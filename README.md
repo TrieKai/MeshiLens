@@ -36,9 +36,8 @@ uv run meshilens-server
 ## Vercel 後端部署
 
 專案可部署為 Vercel Python Function，提供 `GET /api/health` 和
-`POST /api/match`。部署前需在 Vercel 環境變數設定 `MESHI_API_KEY`；呼叫
-`/api/match` 時帶入 `Authorization: Bearer <MESHI_API_KEY>`。未來接上瀏覽器
-擴充功能時，再將其正式網址設定到 `MESHI_ALLOWED_ORIGIN`。
+`POST /api/match`。目前為測試階段，API 未啟用存取驗證。未來接上瀏覽器
+擴充功能時，再將其正式網址設定到 `MESHI_ALLOWED_ORIGIN` 並啟用驗證。
 
 ## 配對規則
 

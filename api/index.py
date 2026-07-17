@@ -32,12 +32,6 @@ class handler(BaseHTTPRequestHandler):
         origin = self.headers.get("Origin", "").rstrip("/")
         return origin if allowed_origin and origin == allowed_origin else None
 
-    def _is_authorized(self) -> bool:
-        expected_key = os.environ.get("MESHI_API_KEY", "")
-        if not expected_key:
-            return False
-        return self.headers.get("Authorization", "") == f"Bearer {expected_key}"
-
     def _send(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -76,9 +70,6 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         if self._path() != "/match":
             self._send(404, {"error": "找不到路徑"})
-            return
-        if not self._is_authorized():
-            self._send(401, {"error": "未授權"})
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
