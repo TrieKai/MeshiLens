@@ -1,6 +1,7 @@
 const CARD_ID = "meshilens-card";
 const ADDRESS_PREFIX = /^(地址|住所|address)\s*[:：]?\s*/i;
 const PHONE_PREFIX = /^(電話|電話番号|phone)\s*[:：]?\s*/i;
+const { isFoodCategory } = globalThis.MeshiLensCategory;
 let activePlaceKey = "";
 let lookupSequence = 0;
 let debounceTimer = null;
@@ -38,9 +39,14 @@ function tabelogUrlFromPage() {
 }
 
 function extractPlace() {
-  const title = document.querySelector("h1.DUwDvf, h1.fontHeadlineLarge, h1");
+  const title = document.querySelector("h1.DUwDvf, h1.fontHeadlineLarge");
   const name = title?.textContent?.trim() || "";
   if (!name) return null;
+  const detailPanel = title.closest('main, [role="main"]');
+  const category = detailPanel
+    ?.querySelector('button[jsaction$=".category"], button.DkEaL')
+    ?.textContent?.trim() || "";
+  if (!isFoodCategory(category)) return null;
   const alternateName = document.querySelector("h2.bwoZTb")?.textContent?.trim() || "";
   const address = labeledValue(
     ['button[data-item-id="address"]', '[data-item-id="address"]'],
@@ -52,6 +58,7 @@ function extractPlace() {
   );
   return {
     name,
+    category,
     alternate_name: alternateName,
     address,
     phone,
@@ -64,6 +71,7 @@ function extractPlace() {
 function placeKey(place) {
   return [
     place.name,
+    place.category,
     place.alternate_name,
     place.address,
     place.phone,
