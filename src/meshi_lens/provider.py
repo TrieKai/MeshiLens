@@ -101,6 +101,21 @@ def restaurant_to_dict(value: Any) -> dict[str, Any]:
     }
 
 
+def merge_candidate_details(
+    summary: Mapping[str, Any], detail: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Prefer non-empty detail fields while retaining search-card fallbacks."""
+    merged = dict(summary)
+    merged.update(
+        {
+            key: value
+            for key, value in detail.items()
+            if value not in (None, "", [], {})
+        }
+    )
+    return merged
+
+
 def area_from_address(address: str) -> str | None:
     normalized = address.replace("日本、", "").replace("日本,", "")
     match = re.search(r"(?:〒\s*\d{3}-?\d{4}\s*)?([^\s,，]{2,12}?[都道府県])", normalized)
@@ -545,19 +560,13 @@ class GurumeProvider:
                 enriched.append(candidate)
                 continue
             try:
-                self._throttle()
-                response = RestaurantDetailRequest(
-                    restaurant_url=candidate["url"],
-                    fetch_reviews=False,
-                    fetch_menu=False,
-                    fetch_courses=False,
-                ).fetch_sync()
-                detail = restaurant_to_dict(getattr(response, "restaurant", response))
+                details = self._fetch_details(
+                    [candidate["url"]], RestaurantDetailRequest
+                )
                 enriched.append(
-                    {
-                        key: detail.get(key) or candidate.get(key)
-                        for key in candidate.keys()
-                    }
+                    merge_candidate_details(candidate, details[0])
+                    if details
+                    else candidate
                 )
             except Exception:
                 enriched.append(candidate)

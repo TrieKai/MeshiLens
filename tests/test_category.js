@@ -8,6 +8,7 @@ const { isFoodCategory } = globalThis.MeshiLensCategory;
 test("accepts dining categories across supported Maps languages", () => {
   for (const category of [
     "日式咖哩餐廳",
+    "咖啡店",
     "麵包店",
     "うなぎ料理店",
     "Japanese restaurant",

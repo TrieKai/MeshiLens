@@ -6,6 +6,7 @@ from meshi_lens.provider import (
     coordinates_from_tabelog_html,
     extract_tabelog_urls,
     hyakumeiten_from_tabelog_html,
+    merge_candidate_details,
     restaurant_to_dict,
 )
 
@@ -108,6 +109,29 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(candidate["dinner_price"], "￥40,000～￥49,999")
         self.assertEqual(candidate["business_hours"], "月・火 11:30 - 14:00")
         self.assertEqual(candidate["closed_days"], "日曜日")
+
+    def test_merges_coordinates_from_enriched_detail(self) -> None:
+        summary = {
+            "name": "カフェ ポエティカ",
+            "url": "https://tabelog.com/ibaraki/A0802/A080201/8028118",
+            "rating": 3.32,
+            "latitude": None,
+            "longitude": None,
+        }
+        detail = {
+            "name": "カフェ ポエティカ",
+            "url": "https://tabelog.com/ibaraki/A0802/A080201/8028118/",
+            "rating": None,
+            "latitude": 36.126572,
+            "longitude": 140.118419,
+            "genres": ["カフェ"],
+            "is_hyakumeiten": False,
+        }
+        merged = merge_candidate_details(summary, detail)
+        self.assertEqual(merged["rating"], 3.32)
+        self.assertEqual(merged["latitude"], 36.126572)
+        self.assertEqual(merged["longitude"], 140.118419)
+        self.assertEqual(merged["genres"], ["カフェ"])
 
     def test_ignores_non_hyakumeiten_award(self) -> None:
         html = """
