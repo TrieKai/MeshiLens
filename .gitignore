@@ -6,3 +6,7 @@ dist/
 build/
 *.egg-info/
 .DS_Store
+.vercel/
+.env
+.env.*
+!.env.example
