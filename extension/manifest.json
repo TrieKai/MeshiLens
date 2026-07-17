@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "MeshiLens — Tabelog for Maps",
+  "version": "0.1.0",
+  "description": "在 Google Maps 店家頁顯示 Tabelog 日本語版評分。",
+  "minimum_chrome_version": "109",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.google.com/maps/*",
+        "https://www.google.co.jp/maps/*",
+        "https://maps.google.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "MeshiLens",
+    "default_popup": "popup.html"
+  }
+}

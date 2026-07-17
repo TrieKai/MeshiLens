@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MeshiLens</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>MeshiLens</h1>
+      <p>在 Google Maps 顯示 Tabelog 日本語版評分。</p>
+      <div id="status" class="status checking">正在檢查本機服務…</div>
+      <label for="api-url">本機服務網址</label>
+      <input id="api-url" type="url" value="http://127.0.0.1:18765" />
+      <button id="save" type="button">儲存並重新檢查</button>
+      <small>資料僅在你的瀏覽器、本機服務與 Tabelog 之間處理。</small>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
