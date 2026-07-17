@@ -165,4 +165,38 @@ def rank_candidates(
             ),
         )
         ranked.append(enriched)
-    return sorted(ranked, key=lambda item: item["score"], reverse=True)
+    ranked.sort(
+        key=lambda item: (
+            item["score"],
+            int(item.get("rating") is not None),
+            int(item.get("review_count") or 0),
+        ),
+        reverse=True,
+    )
+
+    if ranked:
+        winner = ranked[0]
+        winner_phone = normalize_phone(str(winner.get("phone") or ""))
+        winner_name = normalize_name(str(winner.get("name") or ""))
+        duplicates = []
+        for other in ranked[1:]:
+            other_phone = normalize_phone(str(other.get("phone") or ""))
+            candidate_distance = haversine_meters(
+                _float(winner.get("latitude")),
+                _float(winner.get("longitude")),
+                _float(other.get("latitude")),
+                _float(other.get("longitude")),
+            )
+            same_phone = bool(
+                winner_phone and other_phone and winner_phone == other_phone
+            )
+            same_name = similarity(
+                winner_name, normalize_name(str(other.get("name") or ""))
+            ) >= 0.95
+            same_location = candidate_distance is not None and candidate_distance <= 50
+            if same_name and same_location and (same_phone or not winner_phone):
+                duplicates.append(other)
+        if duplicates and winner.get("review_count"):
+            winner["match_reasons"].append("同址重複頁面中評論資料較完整")
+            winner["duplicate_urls"] = [item.get("url") for item in duplicates]
+    return ranked

@@ -86,6 +86,67 @@
   margin-top: 8px;
 }
 
+.meshilens-awards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.meshilens-hyakumeiten {
+  background: #fff4cc;
+  border: 1px solid #dfbd58;
+  border-radius: 999px;
+  color: #76520c;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 750;
+  padding: 4px 9px;
+  text-decoration: none;
+}
+
+.meshilens-hyakumeiten:hover,
+.meshilens-hyakumeiten:focus-visible {
+  background: #ffe9a3;
+  outline: 0;
+}
+
+.meshilens-details {
+  border-top: 1px solid var(--ml-border);
+  margin-top: 11px;
+  padding-top: 9px;
+}
+
+.meshilens-details summary {
+  color: var(--ml-accent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.meshilens-info {
+  display: grid;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.meshilens-info-row {
+  display: grid;
+  font-size: 11px;
+  gap: 8px;
+  grid-template-columns: 62px minmax(0, 1fr);
+  line-height: 1.45;
+}
+
+.meshilens-info-label {
+  color: var(--ml-muted);
+}
+
+.meshilens-info-value {
+  color: var(--ml-ink);
+  overflow-wrap: anywhere;
+}
+
 .meshilens-footer {
   border-top: 1px solid var(--ml-border);
   justify-content: space-between;
@@ -147,6 +208,16 @@
   font-size: 12px;
 }
 
+.meshilens-candidate-award {
+  background: #fff4cc;
+  border-radius: 999px;
+  color: #76520c;
+  font-size: 10px;
+  font-weight: 750;
+  margin-left: auto;
+  padding: 2px 6px;
+}
+
 .meshilens-candidate-address {
   color: var(--ml-muted);
   font-size: 11px;
@@ -166,4 +237,3 @@
     width: auto;
   }
 }
-

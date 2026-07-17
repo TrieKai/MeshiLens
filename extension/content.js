@@ -120,6 +120,44 @@ function selectedView(candidate, result) {
   );
   row.append(meta);
   container.append(row);
+  const hyakumeiten = candidate.hyakumeiten || [];
+  if (candidate.is_hyakumeiten && hyakumeiten.length) {
+    const awards = element("div", "meshilens-awards");
+    for (const selection of hyakumeiten) {
+      const award = element("a", "meshilens-hyakumeiten");
+      const category = [selection.category, selection.area].filter(Boolean).join(" ");
+      award.textContent = `百名店 ${selection.year}${category ? ` · ${category}` : ""}`;
+      award.href = selection.url;
+      award.target = "_blank";
+      award.rel = "noopener noreferrer";
+      award.title = selection.label || award.textContent;
+      awards.append(award);
+    }
+    container.append(awards);
+  }
+
+  const details = element("details", "meshilens-details");
+  details.append(element("summary", "", "更多 Tabelog 資訊"));
+  const info = element("div", "meshilens-info");
+  const addInfo = (label, value) => {
+    if (!value) return;
+    const row = element("div", "meshilens-info-row");
+    row.append(element("span", "meshilens-info-label", label));
+    row.append(element("span", "meshilens-info-value", value));
+    info.append(row);
+  };
+  addInfo("料理類型", candidate.genres?.join("、"));
+  addInfo("最近車站", candidate.station);
+  addInfo("午餐價位", candidate.lunch_price);
+  addInfo("晚餐價位", candidate.dinner_price);
+  addInfo("公休日", candidate.closed_days);
+  addInfo("電話", candidate.phone);
+  addInfo("地址", candidate.address);
+  addInfo("營業時間", candidate.business_hours);
+  if (info.childElementCount) {
+    details.append(info);
+    container.append(details);
+  }
   const certainty = candidate.confidence === "high" ? "高信心配對" : "請確認是否為同一家店";
   const reasons = [certainty, ...(candidate.match_reasons || [])].join(" · ");
   container.append(element("div", "meshilens-reasons", reasons));
@@ -158,6 +196,10 @@ function renderResult(card, result) {
     button.type = "button";
     const top = element("span", "meshilens-candidate-top");
     top.append(element("span", "meshilens-candidate-name", candidate.name || "未命名店家"));
+    if (candidate.is_hyakumeiten) {
+      const count = candidate.hyakumeiten?.length || 1;
+      top.append(element("span", "meshilens-candidate-award", count > 1 ? `百名店 ×${count}` : "百名店"));
+    }
     top.append(element("span", "meshilens-candidate-score", `配對 ${candidate.score}%`));
     button.append(top);
     button.append(element("span", "meshilens-candidate-address", candidate.address || "地址未提供"));

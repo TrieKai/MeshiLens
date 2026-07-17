@@ -73,6 +73,34 @@ class MatchingTests(unittest.TestCase):
         self.assertEqual(result.confidence, "high")
         self.assertEqual(result.score, 98.0)
 
+    def test_duplicate_listing_prefers_page_with_reviews(self) -> None:
+        place = {
+            "name": "CURRY HOUSE KURAGE",
+            "phone": "+81 29-352-2232",
+            "latitude": 36.3141659,
+            "longitude": 140.5705587,
+        }
+        duplicate = {
+            "name": "CURRY HOUSE KURAGE",
+            "phone": "029-352-2232",
+            "latitude": 36.314173868,
+            "longitude": 140.570567680,
+            "rating": None,
+            "review_count": None,
+            "url": "https://tabelog.com/ibaraki/A0801/A080102/8030804/",
+        }
+        established = {
+            **duplicate,
+            "latitude": 36.314173568,
+            "longitude": 140.570567020,
+            "rating": 3.1,
+            "review_count": 17,
+            "url": "https://tabelog.com/ibaraki/A0801/A080102/8028260/",
+        }
+        ranked = rank_candidates(place, [duplicate, established])
+        self.assertEqual(ranked[0]["url"], established["url"])
+        self.assertIn("評論資料較完整", ranked[0]["match_reasons"][-1])
+
 
 if __name__ == "__main__":
     unittest.main()

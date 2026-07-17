@@ -16,6 +16,13 @@ TABELOG_RESULT_RE = re.compile(
     r"(?P<path>[a-z0-9-]+/A\d+/A\d+/\d+)/?",
     re.IGNORECASE,
 )
+HYAKUMEITEN_URL_RE = re.compile(
+    r"https?://award\.tabelog\.com/hyakumeiten/(?P<slug>[^/]+)/(?P<year>20\d{2})/?",
+    re.IGNORECASE,
+)
+HYAKUMEITEN_LABEL_RE = re.compile(
+    r"^(?:食べログ\s*)?(?P<descriptor>.+?)\s*百名店\s*(?P<year>20\d{2})\s*選出店$"
+)
 
 
 def _model_dict(value: Any) -> dict[str, Any]:
@@ -43,6 +50,11 @@ def _model_dict(value: Any) -> dict[str, Any]:
             "latitude",
             "longitude",
             "genres",
+            "station",
+            "lunch_price",
+            "dinner_price",
+            "business_hours",
+            "closed_days",
         }
     }
 
@@ -81,6 +93,11 @@ def restaurant_to_dict(value: Any) -> dict[str, Any]:
         "latitude": latitude,
         "longitude": longitude,
         "genres": genres,
+        "station": _first(data, "station", "nearest_station") or "",
+        "lunch_price": _first(data, "lunch_price", "lunch_budget") or "",
+        "dinner_price": _first(data, "dinner_price", "dinner_budget") or "",
+        "business_hours": _first(data, "business_hours", "hours") or "",
+        "closed_days": _first(data, "closed_days", "regular_holiday") or "",
     }
 
 
@@ -151,6 +168,71 @@ def coordinates_from_tabelog_html(html: str) -> tuple[float | None, float | None
         except (json.JSONDecodeError, KeyError, TypeError, ValueError):
             continue
     return None, None
+
+
+def hyakumeiten_from_tabelog_html(html: str) -> list[dict[str, Any]]:
+    """Extract every Hyakumeiten selection listed on a restaurant page."""
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "lxml")
+    anchors = soup.select('a[href*="award.tabelog.com/hyakumeiten/"]')
+
+    selections: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for anchor in anchors:
+        url = str(anchor.get("href") or "")
+        url_match = HYAKUMEITEN_URL_RE.search(url)
+        if not url_match or url in seen_urls:
+            continue
+
+        wrapper = anchor.find_parent(
+            "div",
+            class_=lambda value: value
+            and (
+                "rdheader-badge-award" in value
+                or "rstinfo-table-badge-hyakumeiten" in value
+            ),
+        )
+        tooltip = wrapper.select_one('[class*="tooltip"] p') if wrapper else None
+        label = (
+            tooltip.get_text(" ", strip=True)
+            if tooltip
+            else anchor.get_text(" ", strip=True)
+        )
+        label = re.sub(r"\s+", " ", label).strip()
+        label_match = HYAKUMEITEN_LABEL_RE.match(label)
+        descriptor = label_match.group("descriptor").strip() if label_match else ""
+        area_match = re.search(r"(?:\s*)(TOKYO|EAST|WEST)$", descriptor)
+        area = area_match.group(1) if area_match else ""
+        category = descriptor[: area_match.start()].strip() if area_match else descriptor
+        year = int(
+            label_match.group("year") if label_match else url_match.group("year")
+        )
+        selections.append(
+            {
+                "label": label or f"百名店 {year} 選出店",
+                "category": category,
+                "area": area,
+                "year": year,
+                "url": url,
+            }
+        )
+        seen_urls.add(url)
+    return sorted(
+        selections,
+        key=lambda item: (
+            int(item.get("year") or 0),
+            str(item.get("category") or ""),
+            str(item.get("area") or ""),
+        ),
+        reverse=True,
+    )
+
+
+def _add_tabelog_badges(candidate: dict[str, Any], html: str) -> None:
+    selections = hyakumeiten_from_tabelog_html(html)
+    candidate["is_hyakumeiten"] = bool(selections)
+    candidate["hyakumeiten"] = selections
 
 
 class GurumeProvider:
@@ -308,6 +390,7 @@ class GurumeProvider:
                         )
                         candidate["latitude"] = latitude
                         candidate["longitude"] = longitude
+                        _add_tabelog_badges(candidate, map_response.text)
                         candidates.append(candidate)
                         continue
                 except Exception:
@@ -337,8 +420,11 @@ class GurumeProvider:
                         )
                         candidate["latitude"] = latitude
                         candidate["longitude"] = longitude
+                        _add_tabelog_badges(candidate, map_response.text)
                     except Exception:
                         pass
+                candidate.setdefault("is_hyakumeiten", False)
+                candidate.setdefault("hyakumeiten", [])
                 candidates.append(candidate)
             except Exception:
                 continue
@@ -377,7 +463,7 @@ class GurumeProvider:
         direct_url = canonical_restaurant_url(str(place.get("tabelog_url") or ""))
         if direct_url:
             direct_candidates = self._fetch_details(
-                [direct_url], RestaurantDetailRequest, include_coordinates=False
+                [direct_url], RestaurantDetailRequest
             )
             for candidate in direct_candidates:
                 candidate["direct_source"] = True
@@ -389,7 +475,15 @@ class GurumeProvider:
             suggestion_candidates = self._fetch_details(
                 suggestion_urls, RestaurantDetailRequest
             )
-            if self._has_strong_identity_match(place, suggestion_candidates):
+            suggestion_has_reviews = any(
+                candidate.get("rating") is not None
+                or int(candidate.get("review_count") or 0) > 0
+                for candidate in suggestion_candidates
+            )
+            if (
+                self._has_strong_identity_match(place, suggestion_candidates)
+                and suggestion_has_reviews
+            ):
                 return suggestion_candidates
         area = area_from_address(str(place.get("address") or ""))
         search_error: Exception | None = None
