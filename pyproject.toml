@@ -1,6 +1,6 @@
 [project]
 name = "meshilens"
-version = "0.3.6"
+version = "0.3.7"
 description = "Show Tabelog ratings, reservations, payment methods, and restaurant details in Google Maps"
 readme = "README.md"
 requires-python = ">=3.12"

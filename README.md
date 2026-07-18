@@ -1,4 +1,4 @@
-# MeshiLens
+# ![MeshiLens logo](extension/icons/icon-48.png) MeshiLens
 
 在 Google Maps 店家頁旁顯示 **Tabelog 日本語版**評分、評論數與原始連結。第一版由 Chrome／Edge 擴充功能讀取目前店家，再交給只監聽本機的 Python 服務搜尋與比對 Tabelog。
 
@@ -79,6 +79,7 @@ node --test tests/test_settings.js tests/test_toggle.js
 - Tabelog 頁面格式調整可能使 `gurume` 暫時失效；正式發布前應增加持久快取、併發限制與監控。
 - 請遵守 Tabelog 的使用條款與 robots 政策，不要大量或自動化濫用請求。
 - Tabelog 商標與資料屬其權利人；本專案不隸屬於 Google 或 Tabelog。
+- 米其林星級與必比登資料需取得 Michelin 授權或合規資料源後才會整合；目前不以自動爬蟲複製 Michelin Guide 內容。
 
 ## 專案結構
 
