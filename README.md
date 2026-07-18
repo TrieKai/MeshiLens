@@ -62,7 +62,7 @@ uv run python scripts/update_michelin.py
 ## AI 用餐建議（選用）
 
 設定 Vercel 或本機伺服器的 `GROQ_API_KEY` 後，擴充功能會在配對成功時向
-`/advice` 發出一個獨立、低優先的請求。預設模型為 `openai/gpt-oss-20b`，可用
+`/advice` 發出一個獨立、低優先的請求。預設模型為 `qwen/qwen3.6-27b`，可用
 `GROQ_MODEL` 覆寫。API key 只存於伺服器環境變數，絕不可放在擴充功能內。
 
 摘要只接收 MeshiLens 已取得的店名、餐廳類型、Tabelog 分數及評論**數量**、價位、

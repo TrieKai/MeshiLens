@@ -16,7 +16,7 @@ from urllib.request import Request, urlopen
 
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-DEFAULT_MODEL = "openai/gpt-oss-20b"
+DEFAULT_MODEL = "qwen/qwen3.6-27b"
 MAX_FACT_VALUE = 240
 
 
@@ -104,6 +104,34 @@ class GroqDiningAdvisor:
     def configured(self) -> bool:
         return bool(self.api_key)
 
+    def _request_body(self, facts: Mapping[str, Any]) -> dict[str, Any]:
+        """Build a model-compatible JSON-mode request without exposing reasoning."""
+        is_qwen = self.model.startswith("qwen/")
+        instructions = (
+            "你是 MeshiLens 的用餐建議助手。只可根據提供的 JSON 結構化資料，以繁體中文"
+            "輸出 JSON 物件：headline、summary、best_for、cautions、evidence。"
+            "不得假設菜色、口味、排隊、人潮、服務品質、營業狀態或評論意見；資料不足時要"
+            "明確說明。summary 最多 100 字，evidence 只能重述輸入中可驗證的事實。"
+        )
+        return {
+            "model": self.model,
+            # Qwen supports none/default; GPT-OSS supports low/medium/high.
+            "reasoning_effort": "default" if is_qwen else "low",
+            "reasoning_format": "hidden",
+            "temperature": 0.6 if is_qwen else 0.2,
+            "max_completion_tokens": 300,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        f"{instructions}\n\n店家結構化資料："
+                        f"{json.dumps(facts, ensure_ascii=False, separators=(',', ':'))}"
+                    ),
+                },
+            ],
+        }
+
     def summarize(
         self,
         place: Mapping[str, Any],
@@ -113,28 +141,7 @@ class GroqDiningAdvisor:
         if not self.configured:
             raise RuntimeError("AI 用餐建議尚未設定")
         facts = advice_facts(place, candidate, michelin)
-        request_body = {
-            "model": self.model,
-            "reasoning_effort": "low",
-            "temperature": 0.2,
-            "max_completion_tokens": 300,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "你是 MeshiLens 的用餐建議助手。只可根據提供的 JSON 結構化資料，以繁體中文"
-                        "輸出 JSON 物件：headline、summary、best_for、cautions、evidence。"
-                        "不得假設菜色、口味、排隊、人潮、服務品質、營業狀態或評論意見；資料不足時要"
-                        "明確說明。summary 最多 100 字，evidence 只能重述輸入中可驗證的事實。"
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": json.dumps(facts, ensure_ascii=False, separators=(",", ":")),
-                },
-            ],
-        }
+        request_body = self._request_body(facts)
         request = Request(
             GROQ_API_URL,
             data=json.dumps(request_body).encode("utf-8"),

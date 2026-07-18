@@ -43,6 +43,21 @@ class AdviceTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "尚未設定"):
             advisor.summarize(self.place, self.candidate, None)
 
+    def test_qwen_uses_qwen_compatible_reasoning_and_json_mode(self) -> None:
+        advisor = GroqDiningAdvisor(api_key="test-key")
+        body = advisor._request_body(advice_facts(self.place, self.candidate, None))
+        self.assertEqual(body["model"], "qwen/qwen3.6-27b")
+        self.assertEqual(body["reasoning_effort"], "default")
+        self.assertEqual(body["reasoning_format"], "hidden")
+        self.assertEqual(body["response_format"], {"type": "json_object"})
+        self.assertEqual(body["messages"][0]["role"], "user")
+        self.assertIn("清水屋", body["messages"][0]["content"])
+
+    def test_gpt_oss_keeps_its_own_reasoning_effort(self) -> None:
+        advisor = GroqDiningAdvisor(api_key="test-key", model="openai/gpt-oss-20b")
+        body = advisor._request_body({"restaurant_name": "測試"})
+        self.assertEqual(body["reasoning_effort"], "low")
+
 
 if __name__ == "__main__":
     unittest.main()
