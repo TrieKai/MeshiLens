@@ -50,6 +50,7 @@ class AdviceTests(unittest.TestCase):
         self.assertEqual(body["reasoning_effort"], "none")
         self.assertEqual(body["reasoning_format"], "hidden")
         self.assertEqual(body["response_format"], {"type": "json_object"})
+        self.assertEqual(body["max_completion_tokens"], 700)
         self.assertEqual(body["messages"][0]["role"], "user")
         self.assertIn("清水屋", body["messages"][0]["content"])
 

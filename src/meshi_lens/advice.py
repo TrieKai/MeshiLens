@@ -50,7 +50,7 @@ def advice_facts(
         "dinner_price": _text(candidate.get("dinner_price")),
         "reservation_status": reservation_status,
         "has_online_reservation": bool(candidate.get("reservation_url")),
-        "payment_available": bool(payment),
+        "payment_available": bool(payment) if payment else None,
         "hyakumeiten_years": sorted(
             {
                 int(item.get("year"))
@@ -111,7 +111,9 @@ class GroqDiningAdvisor:
             "你是 MeshiLens 的用餐建議助手。只可根據提供的 JSON 結構化資料，以繁體中文"
             "輸出 JSON 物件：headline、summary、best_for、cautions、evidence。"
             "不得假設菜色、口味、排隊、人潮、服務品質、營業狀態或評論意見；資料不足時要"
-            "明確說明。summary 最多 100 字，evidence 只能重述輸入中可驗證的事實。"
+            "明確說明。headline 與 summary 必須是字串；best_for、cautions、evidence 必須是"
+            "字串陣列，最多分別 3、2、4 項。summary 最多 100 字，evidence 只能重述輸入中"
+            "可驗證的事實。只輸出 JSON，不要 Markdown 或其他文字。"
         )
         return {
             "model": self.model,
@@ -120,7 +122,7 @@ class GroqDiningAdvisor:
             "reasoning_effort": "none" if is_qwen else "low",
             "reasoning_format": "hidden",
             "temperature": 0.6 if is_qwen else 0.2,
-            "max_completion_tokens": 300,
+            "max_completion_tokens": 700,
             "response_format": {"type": "json_object"},
             "messages": [
                 {
