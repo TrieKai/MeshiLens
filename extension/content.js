@@ -2,6 +2,7 @@ const CARD_ID = "meshilens-card";
 const ADDRESS_PREFIX = /^(地址|住所|address)\s*[:：]?\s*/i;
 const PHONE_PREFIX = /^(電話|電話番号|phone)\s*[:：]?\s*/i;
 const { foodSignalsFromLabels, isFoodPlace } = globalThis.MeshiLensCategory;
+const { coordinatesFromMapsUrl } = globalThis.MeshiLensMaps;
 let activePlaceKey = "";
 let lookupSequence = 0;
 let debounceTimer = null;
@@ -15,15 +16,6 @@ function labeledValue(selectors, prefix) {
     if (value) return value;
   }
   return "";
-}
-
-function coordinatesFromUrl(url) {
-  const placeCoordinates = url.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
-  const viewportCoordinates = url.match(/\/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
-  const match = placeCoordinates || viewportCoordinates;
-  return match
-    ? { latitude: Number(match[1]), longitude: Number(match[2]) }
-    : { latitude: null, longitude: null };
 }
 
 function tabelogUrlFromPage() {
@@ -72,7 +64,7 @@ function extractPlace() {
     address,
     phone,
     tabelog_url: tabelogUrlFromPage(),
-    ...coordinatesFromUrl(location.href),
+    ...coordinatesFromMapsUrl(location.href),
     title,
   };
 }

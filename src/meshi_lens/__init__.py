@@ -1,3 +1,3 @@
 """MeshiLens local matching service."""
 
-__version__ = "0.3.3"
+__version__ = "0.3.4"
