@@ -22,6 +22,7 @@
 - Michelin 資料使用繁中 SSR 清單建立低頻本地快照；使用者瀏覽 Maps 時不會向 Michelin 發出請求
 - 跨語言店名且有 Maps 電話或官網時，只低頻補查 100 公尺內的 Michelin 詳情頁，結果快取一天
 - Tabelog 與 Michelin 以獨立請求並行比對，先完成的一方先顯示，另一方再補入卡片
+- Tabelog 比對完成後，以店名、類型、評分／評論數、價位、獎項、訂位與付款等**結構化資料**非同步產生繁中「AI 用餐建議」；不擷取、不傳送也不摘要 Tabelog 或 Google Maps 評論原文
 - 中低信心時列出候選店家，讓使用者手動切換
 - 六小時記憶體快取與 Tabelog 請求節流
 
@@ -45,7 +46,7 @@ uv run meshilens-server
 ## Vercel 後端部署
 
 專案可部署為 Vercel Python Function，提供 `GET /api/health` 和
-`POST /api/match`。目前為測試階段，API 未啟用存取驗證。未來接上瀏覽器
+`POST /api/match`、`POST /api/michelin` 與選用的 `POST /api/advice`。目前為測試階段，API 未啟用存取驗證。未來接上瀏覽器
 擴充功能時，再將其正式網址設定到 `MESHI_ALLOWED_ORIGIN` 並啟用驗證。
 
 ## 更新 Michelin 日本快照
@@ -57,6 +58,16 @@ uv run python scripts/update_michelin.py
 ```
 
 更新器預設只低頻讀取伺服器端渲染的餐廳清單，並檢查官方宣告筆數與解析筆數完全一致。跨語言配對所需的電話與官方網站由後端只在必要時補查附近詳情頁並快取；若要離線預抓全部詳情，可加上 `--include-details`。
+
+## AI 用餐建議（選用）
+
+設定 Vercel 或本機伺服器的 `GROQ_API_KEY` 後，擴充功能會在配對成功時向
+`/advice` 發出一個獨立、低優先的請求。預設模型為 `openai/gpt-oss-20b`，可用
+`GROQ_MODEL` 覆寫。API key 只存於伺服器環境變數，絕不可放在擴充功能內。
+
+摘要只接收 MeshiLens 已取得的店名、餐廳類型、Tabelog 分數及評論**數量**、價位、
+百名店／米其林、訂位與付款欄位；不接收評論正文、評論者、照片或 Google Maps 評論。
+同一份店家資料會在瀏覽器本機快取 30 天，資料關鍵欄位改變才重新生成。
 
 ## 配對規則
 
@@ -95,6 +106,7 @@ node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js t
 - 請遵守 Tabelog 的使用條款與 robots 政策，不要大量或自動化濫用請求。
 - Tabelog 商標與資料屬其權利人；本專案不隸屬於 Google 或 Tabelog。
 - Michelin 功能僅保存店家識別、座標、料理類型、價位、獎項與官方連結，不保存照片或評審文章；此非官方授權功能，請維持低頻、個人及非商業用途。
+- AI 用餐建議是根據有限結構化欄位的輔助判讀，不是評論摘要，也不應取代店家頁最新資訊或個人判斷。
 
 ## 專案結構
 

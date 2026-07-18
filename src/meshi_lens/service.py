@@ -5,6 +5,7 @@ import threading
 import time
 from typing import Any, Mapping
 
+from .advice import GroqDiningAdvisor, advice_response
 from .matching import rank_candidates
 from .michelin import MichelinProvider
 from .provider import GurumeProvider, canonical_restaurant_url
@@ -42,11 +43,14 @@ class MatchService:
         self,
         provider: GurumeProvider | None = None,
         michelin_provider: MichelinProvider | None = None,
+        advisor: GroqDiningAdvisor | None = None,
     ) -> None:
         self.provider = provider or GurumeProvider()
         self.michelin_provider = michelin_provider or MichelinProvider()
+        self.advisor = advisor or GroqDiningAdvisor()
         self.cache = TTLCache()
         self.michelin_cache = TTLCache(ttl_seconds=86_400, max_items=512)
+        self.advice_cache = TTLCache(ttl_seconds=2_592_000, max_items=512)
 
     @staticmethod
     def validate_place(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -102,6 +106,37 @@ class MatchService:
             "cached": False,
         }
         self.michelin_cache.set(key, result)
+        return result
+
+    def advice(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        place = self.validate_place(payload.get("place") or {})
+        candidate = payload.get("candidate")
+        if not isinstance(candidate, Mapping) or not str(candidate.get("name") or "").strip():
+            raise ValueError("找不到已配對的 Tabelog 店家")
+        michelin = payload.get("michelin")
+        if michelin is not None and not isinstance(michelin, Mapping):
+            raise ValueError("Michelin 資料格式不正確")
+        if not self.advisor.configured:
+            return {"available": False, "advice": None, "cached": False}
+        key = "|".join(
+            [
+                self._cache_key(place),
+                str(candidate.get("url") or ""),
+                str(candidate.get("rating") or ""),
+                str(candidate.get("review_count") or ""),
+                str(candidate.get("reservation_status") or ""),
+                str(candidate.get("reservation_url") or ""),
+                str(michelin.get("url") or "") if isinstance(michelin, Mapping) else "",
+                str(michelin.get("distinction_label") or "") if isinstance(michelin, Mapping) else "",
+            ]
+        )
+        cached = self.advice_cache.get(key)
+        if cached:
+            return {**cached, "cached": True}
+        result = advice_response(self.advisor, place, candidate, michelin)
+        result["available"] = True
+        result["cached"] = False
+        self.advice_cache.set(key, result)
         return result
 
     def match(

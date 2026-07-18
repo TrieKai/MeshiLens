@@ -5,6 +5,7 @@ const { foodSignalsFromLabels, isFoodPlace } = globalThis.MeshiLensCategory;
 const { coordinatesFromMapsUrl } = globalThis.MeshiLensMaps;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
+const { advicePayload, adviceCacheKey, cachedAdvice } = globalThis.MeshiLensAdvice;
 let activePlaceKey = "";
 let lookupSequence = 0;
 let debounceTimer = null;
@@ -162,6 +163,102 @@ function michelinView(michelin) {
   return section;
 }
 
+function adviceView(state) {
+  const section = element("section", "meshilens-advice");
+  section.setAttribute("aria-label", "AI 用餐建議");
+  const heading = element("div", "meshilens-advice-heading");
+  heading.append(element("span", "meshilens-advice-title", "AI 用餐建議"));
+  heading.append(element("span", "meshilens-advice-source", "非評論摘要"));
+  section.append(heading);
+
+  if (state?.status === "loading") {
+    section.append(element("div", "meshilens-advice-pending", "正在整理店家資訊…"));
+    return section;
+  }
+  if (state?.status === "error") {
+    section.append(element("div", "meshilens-advice-pending", "AI 建議暫時無法取得"));
+    return section;
+  }
+  const advice = state?.advice;
+  if (!advice?.summary) return null;
+  section.append(element("div", "meshilens-advice-headline", advice.headline || "用餐建議"));
+  section.append(element("div", "meshilens-advice-summary", advice.summary));
+  const addList = (label, values, className) => {
+    if (!values?.length) return;
+    const group = element("div", `meshilens-advice-group ${className}`);
+    group.append(element("span", "meshilens-advice-label", label));
+    const list = element("span", "meshilens-advice-values", values.join(" · "));
+    group.append(list);
+    section.append(group);
+  };
+  addList("適合", advice.best_for, "is-best-for");
+  addList("留意", advice.cautions, "is-cautions");
+  if (advice.evidence?.length) {
+    section.append(element("div", "meshilens-advice-evidence", `依據：${advice.evidence.join(" · ")}`));
+  }
+  return section;
+}
+
+function syncAdvice(card) {
+  const existing = card.querySelector(".meshilens-advice");
+  const section = adviceView(card._meshilensAdvice);
+  if (!section) {
+    existing?.remove();
+    return;
+  }
+  if (existing) {
+    existing.replaceWith(section);
+    return;
+  }
+  const footer = card.querySelector(".meshilens-footer");
+  if (footer) footer.before(section);
+  else card.append(section);
+}
+
+async function loadAdvice(card, place, candidate, michelin, sequence) {
+  const payload = advicePayload(place, candidate, michelin);
+  if (!payload) return;
+  const key = adviceCacheKey(candidate, michelin);
+  card._meshilensAdviceKey = key;
+  card._meshilensAdvice = { status: "loading" };
+  syncAdvice(card);
+  try {
+    const stored = await chrome.storage.local.get({ diningAdviceCache: {} });
+    const cache = stored.diningAdviceCache || {};
+    const cached = cachedAdvice(cache[key], key);
+    if (cached) {
+      if (sequence === lookupSequence && card.isConnected && card._meshilensAdviceKey === key) {
+        card._meshilensAdvice = { advice: cached };
+        syncAdvice(card);
+      }
+      return;
+    }
+    const response = await chrome.runtime.sendMessage({ type: "GET_DINING_ADVICE", payload });
+    if (!response?.ok) throw new Error(response?.error || "AI 建議暫時無法取得");
+    const advice = response.data?.advice;
+    if (!response.data?.available) {
+      if (sequence === lookupSequence && card.isConnected && card._meshilensAdviceKey === key) {
+        card._meshilensAdvice = null;
+        syncAdvice(card);
+      }
+      return;
+    }
+    if (!advice?.summary) throw new Error("AI 建議暫時無法取得");
+    const nextCache = { ...cache, [key]: { key, savedAt: Date.now(), advice } };
+    const entries = Object.entries(nextCache).sort(([, a], [, b]) => b.savedAt - a.savedAt).slice(0, 100);
+    await chrome.storage.local.set({ diningAdviceCache: Object.fromEntries(entries) });
+    if (sequence === lookupSequence && card.isConnected && card._meshilensAdviceKey === key) {
+      card._meshilensAdvice = { advice };
+      syncAdvice(card);
+    }
+  } catch {
+    if (sequence === lookupSequence && card.isConnected && card._meshilensAdviceKey === key) {
+      card._meshilensAdvice = { status: "error" };
+      syncAdvice(card);
+    }
+  }
+}
+
 function timelineView(entries) {
   if (!shouldShowTimeline(entries)) return null;
   const section = element("section", "meshilens-timeline");
@@ -232,6 +329,9 @@ function updateMichelin(card, michelin) {
     if (header) header.after(section);
   }
   syncTimeline(card);
+  if (card._meshilensSelected && card._meshilensPlace) {
+    loadAdvice(card, card._meshilensPlace, card._meshilensSelected, michelin, card._meshilensSequence);
+  }
 }
 
 function selectedView(candidate, result) {
@@ -348,6 +448,7 @@ function renderResult(card, result) {
     card.append(element("div", "meshilens-status", message));
   } else {
     card.append(selectedView(selected, resultWithMichelin));
+    syncAdvice(card);
   }
 
   if (!result.candidates?.length) return;
@@ -371,14 +472,23 @@ function renderResult(card, result) {
       const michelinNode = card.querySelector(".meshilens-michelin");
       const preservedNodes = [headerNode, michelinNode].filter(Boolean);
       card._meshilensSelected = candidate;
+      card._meshilensAdvice = null;
       const resultWithMichelin = {
         ...result,
         michelin: card._meshilensMichelin || result.michelin || null,
       };
       card.replaceChildren(...preservedNodes, selectedView(candidate, resultWithMichelin));
+      syncAdvice(card);
       card.append(toggle, list);
       list.classList.add("meshilens-hidden");
       toggle.textContent = `查看候選店家（${result.candidates.length}）`;
+      loadAdvice(
+        card,
+        card._meshilensPlace,
+        candidate,
+        card._meshilensMichelin || result.michelin || null,
+        card._meshilensSequence,
+      );
     });
     list.append(button);
   }
@@ -392,6 +502,8 @@ function renderResult(card, result) {
 async function lookup(place) {
   const sequence = ++lookupSequence;
   const card = mountCard(place);
+  card._meshilensPlace = place;
+  card._meshilensSequence = sequence;
   renderStatus(card, "正在查詢 Tabelog 與 Michelin…");
   const michelinRequest = chrome.runtime.sendMessage({ type: "MATCH_MICHELIN", place })
     .then((response) => {
@@ -404,6 +516,9 @@ async function lookup(place) {
     if (sequence !== lookupSequence || !card.isConnected) return;
     if (!response?.ok) throw new Error(response?.error || "查詢失敗");
     renderResult(card, response.data);
+    if (response.data.selected) {
+      loadAdvice(card, place, response.data.selected, card._meshilensMichelin || null, sequence);
+    }
   } catch (error) {
     if (sequence !== lookupSequence || !card.isConnected) return;
     renderResult(card, {

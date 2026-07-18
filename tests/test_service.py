@@ -36,6 +36,24 @@ class FailingProvider:
         raise RuntimeError("Tabelog 403")
 
 
+class FakeAdvisor:
+    model = "test-model"
+    configured = True
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def summarize(self, _place, _candidate, _michelin):
+        self.calls += 1
+        return {
+            "headline": "適合聚餐",
+            "summary": "根據價位與獎項整理。",
+            "best_for": ["聚餐"],
+            "cautions": [],
+            "evidence": ["Tabelog 評分"],
+        }
+
+
 class ServiceTests(unittest.TestCase):
     def test_match_and_cache(self) -> None:
         provider = FakeProvider()
@@ -94,6 +112,33 @@ class ServiceTests(unittest.TestCase):
         )
         result = service.match({"name": "清水屋"}, include_michelin=False)
         self.assertIsNone(result["michelin"])
+
+    def test_advice_is_separate_and_cached(self) -> None:
+        advisor = FakeAdvisor()
+        service = MatchService(
+            provider=FakeProvider(), michelin_provider=FakeMichelinProvider(), advisor=advisor
+        )
+        payload = {
+            "place": {"name": "清水屋"},
+            "candidate": {"name": "清水屋", "url": "https://tabelog.com/example/", "rating": 3.5},
+            "michelin": {"distinction_label": "必比登推介"},
+        }
+        first = service.advice(payload)
+        second = service.advice(payload)
+        self.assertEqual(first["advice"]["headline"], "適合聚餐")
+        self.assertFalse(first["cached"])
+        self.assertTrue(second["cached"])
+        self.assertEqual(advisor.calls, 1)
+
+    def test_advice_is_hidden_until_groq_is_configured(self) -> None:
+        service = MatchService(
+            provider=FakeProvider(), michelin_provider=FakeMichelinProvider()
+        )
+        result = service.advice(
+            {"place": {"name": "清水屋"}, "candidate": {"name": "清水屋"}}
+        )
+        self.assertFalse(result["available"])
+        self.assertIsNone(result["advice"])
 
 
 if __name__ == "__main__":

@@ -68,7 +68,7 @@ class handler(BaseHTTPRequestHandler):
         self._send(404, {"error": "找不到路徑"})
 
     def do_POST(self) -> None:  # noqa: N802
-        if self._path() not in {"/match", "/michelin"}:
+        if self._path() not in {"/match", "/michelin", "/advice"}:
             self._send(404, {"error": "找不到路徑"})
             return
         try:
@@ -78,17 +78,18 @@ class handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length))
             if not isinstance(payload, dict):
                 raise ValueError("請求內容必須是物件")
-            result = (
-                SERVICE.match_michelin(payload)
-                if self._path() == "/michelin"
-                else SERVICE.match(payload, include_michelin=False)
-            )
+            if self._path() == "/michelin":
+                result = SERVICE.match_michelin(payload)
+            elif self._path() == "/advice":
+                result = SERVICE.advice(payload)
+            else:
+                result = SERVICE.match(payload, include_michelin=False)
             self._send(200, result)
         except (ValueError, json.JSONDecodeError) as exc:
             self._send(400, {"error": str(exc)})
         except Exception as exc:
-            LOGGER.exception("Tabelog lookup failed")
-            self._send(502, {"error": str(exc) or "Tabelog 查詢失敗"})
+            LOGGER.exception("MeshiLens request failed")
+            self._send(502, {"error": str(exc) or "MeshiLens 服務暫時無法取得"})
 
     def log_message(self, format: str, *args: Any) -> None:
         LOGGER.info("%s - %s", self.address_string(), format % args)

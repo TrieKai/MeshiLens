@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "MeshiLens — Tabelog for Maps",
-  "version": "0.4.3",
-  "description": "在 Google Maps 顯示 Tabelog 評分、百名店時間線與日本 Michelin Guide 入選資訊。",
+  "version": "0.4.4",
+  "description": "在 Google Maps 顯示 Tabelog 評分、百名店時間線、AI 用餐建議與日本 Michelin Guide 入選資訊。",
   "minimum_chrome_version": "109",
   "permissions": ["storage"],
   "host_permissions": [
@@ -26,7 +26,7 @@
         "https://www.google.co.jp/maps/*",
         "https://maps.google.com/*"
       ],
-      "js": ["category.js", "maps.js", "settings.js", "timeline.js", "content.js"],
+      "js": ["category.js", "maps.js", "settings.js", "timeline.js", "advice.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }

@@ -70,16 +70,24 @@ function placePayload(place) {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (!message || !["MATCH_PLACE", "MATCH_MICHELIN", "HEALTH_CHECK"].includes(message.type)) {
+  if (!message || !["MATCH_PLACE", "MATCH_MICHELIN", "GET_DINING_ADVICE", "HEALTH_CHECK"].includes(message.type)) {
     return false;
   }
   const work = message.type === "HEALTH_CHECK"
     ? request("/health")
     : chrome.storage.local.get({ enabled: true }).then(({ enabled }) => {
         if (!enabled) throw new Error("MeshiLens 已停用");
-        return request(message.type === "MATCH_MICHELIN" ? "/michelin" : "/match", {
+        const path = message.type === "MATCH_MICHELIN"
+          ? "/michelin"
+          : message.type === "GET_DINING_ADVICE"
+            ? "/advice"
+            : "/match";
+        const payload = message.type === "GET_DINING_ADVICE"
+          ? message.payload
+          : placePayload(message.place);
+        return request(path, {
           method: "POST",
-          body: JSON.stringify(placePayload(message.place)),
+          body: JSON.stringify(payload),
         });
       });
   work.then((data) => sendResponse({ ok: true, data })).catch((error) => {
