@@ -1,7 +1,7 @@
 [project]
 name = "meshilens"
-version = "0.3.7"
-description = "Show Tabelog ratings, reservations, payment methods, and restaurant details in Google Maps"
+version = "0.4.0"
+description = "Show Tabelog ratings and Michelin Guide Japan distinctions in Google Maps"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -17,3 +17,4 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/meshi_lens"]
+artifacts = ["src/meshi_lens/data/*.json"]

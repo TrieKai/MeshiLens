@@ -1,6 +1,6 @@
 # ![MeshiLens logo](extension/icons/icon-48.png) MeshiLens
 
-在 Google Maps 店家頁旁顯示 **Tabelog 日本語版**評分、評論數與原始連結。第一版由 Chrome／Edge 擴充功能讀取目前店家，再交給只監聽本機的 Python 服務搜尋與比對 Tabelog。
+在 Google Maps 店家頁旁顯示 **Tabelog 日本語版**評分與 **Michelin Guide 日本**入選資訊。Chrome／Edge 擴充功能讀取目前店家，再交給 Python 服務進行店家比對。
 
 ## 已完成的 MVP
 
@@ -18,6 +18,8 @@
 - 在 Maps 店家區塊顯示評分、評論數、多年度百名店紀錄、價位、車站、營業資訊及 Tabelog 連結
 - 顯示 Tabelog 的預約狀態；有穩定的線上預約連結時提供直接按鈕
 - 顯示信用卡、電子支付與 QR Code 支付的接受狀態及 Tabelog 列出的品牌
+- 顯示日本全地區目前 Michelin Guide 的三星、二星、一星、必比登及指南入選資訊
+- Michelin 資料使用繁中 SSR 清單建立低頻本地快照；使用者瀏覽 Maps 時不會向 Michelin 發出請求
 - 中低信心時列出候選店家，讓使用者手動切換
 - 六小時記憶體快取與 Tabelog 請求節流
 
@@ -44,6 +46,16 @@ uv run meshilens-server
 `POST /api/match`。目前為測試階段，API 未啟用存取驗證。未來接上瀏覽器
 擴充功能時，再將其正式網址設定到 `MESHI_ALLOWED_ORIGIN` 並啟用驗證。
 
+## 更新 Michelin 日本快照
+
+目前快照涵蓋繁中 Michelin Guide 日本全地區。需要更新時手動執行：
+
+```bash
+uv run python scripts/update_michelin.py
+```
+
+更新器會低頻讀取伺服器端渲染的餐廳清單、檢查官方宣告筆數與解析筆數完全一致，成功後才以新快照取代舊資料。
+
 ## 配對規則
 
 配對最高為 100 分：
@@ -66,7 +78,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 node --check extension/background.js
 node --check extension/content.js
 node --check extension/popup.js
-node --test tests/test_settings.js tests/test_toggle.js
+node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js tests/test_maps.js
 ```
 
 測試包含「割烹 清水屋」對 Tabelog「清水屋」的電話與地址差異案例。
@@ -79,14 +91,16 @@ node --test tests/test_settings.js tests/test_toggle.js
 - Tabelog 頁面格式調整可能使 `gurume` 暫時失效；正式發布前應增加持久快取、併發限制與監控。
 - 請遵守 Tabelog 的使用條款與 robots 政策，不要大量或自動化濫用請求。
 - Tabelog 商標與資料屬其權利人；本專案不隸屬於 Google 或 Tabelog。
-- 米其林星級與必比登資料需取得 Michelin 授權或合規資料源後才會整合；目前不以自動爬蟲複製 Michelin Guide 內容。
+- Michelin 功能僅保存店家識別、座標、料理類型、價位、獎項與官方連結，不保存照片或評審文章；此非官方授權功能，請維持低頻、個人及非商業用途。
 
 ## 專案結構
 
 ```text
 extension/                 Chrome／Edge Manifest V3 擴充功能
 src/meshi_lens/provider.py gurume 介接與節流
+src/meshi_lens/michelin.py Michelin SSR 解析、本地快照與店家配對
 src/meshi_lens/matching.py 店家正規化、距離與配對評分
 src/meshi_lens/server.py   只監聽本機的 JSON HTTP 服務
+scripts/update_michelin.py 低頻更新日本全地區 Michelin 快照
 tests/                     不連網單元測試
 ```

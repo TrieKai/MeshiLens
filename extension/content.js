@@ -118,6 +118,32 @@ function renderStatus(card, message) {
   card.append(header, element("div", "meshilens-status", message));
 }
 
+function michelinView(michelin) {
+  if (!michelin) return null;
+  const section = element("section", "meshilens-michelin");
+  const heading = element("div", "meshilens-michelin-heading");
+  heading.append(element("span", "meshilens-michelin-source", "MICHELIN GUIDE"));
+  heading.append(element("span", "meshilens-michelin-current", "目前收錄"));
+  section.append(heading);
+
+  const awards = element("div", "meshilens-michelin-awards");
+  const link = element("a", "meshilens-michelin-badge", michelin.distinction_label);
+  link.href = michelin.url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  awards.append(link);
+  if (michelin.green_star) {
+    awards.append(element("span", "meshilens-green-star", "米其林綠星"));
+  }
+  section.append(awards);
+
+  const details = [michelin.cuisine, michelin.price, michelin.location]
+    .filter(Boolean)
+    .join(" · ");
+  if (details) section.append(element("div", "meshilens-michelin-details", details));
+  return section;
+}
+
 function selectedView(candidate, result) {
   const container = document.createDocumentFragment();
   const row = element("div", "meshilens-score-row");
@@ -228,9 +254,15 @@ function renderResult(card, result) {
   header.append(element("span", "meshilens-source", result.source || "Tabelog 日本語版"));
   card.append(header);
 
+  const michelin = michelinView(result.michelin);
+  if (michelin) card.append(michelin);
+
   const selected = result.selected;
   if (!selected) {
-    card.append(element("div", "meshilens-status", "找不到可信的 Tabelog 店家，請從候選結果選擇。"));
+    const message = result.tabelog_error
+      ? `Tabelog：${result.tabelog_error}`
+      : "找不到可信的 Tabelog 店家，請從候選結果選擇。";
+    card.append(element("div", "meshilens-status", message));
   } else {
     card.append(selectedView(selected, result));
   }
@@ -253,7 +285,9 @@ function renderResult(card, result) {
     button.append(element("span", "meshilens-candidate-address", candidate.address || "地址未提供"));
     button.addEventListener("click", () => {
       const headerNode = card.querySelector(".meshilens-header");
-      card.replaceChildren(headerNode, selectedView(candidate, result));
+      const michelinNode = card.querySelector(".meshilens-michelin");
+      const preservedNodes = [headerNode, michelinNode].filter(Boolean);
+      card.replaceChildren(...preservedNodes, selectedView(candidate, result));
       card.append(toggle, list);
       list.classList.add("meshilens-hidden");
       toggle.textContent = `查看候選店家（${result.candidates.length}）`;

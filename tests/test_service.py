@@ -21,10 +21,27 @@ class FakeProvider:
         ]
 
 
+class FakeMichelinProvider:
+    def match(self, _place, _tabelog=None):
+        return {
+            "name": "清水屋",
+            "distinction": "BIB_GOURMAND",
+            "distinction_label": "必比登推介",
+            "url": "https://guide.michelin.com/example",
+        }
+
+
+class FailingProvider:
+    def search(self, _place):
+        raise RuntimeError("Tabelog 403")
+
+
 class ServiceTests(unittest.TestCase):
     def test_match_and_cache(self) -> None:
         provider = FakeProvider()
-        service = MatchService(provider=provider)
+        service = MatchService(
+            provider=provider, michelin_provider=FakeMichelinProvider()
+        )
         place = {
             "name": "割烹 清水屋",
             "alternate_name": "清水屋",
@@ -36,6 +53,7 @@ class ServiceTests(unittest.TestCase):
         second = service.match(place)
         self.assertTrue(first["matched"])
         self.assertEqual(first["selected"]["rating"], 3.54)
+        self.assertEqual(first["michelin"]["distinction"], "BIB_GOURMAND")
         self.assertTrue(second["cached"])
         self.assertEqual(provider.calls, 1)
         self.assertEqual(
@@ -44,9 +62,20 @@ class ServiceTests(unittest.TestCase):
         )
 
     def test_requires_name(self) -> None:
-        service = MatchService(provider=FakeProvider())
+        service = MatchService(
+            provider=FakeProvider(), michelin_provider=FakeMichelinProvider()
+        )
         with self.assertRaisesRegex(ValueError, "名稱"):
             service.match({"address": "somewhere"})
+
+    def test_returns_michelin_when_tabelog_is_unavailable(self) -> None:
+        service = MatchService(
+            provider=FailingProvider(), michelin_provider=FakeMichelinProvider()
+        )
+        result = service.match({"name": "清水屋"})
+        self.assertIsNone(result["selected"])
+        self.assertEqual(result["michelin"]["distinction_label"], "必比登推介")
+        self.assertEqual(result["tabelog_error"], "Tabelog 403")
 
 
 if __name__ == "__main__":

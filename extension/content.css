@@ -82,6 +82,72 @@
   padding: 8px 0;
 }
 
+.meshilens-michelin {
+  background: #fff7f7;
+  border: 1px solid #ead4d6;
+  border-radius: 10px;
+  margin-bottom: 11px;
+  padding: 10px 11px;
+}
+
+.meshilens-michelin-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.meshilens-michelin-source {
+  color: #8f1622;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.meshilens-michelin-current,
+.meshilens-michelin-details {
+  color: var(--ml-muted);
+  font-size: 10px;
+}
+
+.meshilens-michelin-awards {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.meshilens-michelin-badge,
+.meshilens-green-star {
+  border-radius: 999px;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 750;
+  padding: 4px 9px;
+  text-decoration: none;
+}
+
+.meshilens-michelin-badge {
+  background: #a71927;
+  color: white;
+}
+
+.meshilens-michelin-badge:hover,
+.meshilens-michelin-badge:focus-visible {
+  background: #86131e;
+  outline: 0;
+}
+
+.meshilens-green-star {
+  background: #e4f2e9;
+  color: #23613c;
+}
+
+.meshilens-michelin-details {
+  line-height: 1.4;
+  margin-top: 7px;
+}
+
 .meshilens-reasons {
   margin-top: 8px;
 }

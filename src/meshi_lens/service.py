@@ -6,6 +6,7 @@ import time
 from typing import Any, Mapping
 
 from .matching import rank_candidates
+from .michelin import MichelinProvider
 from .provider import GurumeProvider, canonical_restaurant_url
 
 
@@ -37,8 +38,13 @@ class TTLCache:
 
 
 class MatchService:
-    def __init__(self, provider: GurumeProvider | None = None) -> None:
+    def __init__(
+        self,
+        provider: GurumeProvider | None = None,
+        michelin_provider: MichelinProvider | None = None,
+    ) -> None:
         self.provider = provider or GurumeProvider()
+        self.michelin_provider = michelin_provider or MichelinProvider()
         self.cache = TTLCache()
 
     @staticmethod
@@ -88,15 +94,27 @@ class MatchService:
         if cached:
             return {**cached, "cached": True}
 
-        candidates = rank_candidates(place, self.provider.search(place))
+        michelin = self.michelin_provider.match(place)
+        try:
+            candidates = rank_candidates(place, self.provider.search(place))
+            tabelog_error = ""
+        except Exception as exc:
+            if not michelin:
+                raise
+            candidates = []
+            tabelog_error = str(exc) or "Tabelog 查詢失敗"
         selected = candidates[0] if candidates and candidates[0]["confidence"] != "low" else None
+        if selected:
+            michelin = self.michelin_provider.match(place, selected) or michelin
         result = {
             "place": place,
             "selected": selected,
             "candidates": candidates,
+            "michelin": michelin,
             "matched": selected is not None,
             "needs_confirmation": bool(selected and selected["confidence"] != "high"),
             "source": "Tabelog 日本語版",
+            "tabelog_error": tabelog_error,
             "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "cached": False,
         }
