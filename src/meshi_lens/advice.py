@@ -115,8 +115,9 @@ class GroqDiningAdvisor:
         )
         return {
             "model": self.model,
+            # This short structured summary needs deterministic JSON, not a reasoning trace.
             # Qwen supports none/default; GPT-OSS supports low/medium/high.
-            "reasoning_effort": "default" if is_qwen else "low",
+            "reasoning_effort": "none" if is_qwen else "low",
             "reasoning_format": "hidden",
             "temperature": 0.6 if is_qwen else 0.2,
             "max_completion_tokens": 300,
