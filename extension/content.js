@@ -216,6 +216,13 @@ function syncAdvice(card) {
 }
 
 async function loadAdvice(card, place, candidate, michelin, sequence) {
+  // Michelin can arrive after the Tabelog result.  Start the AI request with the
+  // first complete restaurant match and keep it in the background; otherwise a
+  // late Michelin response would restart the pending AI card and make the UI
+  // feel slower (as well as sending a duplicate request).
+  const requestKey = candidate.url || candidate.name;
+  if (card._meshilensAdviceRequestKey === requestKey) return;
+  card._meshilensAdviceRequestKey = requestKey;
   const payload = advicePayload(place, candidate, michelin);
   if (!payload) return;
   const key = adviceCacheKey(candidate, michelin);
@@ -473,6 +480,7 @@ function renderResult(card, result) {
       const preservedNodes = [headerNode, michelinNode].filter(Boolean);
       card._meshilensSelected = candidate;
       card._meshilensAdvice = null;
+      card._meshilensAdviceRequestKey = "";
       const resultWithMichelin = {
         ...result,
         michelin: card._meshilensMichelin || result.michelin || null,
