@@ -8,10 +8,26 @@ from meshi_lens.provider import (
     hyakumeiten_from_tabelog_html,
     merge_candidate_details,
     restaurant_to_dict,
+    web_search_queries,
 )
 
 
 class ProviderTests(unittest.TestCase):
+    def test_searches_by_local_phone_before_translated_name(self) -> None:
+        self.assertEqual(
+            web_search_queries(
+                {
+                    "name": "Sandwich Shop MURATA",
+                    "alternate_name": "",
+                    "phone": "+81 29-897-1508",
+                }
+            ),
+            [
+                'site:tabelog.com "029-897-1508"',
+                'site:tabelog.com "Sandwich Shop MURATA"',
+            ],
+        )
+
     def test_canonicalizes_review_and_language_urls(self) -> None:
         self.assertEqual(
             canonical_restaurant_url(

@@ -1,7 +1,7 @@
 const CARD_ID = "meshilens-card";
 const ADDRESS_PREFIX = /^(地址|住所|address)\s*[:：]?\s*/i;
 const PHONE_PREFIX = /^(電話|電話番号|phone)\s*[:：]?\s*/i;
-const { isFoodCategory } = globalThis.MeshiLensCategory;
+const { foodSignalsFromLabels, isFoodPlace } = globalThis.MeshiLensCategory;
 let activePlaceKey = "";
 let lookupSequence = 0;
 let debounceTimer = null;
@@ -38,6 +38,15 @@ function tabelogUrlFromPage() {
   return "";
 }
 
+function diningSignals(detailPanel) {
+  const labels = Array.from(
+    detailPanel?.querySelectorAll('button, [role="tab"], [aria-label]') || [],
+    (element) => [element.getAttribute("aria-label"), element.textContent]
+      .filter(Boolean),
+  ).flat();
+  return foodSignalsFromLabels(labels);
+}
+
 function extractPlace() {
   const title = document.querySelector("h1.DUwDvf, h1.fontHeadlineLarge");
   const name = title?.textContent?.trim() || "";
@@ -46,7 +55,7 @@ function extractPlace() {
   const category = detailPanel
     ?.querySelector('button[jsaction$=".category"], button.DkEaL')
     ?.textContent?.trim() || "";
-  if (!isFoodCategory(category)) return null;
+  if (!isFoodPlace({ category, ...diningSignals(detailPanel) })) return null;
   const alternateName = document.querySelector("h2.bwoZTb")?.textContent?.trim() || "";
   const address = labeledValue(
     ['button[data-item-id="address"]', '[data-item-id="address"]'],

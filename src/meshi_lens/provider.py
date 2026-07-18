@@ -122,6 +122,24 @@ def area_from_address(address: str) -> str | None:
     return match.group(1) if match else None
 
 
+def web_search_queries(place: Mapping[str, Any]) -> list[str]:
+    """Build identity-focused fallbacks for translated Google Maps names."""
+    queries: list[str] = []
+    raw_phone = str(place.get("phone") or "").strip()
+    if raw_phone:
+        local_phone = re.sub(r"^\+?81[\s().-]*", "0", raw_phone)
+        local_phone = re.sub(r"[^\d-]", "", local_phone)
+        if local_phone:
+            queries.append(f'site:tabelog.com "{local_phone}"')
+
+    for value in (place.get("alternate_name"), place.get("name")):
+        name = str(value or "").replace('"', "").strip()
+        query = f'site:tabelog.com "{name}"' if name else ""
+        if query and query not in queries:
+            queries.append(query)
+    return queries
+
+
 def canonical_restaurant_url(value: str) -> str | None:
     """Reduce a Tabelog result/review URL to its Japanese restaurant page."""
     decoded = unquote(value)
@@ -271,33 +289,32 @@ class GurumeProvider:
         """Find indexed Tabelog detail URLs when Tabelog's search page returns 403."""
         from curl_cffi import requests
 
-        name = str(place.get("alternate_name") or place.get("name") or "").strip()
-        query = f'site:tabelog.com "{name.replace(chr(34), "").strip()}"'[:500]
         search_engines = (
-            ("https://search.yahoo.co.jp/search", {"p": query}),
-            ("https://html.duckduckgo.com/html/", {"q": query}),
+            ("https://search.yahoo.co.jp/search", "p"),
+            ("https://html.duckduckgo.com/html/", "q"),
         )
         last_error: Exception | None = None
-        for url, params in search_engines:
-            try:
-                self._throttle()
-                response = requests.get(
-                    url,
-                    params=params,
-                    headers={
-                        "User-Agent": "Mozilla/5.0",
-                        "Accept-Language": "ja,en;q=0.8",
-                    },
-                    timeout=20.0,
-                    allow_redirects=True,
-                    impersonate="chrome",
-                )
-                response.raise_for_status()
-                urls = extract_tabelog_urls(response.text, limit=limit)
-                if urls:
-                    return urls
-            except Exception as exc:
-                last_error = exc
+        for query in web_search_queries(place):
+            for url, parameter in search_engines:
+                try:
+                    self._throttle()
+                    response = requests.get(
+                        url,
+                        params={parameter: query[:500]},
+                        headers={
+                            "User-Agent": "Mozilla/5.0",
+                            "Accept-Language": "ja,en;q=0.8",
+                        },
+                        timeout=20.0,
+                        allow_redirects=True,
+                        impersonate="chrome",
+                    )
+                    response.raise_for_status()
+                    urls = extract_tabelog_urls(response.text, limit=limit)
+                    if urls:
+                        return urls
+                except Exception as exc:
+                    last_error = exc
         if last_error:
             raise last_error
         return []
@@ -571,4 +588,18 @@ class GurumeProvider:
             except Exception:
                 enriched.append(candidate)
         enriched.extend(candidates[4:])
+        if not self._has_strong_identity_match(place, enriched):
+            try:
+                fallback_urls = self._discover_with_web_search(place, min(limit, 4))
+                fallback_candidates = self._fetch_details(
+                    fallback_urls, RestaurantDetailRequest
+                )
+                known_urls = {str(item.get("url") or "") for item in enriched}
+                enriched.extend(
+                    item
+                    for item in fallback_candidates
+                    if str(item.get("url") or "") not in known_urls
+                )
+            except Exception:
+                pass
         return enriched
