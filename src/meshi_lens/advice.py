@@ -151,6 +151,8 @@ class GroqDiningAdvisor:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": "MeshiLens/0.4 (+https://meshilens.vercel.app)",
             },
             method="POST",
         )

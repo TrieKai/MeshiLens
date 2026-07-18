@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from meshi_lens.advice import GroqDiningAdvisor, _validate_advice, advice_facts
 
@@ -58,6 +59,25 @@ class AdviceTests(unittest.TestCase):
         advisor = GroqDiningAdvisor(api_key="test-key", model="openai/gpt-oss-20b")
         body = advisor._request_body({"restaurant_name": "測試"})
         self.assertEqual(body["reasoning_effort"], "low")
+
+    def test_sends_an_identifying_user_agent_to_groq(self) -> None:
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            @staticmethod
+            def read() -> bytes:
+                return b'{"choices":[{"message":{"content":"{\\"summary\\":\\"test\\"}"}}]}'
+
+        advisor = GroqDiningAdvisor(api_key="test-key")
+        with patch("meshi_lens.advice.urlopen", return_value=FakeResponse()) as urlopen:
+            advisor.summarize(self.place, self.candidate, None)
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.get_header("User-agent"), "MeshiLens/0.4 (+https://meshilens.vercel.app)")
+        self.assertEqual(request.get_header("Accept"), "application/json")
 
 
 if __name__ == "__main__":
