@@ -79,6 +79,22 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(result["michelin"]["distinction_label"], "必比登推介")
         self.assertEqual(result["tabelog_error"], "Tabelog 403")
 
+    def test_michelin_can_return_without_waiting_for_tabelog(self) -> None:
+        provider = FakeProvider()
+        service = MatchService(
+            provider=provider, michelin_provider=FakeMichelinProvider()
+        )
+        result = service.match_michelin({"name": "清水屋"})
+        self.assertEqual(result["michelin"]["distinction_label"], "必比登推介")
+        self.assertEqual(provider.calls, 0)
+
+    def test_tabelog_match_can_skip_michelin(self) -> None:
+        service = MatchService(
+            provider=FakeProvider(), michelin_provider=FakeMichelinProvider()
+        )
+        result = service.match({"name": "清水屋"}, include_michelin=False)
+        self.assertIsNone(result["michelin"])
+
 
 if __name__ == "__main__":
     unittest.main()

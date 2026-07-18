@@ -46,6 +46,7 @@ class MatchService:
         self.provider = provider or GurumeProvider()
         self.michelin_provider = michelin_provider or MichelinProvider()
         self.cache = TTLCache()
+        self.michelin_cache = TTLCache(ttl_seconds=86_400, max_items=512)
 
     @staticmethod
     def validate_place(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -89,24 +90,40 @@ class MatchService:
             )
         )
 
-    def match(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+    def match_michelin(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        place = self.validate_place(payload)
+        key = self._cache_key(place)
+        cached = self.michelin_cache.get(key)
+        if cached:
+            return {**cached, "cached": True}
+        result = {
+            "place": place,
+            "michelin": self.michelin_provider.match(place),
+            "cached": False,
+        }
+        self.michelin_cache.set(key, result)
+        return result
+
+    def match(
+        self, payload: Mapping[str, Any], *, include_michelin: bool = True
+    ) -> dict[str, Any]:
         place = self.validate_place(payload)
         key = self._cache_key(place)
         cached = self.cache.get(key)
         if cached:
             return {**cached, "cached": True}
 
-        michelin = self.michelin_provider.match(place)
+        michelin = self.michelin_provider.match(place) if include_michelin else None
         try:
             candidates = rank_candidates(place, self.provider.search(place))
             tabelog_error = ""
         except Exception as exc:
-            if not michelin:
+            if not michelin or not include_michelin:
                 raise
             candidates = []
             tabelog_error = str(exc) or "Tabelog 查詢失敗"
         selected = candidates[0] if candidates and candidates[0]["confidence"] != "low" else None
-        if selected:
+        if selected and include_michelin:
             michelin = self.michelin_provider.match(place, selected) or michelin
         result = {
             "place": place,

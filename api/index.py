@@ -68,7 +68,7 @@ class handler(BaseHTTPRequestHandler):
         self._send(404, {"error": "找不到路徑"})
 
     def do_POST(self) -> None:  # noqa: N802
-        if self._path() != "/match":
+        if self._path() not in {"/match", "/michelin"}:
             self._send(404, {"error": "找不到路徑"})
             return
         try:
@@ -78,7 +78,12 @@ class handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length))
             if not isinstance(payload, dict):
                 raise ValueError("請求內容必須是物件")
-            self._send(200, SERVICE.match(payload))
+            result = (
+                SERVICE.match_michelin(payload)
+                if self._path() == "/michelin"
+                else SERVICE.match(payload, include_michelin=False)
+            )
+            self._send(200, result)
         except (ValueError, json.JSONDecodeError) as exc:
             self._send(400, {"error": str(exc)})
         except Exception as exc:

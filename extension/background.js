@@ -56,25 +56,30 @@ async function request(path, options = {}) {
   }
 }
 
+function placePayload(place) {
+  return {
+    name: String(place?.name || "").slice(0, 200),
+    alternate_name: String(place?.alternate_name || "").slice(0, 200),
+    address: String(place?.address || "").slice(0, 500),
+    phone: String(place?.phone || "").slice(0, 50),
+    website: String(place?.website || "").slice(0, 500),
+    tabelog_url: String(place?.tabelog_url || "").slice(0, 300),
+    latitude: place?.latitude ?? null,
+    longitude: place?.longitude ?? null,
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (!message || !["MATCH_PLACE", "HEALTH_CHECK"].includes(message.type)) {
+  if (!message || !["MATCH_PLACE", "MATCH_MICHELIN", "HEALTH_CHECK"].includes(message.type)) {
     return false;
   }
   const work = message.type === "HEALTH_CHECK"
     ? request("/health")
     : chrome.storage.local.get({ enabled: true }).then(({ enabled }) => {
         if (!enabled) throw new Error("MeshiLens 已停用");
-        return request("/match", {
+        return request(message.type === "MATCH_MICHELIN" ? "/michelin" : "/match", {
           method: "POST",
-          body: JSON.stringify({
-            name: String(message.place?.name || "").slice(0, 200),
-            alternate_name: String(message.place?.alternate_name || "").slice(0, 200),
-            address: String(message.place?.address || "").slice(0, 500),
-            phone: String(message.place?.phone || "").slice(0, 50),
-            tabelog_url: String(message.place?.tabelog_url || "").slice(0, 300),
-            latitude: message.place?.latitude ?? null,
-            longitude: message.place?.longitude ?? null,
-          }),
+          body: JSON.stringify(placePayload(message.place)),
         });
       });
   work.then((data) => sendResponse({ ok: true, data })).catch((error) => {

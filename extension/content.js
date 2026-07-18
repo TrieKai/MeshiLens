@@ -161,6 +161,22 @@ function michelinView(michelin) {
   return section;
 }
 
+function updateMichelin(card, michelin) {
+  card._meshilensMichelin = michelin || null;
+  const existing = card.querySelector(".meshilens-michelin");
+  if (!michelin) {
+    existing?.remove();
+    return;
+  }
+  const section = michelinView(michelin);
+  if (existing) {
+    existing.replaceWith(section);
+    return;
+  }
+  const header = card.querySelector(".meshilens-header");
+  if (header) header.after(section);
+}
+
 function selectedView(candidate, result) {
   const container = document.createDocumentFragment();
   const row = element("div", "meshilens-score-row");
@@ -271,7 +287,7 @@ function renderResult(card, result) {
   header.append(element("span", "meshilens-source", result.source || "Tabelog 日本語版"));
   card.append(header);
 
-  const michelin = michelinView(result.michelin);
+  const michelin = michelinView(result.michelin || card._meshilensMichelin);
   if (michelin) card.append(michelin);
 
   const selected = result.selected;
@@ -321,7 +337,13 @@ function renderResult(card, result) {
 async function lookup(place) {
   const sequence = ++lookupSequence;
   const card = mountCard(place);
-  renderStatus(card, "正在比對 Tabelog 店家…");
+  renderStatus(card, "正在查詢 Tabelog 與 Michelin…");
+  const michelinRequest = chrome.runtime.sendMessage({ type: "MATCH_MICHELIN", place })
+    .then((response) => {
+      if (sequence !== lookupSequence || !card.isConnected || !response?.ok) return;
+      if (response.data?.michelin) updateMichelin(card, response.data.michelin);
+    })
+    .catch(() => {});
   try {
     const response = await chrome.runtime.sendMessage({ type: "MATCH_PLACE", place });
     if (sequence !== lookupSequence || !card.isConnected) return;
@@ -329,8 +351,14 @@ async function lookup(place) {
     renderResult(card, response.data);
   } catch (error) {
     if (sequence !== lookupSequence || !card.isConnected) return;
-    renderStatus(card, error.message || "Tabelog 查詢失敗");
+    renderResult(card, {
+      candidates: [],
+      michelin: card._meshilensMichelin,
+      source: "Tabelog 日本語版",
+      tabelog_error: error.message || "Tabelog 查詢失敗",
+    });
   }
+  await michelinRequest;
 }
 
 function scan() {
