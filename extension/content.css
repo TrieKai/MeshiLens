@@ -152,29 +152,102 @@
   margin-top: 8px;
 }
 
-.meshilens-awards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 9px;
+.meshilens-timeline {
+  background: #fcfaf6;
+  border: 1px solid var(--ml-border);
+  border-radius: 10px;
+  margin-top: 11px;
+  padding: 10px 12px 8px;
 }
 
-.meshilens-hyakumeiten {
-  background: #fff4cc;
-  border: 1px solid #dfbd58;
-  border-radius: 999px;
-  color: #76520c;
-  display: inline-block;
+.meshilens-timeline-title {
+  color: var(--ml-muted);
   font-size: 11px;
-  font-weight: 750;
-  padding: 4px 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+}
+
+.meshilens-timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.meshilens-timeline-item {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 44px minmax(0, 1fr);
+  padding: 0 0 12px;
+  position: relative;
+}
+
+.meshilens-timeline-item:last-child {
+  padding-bottom: 2px;
+}
+
+.meshilens-timeline-item:not(:last-child)::before {
+  background: #e2d9cd;
+  bottom: 0;
+  content: "";
+  left: 51px;
+  position: absolute;
+  top: 16px;
+  width: 1px;
+}
+
+.meshilens-timeline-year {
+  color: var(--ml-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  padding-top: 1px;
+}
+
+.meshilens-timeline-body {
+  padding-left: 14px;
+  position: relative;
+}
+
+.meshilens-timeline-body::before {
+  background: #c4b8a8;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px #fcfaf6;
+  content: "";
+  height: 7px;
+  left: 0;
+  position: absolute;
+  top: 5px;
+  width: 7px;
+}
+
+.meshilens-timeline-item.is-current .meshilens-timeline-body::before,
+.meshilens-timeline-item.is-michelin .meshilens-timeline-body::before {
+  background: #8f1622;
+}
+
+.meshilens-timeline-label {
+  color: var(--ml-ink);
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
   text-decoration: none;
 }
 
-.meshilens-hyakumeiten:hover,
-.meshilens-hyakumeiten:focus-visible {
-  background: #ffe9a3;
+a.meshilens-timeline-label:hover,
+a.meshilens-timeline-label:focus-visible {
+  color: var(--ml-accent);
   outline: 0;
+}
+
+.meshilens-timeline-item.is-current .meshilens-timeline-label {
+  color: var(--ml-accent);
+}
+
+.meshilens-timeline-meta {
+  color: var(--ml-muted);
+  font-size: 11px;
+  margin-top: 2px;
 }
 
 .meshilens-reservation,

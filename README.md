@@ -15,7 +15,7 @@
 - 使用 `gurume` 搜尋 Tabelog，並補抓候選店家的基本資料
 - Tabelog 搜尋頁回覆 403 時，以低頻率公開網頁搜尋找出候選店家 URL，再由 `gurume` 讀取 Tabelog 詳細頁
 - 以電話、地址、座標及正規化店名計算配對信心
-- 在 Maps 店家區塊顯示評分、評論數、多年度百名店紀錄、價位、車站、營業資訊及 Tabelog 連結
+- 在 Maps 店家區塊顯示評分、評論數、店家時間線（百名店多年紀錄 + 目前 Michelin）、價位、車站、營業資訊及 Tabelog 連結
 - 顯示 Tabelog 的預約狀態；有穩定的線上預約連結時提供直接按鈕
 - 顯示信用卡、電子支付與 QR Code 支付的接受狀態及 Tabelog 列出的品牌
 - 顯示日本全地區目前 Michelin Guide 的三星、二星、一星、必比登及指南入選資訊
@@ -81,7 +81,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 node --check extension/background.js
 node --check extension/content.js
 node --check extension/popup.js
-node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js tests/test_maps.js
+node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js tests/test_maps.js tests/test_timeline.js
 ```
 
 測試包含「割烹 清水屋」對 Tabelog「清水屋」的電話與地址差異案例。
@@ -100,10 +100,12 @@ node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js t
 
 ```text
 extension/                 Chrome／Edge Manifest V3 擴充功能
+extension/timeline.js      店家時間線條目組裝
 src/meshi_lens/provider.py gurume 介接與節流
 src/meshi_lens/michelin.py Michelin SSR 解析、本地快照與店家配對
 src/meshi_lens/matching.py 店家正規化、距離與配對評分
 src/meshi_lens/server.py   只監聽本機的 JSON HTTP 服務
 scripts/update_michelin.py 低頻更新日本全地區 Michelin 快照
 tests/                     不連網單元測試
+AGENTS.md                  AI／協作代理人專案指引
 ```

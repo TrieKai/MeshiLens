@@ -4,6 +4,7 @@ const PHONE_PREFIX = /^(電話|電話番号|phone)\s*[:：]?\s*/i;
 const { foodSignalsFromLabels, isFoodPlace } = globalThis.MeshiLensCategory;
 const { coordinatesFromMapsUrl } = globalThis.MeshiLensMaps;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
+const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 let activePlaceKey = "";
 let lookupSequence = 0;
 let debounceTimer = null;
@@ -161,20 +162,76 @@ function michelinView(michelin) {
   return section;
 }
 
+function timelineView(entries) {
+  if (!shouldShowTimeline(entries)) return null;
+  const section = element("section", "meshilens-timeline");
+  section.setAttribute("aria-label", "店家時間線");
+  section.append(element("div", "meshilens-timeline-title", "店家時間線"));
+  const list = element("ol", "meshilens-timeline-list");
+  for (const entry of entries) {
+    const item = element("li", "meshilens-timeline-item");
+    if (entry.current) item.classList.add("is-current");
+    if (entry.kind === "michelin") item.classList.add("is-michelin");
+    item.append(element("span", "meshilens-timeline-year", entry.year_label || ""));
+    const body = element("div", "meshilens-timeline-body");
+    if (entry.url) {
+      const link = element("a", "meshilens-timeline-label", entry.label);
+      link.href = entry.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      if (entry.title) link.title = entry.title;
+      body.append(link);
+    } else {
+      body.append(element("div", "meshilens-timeline-label", entry.label));
+    }
+    if (entry.meta) body.append(element("div", "meshilens-timeline-meta", entry.meta));
+    item.append(body);
+    list.append(item);
+  }
+  section.append(list);
+  return section;
+}
+
+function syncTimeline(card) {
+  const existing = card.querySelector(".meshilens-timeline");
+  const selected = card._meshilensSelected;
+  if (!selected) {
+    existing?.remove();
+    return;
+  }
+  const entries = buildTimelineEntries(
+    card._meshilensMichelin,
+    selected.hyakumeiten || [],
+  );
+  const section = timelineView(entries);
+  if (!section) {
+    existing?.remove();
+    return;
+  }
+  if (existing) {
+    existing.replaceWith(section);
+    return;
+  }
+  const scoreRow = card.querySelector(".meshilens-score-row");
+  if (scoreRow) scoreRow.after(section);
+}
+
 function updateMichelin(card, michelin) {
   card._meshilensMichelin = michelin || null;
   const existing = card.querySelector(".meshilens-michelin");
   if (!michelin) {
     existing?.remove();
+    syncTimeline(card);
     return;
   }
   const section = michelinView(michelin);
   if (existing) {
     existing.replaceWith(section);
-    return;
+  } else {
+    const header = card.querySelector(".meshilens-header");
+    if (header) header.after(section);
   }
-  const header = card.querySelector(".meshilens-header");
-  if (header) header.after(section);
+  syncTimeline(card);
 }
 
 function selectedView(candidate, result) {
@@ -192,21 +249,10 @@ function selectedView(candidate, result) {
   );
   row.append(meta);
   container.append(row);
-  const hyakumeiten = candidate.hyakumeiten || [];
-  if (candidate.is_hyakumeiten && hyakumeiten.length) {
-    const awards = element("div", "meshilens-awards");
-    for (const selection of hyakumeiten) {
-      const award = element("a", "meshilens-hyakumeiten");
-      const category = [selection.category, selection.area].filter(Boolean).join(" ");
-      award.textContent = `百名店 ${selection.year}${category ? ` · ${category}` : ""}`;
-      award.href = selection.url;
-      award.target = "_blank";
-      award.rel = "noopener noreferrer";
-      award.title = selection.label || award.textContent;
-      awards.append(award);
-    }
-    container.append(awards);
-  }
+  const timeline = timelineView(
+    buildTimelineEntries(result.michelin, candidate.hyakumeiten || []),
+  );
+  if (timeline) container.append(timeline);
 
   const reservationStatus = candidate.reservation_url
     ? "online"
@@ -287,17 +333,21 @@ function renderResult(card, result) {
   header.append(element("span", "meshilens-source", result.source || "Tabelog 日本語版"));
   card.append(header);
 
-  const michelin = michelinView(result.michelin || card._meshilensMichelin);
+  const michelinData = result.michelin || card._meshilensMichelin || null;
+  card._meshilensMichelin = michelinData;
+  const resultWithMichelin = { ...result, michelin: michelinData };
+  const michelin = michelinView(michelinData);
   if (michelin) card.append(michelin);
 
   const selected = result.selected;
+  card._meshilensSelected = selected || null;
   if (!selected) {
     const message = result.tabelog_error
       ? `Tabelog：${result.tabelog_error}`
       : "找不到可信的 Tabelog 店家，請從候選結果選擇。";
     card.append(element("div", "meshilens-status", message));
   } else {
-    card.append(selectedView(selected, result));
+    card.append(selectedView(selected, resultWithMichelin));
   }
 
   if (!result.candidates?.length) return;
@@ -320,7 +370,12 @@ function renderResult(card, result) {
       const headerNode = card.querySelector(".meshilens-header");
       const michelinNode = card.querySelector(".meshilens-michelin");
       const preservedNodes = [headerNode, michelinNode].filter(Boolean);
-      card.replaceChildren(...preservedNodes, selectedView(candidate, result));
+      card._meshilensSelected = candidate;
+      const resultWithMichelin = {
+        ...result,
+        michelin: card._meshilensMichelin || result.michelin || null,
+      };
+      card.replaceChildren(...preservedNodes, selectedView(candidate, resultWithMichelin));
       card.append(toggle, list);
       list.classList.add("meshilens-hidden");
       toggle.textContent = `查看候選店家（${result.candidates.length}）`;
