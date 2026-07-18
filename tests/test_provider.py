@@ -7,7 +7,10 @@ from meshi_lens.provider import (
     extract_tabelog_urls,
     hyakumeiten_from_tabelog_html,
     merge_candidate_details,
+    payment_from_tabelog_html,
+    reservation_from_tabelog_html,
     restaurant_to_dict,
+    stable_reservation_url,
     web_search_queries,
 )
 
@@ -118,6 +121,8 @@ class ProviderTests(unittest.TestCase):
                 "dinner_price": "￥40,000～￥49,999",
                 "business_hours": "月・火 11:30 - 14:00",
                 "closed_days": "日曜日",
+                "reservation_url": "https://tabelog.com/booking/example",
+                "has_reservation": True,
             }
         )
         self.assertEqual(candidate["station"], "金沢駅")
@@ -125,6 +130,64 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(candidate["dinner_price"], "￥40,000～￥49,999")
         self.assertEqual(candidate["business_hours"], "月・火 11:30 - 14:00")
         self.assertEqual(candidate["closed_days"], "日曜日")
+        self.assertEqual(
+            candidate["reservation_url"], "https://tabelog.com/booking/example"
+        )
+        self.assertTrue(candidate["has_reservation"])
+
+    def test_extracts_reservation_and_payment_information(self) -> None:
+        html = """
+        <table>
+          <tr><th>予約可否</th><td>予約可<br>週末は早めの予約を推奨</td></tr>
+          <tr>
+            <th>支払い方法</th>
+            <td>
+              カード可（VISA、Master、JCB、AMEX）
+              電子マネー可（Suica、iD、QUICPay）
+              QRコード決済可（PayPay、楽天ペイ）
+            </td>
+          </tr>
+        </table>
+        """
+        self.assertEqual(
+            reservation_from_tabelog_html(html),
+            {
+                "status": "available",
+                "url": "",
+                "details": "予約可 週末は早めの予約を推奨",
+            },
+        )
+        payment = payment_from_tabelog_html(html)
+        self.assertTrue(payment["cards"]["accepted"])
+        self.assertEqual(payment["cards"]["details"], "VISA、Master、JCB、AMEX")
+        self.assertEqual(payment["electronic_money"]["details"], "Suica、iD、QUICPay")
+        self.assertEqual(payment["qr_code"]["details"], "PayPay、楽天ペイ")
+
+    def test_online_reservation_wins_and_payment_rejections_are_kept(self) -> None:
+        html = """
+        <table>
+          <tr><th>予約可否</th><td>予約不可</td></tr>
+          <tr><th>支払い方法</th><td>カード不可 電子マネー不可 QRコード決済不可</td></tr>
+        </table>
+        """
+        self.assertEqual(
+            reservation_from_tabelog_html(html, "https://example.com/reserve")["status"],
+            "online",
+        )
+        payment = payment_from_tabelog_html(html)
+        self.assertFalse(payment["cards"]["accepted"])
+        self.assertFalse(payment["electronic_money"]["accepted"])
+        self.assertFalse(payment["qr_code"]["accepted"])
+
+    def test_rejects_generic_tabelog_reservation_help_links(self) -> None:
+        self.assertEqual(
+            stable_reservation_url(
+                "https://tabelog.com/ai_request_booking/guide/index"
+            ),
+            "",
+        )
+        actionable = "https://yoyaku.tabelog.com/yoyaku/net_booking_form/index?rcd=123"
+        self.assertEqual(stable_reservation_url(actionable), actionable)
 
     def test_merges_coordinates_from_enriched_detail(self) -> None:
         summary = {

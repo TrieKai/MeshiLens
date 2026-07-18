@@ -23,6 +23,9 @@ HYAKUMEITEN_URL_RE = re.compile(
 HYAKUMEITEN_LABEL_RE = re.compile(
     r"^(?:食べログ\s*)?(?P<descriptor>.+?)\s*百名店\s*(?P<year>20\d{2})\s*選出店$"
 )
+PAYMENT_MARKER_RE = re.compile(
+    r"(?P<kind>カード|クレジットカード|電子マネー|QRコード決済)\s*(?P<status>不可|可)"
+)
 
 
 def _model_dict(value: Any) -> dict[str, Any]:
@@ -55,6 +58,8 @@ def _model_dict(value: Any) -> dict[str, Any]:
             "dinner_price",
             "business_hours",
             "closed_days",
+            "reservation_url",
+            "has_reservation",
         }
     }
 
@@ -75,6 +80,22 @@ def _coordinates(data: Mapping[str, Any]) -> tuple[Any, Any]:
         latitude = latitude or _first(coordinates, "latitude", "lat")
         longitude = longitude or _first(coordinates, "longitude", "lng", "lon")
     return latitude, longitude
+
+
+def stable_reservation_url(value: Any) -> str:
+    """Keep actionable booking URLs and reject Tabelog's generic help/account pages."""
+    url = str(value or "").strip()
+    if not url:
+        return ""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        return ""
+    path = parsed.path.rstrip("/").lower()
+    generic_paths = {
+        "/ai_request_booking/guide/index",
+        "/yoyaku/tabelog_booking/send_remind",
+    }
+    return "" if path in generic_paths else url
 
 
 def restaurant_to_dict(value: Any) -> dict[str, Any]:
@@ -98,6 +119,10 @@ def restaurant_to_dict(value: Any) -> dict[str, Any]:
         "dinner_price": _first(data, "dinner_price", "dinner_budget") or "",
         "business_hours": _first(data, "business_hours", "hours") or "",
         "closed_days": _first(data, "closed_days", "regular_holiday") or "",
+        "reservation_url": stable_reservation_url(
+            _first(data, "reservation_url", "booking_url")
+        ),
+        "has_reservation": bool(data.get("has_reservation")),
     }
 
 
@@ -262,10 +287,80 @@ def hyakumeiten_from_tabelog_html(html: str) -> list[dict[str, Any]]:
     )
 
 
-def _add_tabelog_badges(candidate: dict[str, Any], html: str) -> None:
+def _tabelog_info_map(html: str) -> dict[str, str]:
+    """Read the label/value rows used by Tabelog's restaurant information table."""
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "lxml")
+    info: dict[str, str] = {}
+    for row in soup.find_all("tr"):
+        header = row.find("th")
+        value = row.find("td")
+        if header is None or value is None:
+            continue
+        key = re.sub(r"\s+", "", header.get_text(" ", strip=True))
+        text = re.sub(r"\s+", " ", value.get_text(" ", strip=True)).strip()
+        if key and text and key not in info:
+            info[key] = text
+    return info
+
+
+def reservation_from_tabelog_html(
+    html: str, reservation_url: str = ""
+) -> dict[str, Any]:
+    """Return a stable reservation state plus gurume's online-booking URL."""
+    value = _tabelog_info_map(html).get("予約可否", "")
+    if reservation_url:
+        status = "online"
+    elif re.search(r"予約\s*不可", value):
+        status = "unavailable"
+    elif re.search(r"予約\s*可", value):
+        status = "available"
+    else:
+        status = "unknown"
+    return {
+        "status": status,
+        "url": reservation_url,
+        "details": value,
+    }
+
+
+def payment_from_tabelog_html(html: str) -> dict[str, Any]:
+    """Extract card, electronic-money and QR-payment support from Tabelog."""
+    value = _tabelog_info_map(html).get("支払い方法", "")
+    if not value:
+        return {}
+
+    markers = list(PAYMENT_MARKER_RE.finditer(value))
+    payment: dict[str, Any] = {"details": value}
+    key_by_kind = {
+        "カード": "cards",
+        "クレジットカード": "cards",
+        "電子マネー": "electronic_money",
+        "QRコード決済": "qr_code",
+    }
+    for index, marker in enumerate(markers):
+        section_end = markers[index + 1].start() if index + 1 < len(markers) else len(value)
+        details = value[marker.end() : section_end].strip(" \t\r\n、。・()（）")
+        payment[key_by_kind[marker.group("kind")]] = {
+            "accepted": marker.group("status") == "可",
+            "details": details,
+        }
+    return payment
+
+
+def _add_tabelog_extras(candidate: dict[str, Any], html: str) -> None:
     selections = hyakumeiten_from_tabelog_html(html)
     candidate["is_hyakumeiten"] = bool(selections)
     candidate["hyakumeiten"] = selections
+    reservation = reservation_from_tabelog_html(
+        html, str(candidate.get("reservation_url") or "")
+    )
+    candidate["reservation_status"] = reservation["status"]
+    candidate["reservation_details"] = reservation["details"]
+    if reservation["url"]:
+        candidate["reservation_url"] = reservation["url"]
+    candidate["payment"] = payment_from_tabelog_html(html)
 
 
 class GurumeProvider:
@@ -422,7 +517,7 @@ class GurumeProvider:
                         )
                         candidate["latitude"] = latitude
                         candidate["longitude"] = longitude
-                        _add_tabelog_badges(candidate, map_response.text)
+                        _add_tabelog_extras(candidate, map_response.text)
                         candidates.append(candidate)
                         continue
                 except Exception:
@@ -452,11 +547,17 @@ class GurumeProvider:
                         )
                         candidate["latitude"] = latitude
                         candidate["longitude"] = longitude
-                        _add_tabelog_badges(candidate, map_response.text)
+                        _add_tabelog_extras(candidate, map_response.text)
                     except Exception:
                         pass
                 candidate.setdefault("is_hyakumeiten", False)
                 candidate.setdefault("hyakumeiten", [])
+                candidate.setdefault(
+                    "reservation_status",
+                    "online" if candidate.get("reservation_url") else "unknown",
+                )
+                candidate.setdefault("reservation_details", "")
+                candidate.setdefault("payment", {})
                 candidates.append(candidate)
             except Exception:
                 continue

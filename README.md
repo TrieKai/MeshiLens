@@ -5,7 +5,7 @@
 ## 已完成的 MVP
 
 - 監聽 Google Maps 單頁式切換，不用重新整理頁面
-- 擴充功能彈出視窗提供啟用／停用開關；停用後立即移除評分卡並停止新的店家查詢
+- 擴充功能彈出視窗顯示目前版本，並提供啟用／停用開關及五種主題色；停用後立即移除評分卡並停止新的店家查詢
 - 讀取店名、地址、電話與真正的店家座標（網址含多組 `!3d...!4d...` 時使用最後一組目前店家座標）
 - Google Maps 已列出 Tabelog 菜單／店家連結時，直接使用該 URL 並視為高信心配對
 - 以 Google Maps 餐飲類別為快速判斷，未知類別若有菜單、每人價格或明確提供內用，也會視為餐飲店家；沒有任何餐飲訊號的地點不顯示也不呼叫 API
@@ -16,6 +16,8 @@
 - Tabelog 搜尋頁回覆 403 時，以低頻率公開網頁搜尋找出候選店家 URL，再由 `gurume` 讀取 Tabelog 詳細頁
 - 以電話、地址、座標及正規化店名計算配對信心
 - 在 Maps 店家區塊顯示評分、評論數、多年度百名店紀錄、價位、車站、營業資訊及 Tabelog 連結
+- 顯示 Tabelog 的預約狀態；有穩定的線上預約連結時提供直接按鈕
+- 顯示信用卡、電子支付與 QR Code 支付的接受狀態及 Tabelog 列出的品牌
 - 中低信心時列出候選店家，讓使用者手動切換
 - 六小時記憶體快取與 Tabelog 請求節流
 
@@ -64,6 +66,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 node --check extension/background.js
 node --check extension/content.js
 node --check extension/popup.js
+node --test tests/test_settings.js tests/test_toggle.js
 ```
 
 測試包含「割烹 清水屋」對 Tabelog「清水屋」的電話與地址差異案例。

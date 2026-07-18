@@ -4,7 +4,24 @@ const input = document.getElementById("api-url");
 const status = document.getElementById("status");
 const enabledInput = document.getElementById("enabled");
 const enabledState = document.getElementById("enabled-state");
+const version = document.getElementById("version");
+const themeButtons = [...document.querySelectorAll("[data-theme-color]")];
+const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 let checkSequence = 0;
+
+version.textContent = `v${chrome.runtime.getManifest().version}`;
+
+function renderTheme(value) {
+  const color = normalizeThemeColor(value);
+  document.documentElement.style.setProperty("--ml-accent", color);
+  for (const button of themeButtons) {
+    button.setAttribute(
+      "aria-pressed",
+      String(button.dataset.themeColor.toLowerCase() === color),
+    );
+  }
+  return color;
+}
 
 function isAllowedApiUrl(value) {
   try {
@@ -41,13 +58,25 @@ function renderEnabled(enabled) {
   enabledState.textContent = enabled ? "已啟用" : "已暫停";
 }
 
-chrome.storage.local.get({ apiUrl: DEFAULT_API_URL, enabled: true }).then(async ({ apiUrl, enabled }) => {
+chrome.storage.local.get({
+  apiUrl: DEFAULT_API_URL,
+  enabled: true,
+  themeColor: DEFAULT_THEME_COLOR,
+}).then(async ({ apiUrl, enabled, themeColor }) => {
   const value = apiUrl === LEGACY_LOCAL_API_URL ? DEFAULT_API_URL : apiUrl;
   if (value !== apiUrl) await chrome.storage.local.set({ apiUrl: value });
   input.value = value;
   renderEnabled(enabled);
+  renderTheme(themeColor);
   check();
 });
+
+for (const button of themeButtons) {
+  button.addEventListener("click", async () => {
+    const themeColor = renderTheme(button.dataset.themeColor);
+    await chrome.storage.local.set({ themeColor });
+  });
+}
 
 enabledInput.addEventListener("change", async () => {
   const enabled = enabledInput.checked;

@@ -3,10 +3,12 @@ const ADDRESS_PREFIX = /^(地址|住所|address)\s*[:：]?\s*/i;
 const PHONE_PREFIX = /^(電話|電話番号|phone)\s*[:：]?\s*/i;
 const { foodSignalsFromLabels, isFoodPlace } = globalThis.MeshiLensCategory;
 const { coordinatesFromMapsUrl } = globalThis.MeshiLensMaps;
+const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 let activePlaceKey = "";
 let lookupSequence = 0;
 let debounceTimer = null;
 let extensionEnabled = false;
+let themeColor = DEFAULT_THEME_COLOR;
 
 function labeledValue(selectors, prefix) {
   for (const selector of selectors) {
@@ -95,6 +97,7 @@ function mountCard(place) {
   const card = element("section");
   card.id = CARD_ID;
   card.setAttribute("aria-label", "Tabelog 評分");
+  card.style.setProperty("--ml-accent", themeColor);
 
   const titleBlock = place.title?.closest("div");
   const mount = titleBlock?.parentElement;
@@ -146,6 +149,19 @@ function selectedView(candidate, result) {
     container.append(awards);
   }
 
+  const reservationStatus = candidate.reservation_url
+    ? "online"
+    : candidate.reservation_status || "unknown";
+  if (reservationStatus === "online") {
+    const reservation = element("a", "meshilens-reservation", "可網路預約 ↗");
+    reservation.href = candidate.reservation_url;
+    reservation.target = "_blank";
+    reservation.rel = "noopener noreferrer";
+    container.append(reservation);
+  } else if (reservationStatus === "available") {
+    container.append(element("div", "meshilens-reservation-available", "可預約"));
+  }
+
   const details = element("details", "meshilens-details");
   details.append(element("summary", "", "更多 Tabelog 資訊"));
   const info = element("div", "meshilens-info");
@@ -161,6 +177,28 @@ function selectedView(candidate, result) {
   addInfo("午餐價位", candidate.lunch_price);
   addInfo("晚餐價位", candidate.dinner_price);
   addInfo("公休日", candidate.closed_days);
+  const reservationLabels = {
+    online: "可網路預約",
+    available: "可預約",
+    unavailable: "不接受預約",
+  };
+  addInfo("預約", reservationLabels[reservationStatus]);
+  const paymentLabel = (section) => {
+    if (!section || section.accepted === undefined) return "";
+    if (!section.accepted) return "不可使用";
+    return section.details || "可使用";
+  };
+  addInfo("信用卡", paymentLabel(candidate.payment?.cards));
+  addInfo("電子支付", paymentLabel(candidate.payment?.electronic_money));
+  addInfo("QR 支付", paymentLabel(candidate.payment?.qr_code));
+  if (
+    candidate.payment?.details &&
+    !candidate.payment?.cards &&
+    !candidate.payment?.electronic_money &&
+    !candidate.payment?.qr_code
+  ) {
+    addInfo("付款方式", candidate.payment.details);
+  }
   addInfo("電話", candidate.phone);
   addInfo("地址", candidate.address);
   addInfo("營業時間", candidate.business_hours);
@@ -275,19 +313,26 @@ new MutationObserver((mutations) => {
 window.addEventListener("popstate", scan);
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local" || !changes.enabled) return;
-  extensionEnabled = changes.enabled.newValue !== false;
-  activePlaceKey = "";
-  if (!extensionEnabled) {
-    lookupSequence += 1;
-    clearTimeout(debounceTimer);
-    document.getElementById(CARD_ID)?.remove();
-    return;
+  if (areaName !== "local") return;
+  if (changes.themeColor) {
+    themeColor = normalizeThemeColor(changes.themeColor.newValue);
+    document.getElementById(CARD_ID)?.style.setProperty("--ml-accent", themeColor);
   }
-  scan();
+  if (changes.enabled) {
+    extensionEnabled = changes.enabled.newValue !== false;
+    activePlaceKey = "";
+    if (!extensionEnabled) {
+      lookupSequence += 1;
+      clearTimeout(debounceTimer);
+      document.getElementById(CARD_ID)?.remove();
+      return;
+    }
+    scan();
+  }
 });
 
-chrome.storage.local.get({ enabled: true }).then(({ enabled }) => {
+chrome.storage.local.get({ enabled: true, themeColor: DEFAULT_THEME_COLOR }).then(({ enabled, themeColor: savedThemeColor }) => {
   extensionEnabled = enabled;
+  themeColor = normalizeThemeColor(savedThemeColor);
   scan();
 });

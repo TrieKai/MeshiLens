@@ -1,7 +1,7 @@
 [project]
 name = "meshilens"
-version = "0.3.5"
-description = "Show Tabelog ratings, Hyakumeiten history, and restaurant details in Google Maps"
+version = "0.3.6"
+description = "Show Tabelog ratings, reservations, payment methods, and restaurant details in Google Maps"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
