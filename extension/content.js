@@ -33,6 +33,21 @@ function tabelogUrlFromPage() {
   return "";
 }
 
+function officialWebsiteFromPage(detailPanel) {
+  const links = detailPanel?.querySelectorAll(
+    'a[data-item-id="authority"][href], a[aria-label^="網站:"][href], a[aria-label^="Website:"][href]',
+  ) || [];
+  for (const link of links) {
+    try {
+      const url = new URL(link.href);
+      if (url.protocol === "http:" || url.protocol === "https:") return url.href;
+    } catch {
+      // Ignore malformed Maps links and keep checking the remaining website buttons.
+    }
+  }
+  return "";
+}
+
 function diningSignals(detailPanel) {
   const labels = Array.from(
     detailPanel?.querySelectorAll('button, [role="tab"], [aria-label]') || [],
@@ -66,6 +81,7 @@ function extractPlace() {
     alternate_name: alternateName,
     address,
     phone,
+    website: officialWebsiteFromPage(detailPanel),
     tabelog_url: tabelogUrlFromPage(),
     ...coordinatesFromMapsUrl(location.href),
     title,
@@ -79,6 +95,7 @@ function placeKey(place) {
     place.alternate_name,
     place.address,
     place.phone,
+    place.website,
     place.latitude,
     place.longitude,
     place.tabelog_url,

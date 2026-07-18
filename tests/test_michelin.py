@@ -6,6 +6,8 @@ import unittest
 from meshi_lens.michelin import (
     MichelinProvider,
     michelin_listing_meta,
+    normalize_website,
+    parse_michelin_detail,
     parse_michelin_listing,
 )
 
@@ -34,8 +36,35 @@ LISTING_HTML = """
 </div>
 """
 
+DETAIL_HTML = """
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Restaurant",
+  "name": "Tour D'argent Tokyo",
+  "telephone": "+81 3-3239-3111"
+}
+</script>
+<a data-event="CTA_website" href="https://tourdargent.jp/">訪問網</a>
+"""
+
 
 class MichelinTests(unittest.TestCase):
+    def test_parses_phone_and_official_website_from_detail_page(self) -> None:
+        detail = parse_michelin_detail(DETAIL_HTML)
+        self.assertEqual(detail["phone"], "+81 3-3239-3111")
+        self.assertEqual(detail["website"], "https://tourdargent.jp/")
+
+    def test_normalizes_equivalent_official_websites(self) -> None:
+        self.assertEqual(
+            normalize_website("http://www.tourdargent.jp/"),
+            normalize_website("https://tourdargent.jp"),
+        )
+        self.assertEqual(
+            normalize_website("https://example.com/menu/?from=maps#top"),
+            "https://example.com/menu",
+        )
+
     def test_parses_ssr_cards_and_listing_meta(self) -> None:
         self.assertEqual(michelin_listing_meta(LISTING_HTML), (2, 2))
         restaurants = parse_michelin_listing(LISTING_HTML)
@@ -84,6 +113,77 @@ class MichelinTests(unittest.TestCase):
                     "name": "Completely Different Cafe",
                     "latitude": 35.65880,
                     "longitude": 139.70250,
+                }
+            )
+        self.assertIsNone(matched)
+
+    def test_matches_cross_language_name_by_phone_website_and_coordinates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "michelin.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "restaurants": [
+                            {
+                                "id": "1194082",
+                                "name": "Tour D'argent Tokyo",
+                                "url": "https://guide.michelin.com/restaurant/tour-d-argent",
+                                "latitude": 35.680691,
+                                "longitude": 139.734172,
+                                "distinction": "ONE_STAR",
+                                "distinction_label": "米其林一星",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            provider = MichelinProvider(path)
+            provider._fetch_detail = lambda _restaurant: {
+                "phone": "+81 3-3239-3111",
+                "website": "https://tourdargent.jp/",
+            }
+            matched = provider.match(
+                {
+                    "name": "法國料理 銀塔 東京",
+                    "phone": "03-3239-3111",
+                    "website": "http://www.tourdargent.jp/",
+                    "latitude": 35.6809101,
+                    "longitude": 139.7340409,
+                }
+            )
+        self.assertIsNotNone(matched)
+        self.assertEqual(matched["id"], "1194082")
+        self.assertEqual(matched["match_score"], 98.4)
+        self.assertIn("電話完全相同", matched["match_reasons"])
+        self.assertIn("官方網站完全相同", matched["match_reasons"])
+
+    def test_rejects_ambiguous_shared_phone_without_website(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "michelin.json"
+            restaurants = [
+                {
+                    "id": str(index),
+                    "name": name,
+                    "url": f"https://guide.michelin.com/restaurant/{index}",
+                    "phone": "03-0000-0000",
+                    "latitude": 35.0 + offset,
+                    "longitude": 139.0,
+                    "distinction_label": "米其林指南入選",
+                }
+                for index, name, offset in (
+                    (1, "Hotel Restaurant A", 0.00005),
+                    (2, "Hotel Restaurant B", 0.00010),
+                )
+            ]
+            path.write_text(json.dumps({"restaurants": restaurants}), encoding="utf-8")
+            provider = MichelinProvider(path)
+            matched = provider.match(
+                {
+                    "name": "完全不同的中文名稱",
+                    "phone": "03-0000-0000",
+                    "latitude": 35.0,
+                    "longitude": 139.0,
                 }
             )
         self.assertIsNone(matched)

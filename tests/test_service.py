@@ -47,6 +47,7 @@ class ServiceTests(unittest.TestCase):
             "alternate_name": "清水屋",
             "address": "茨城県潮来市永山2651-1",
             "phone": "0299-64-2011",
+            "website": "https://www.kappo-shimizuya.com/",
             "tabelog_url": "https://tabelog.com/ibaraki/A0804/A080401/8000477/dtlmenu/",
         }
         first = service.match(place)
@@ -54,6 +55,7 @@ class ServiceTests(unittest.TestCase):
         self.assertTrue(first["matched"])
         self.assertEqual(first["selected"]["rating"], 3.54)
         self.assertEqual(first["michelin"]["distinction"], "BIB_GOURMAND")
+        self.assertEqual(first["place"]["website"], "https://www.kappo-shimizuya.com/")
         self.assertTrue(second["cached"])
         self.assertEqual(provider.calls, 1)
         self.assertEqual(

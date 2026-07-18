@@ -57,6 +57,7 @@ class MatchService:
             "alternate_name": str(payload.get("alternate_name") or "").strip()[:200],
             "address": str(payload.get("address") or "").strip()[:500],
             "phone": str(payload.get("phone") or "").strip()[:50],
+            "website": str(payload.get("website") or "").strip()[:500],
             "tabelog_url": canonical_restaurant_url(
                 str(payload.get("tabelog_url") or "").strip()[:300]
             )
@@ -81,6 +82,7 @@ class MatchService:
                 "alternate_name",
                 "address",
                 "phone",
+                "website",
                 "tabelog_url",
                 "latitude",
                 "longitude",
