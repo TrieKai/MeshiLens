@@ -6,6 +6,7 @@ const { coordinatesFromMapsUrl } = globalThis.MeshiLensMaps;
 let activePlaceKey = "";
 let lookupSequence = 0;
 let debounceTimer = null;
+let extensionEnabled = false;
 
 function labeledValue(selectors, prefix) {
   for (const selector of selectors) {
@@ -245,6 +246,11 @@ async function lookup(place) {
 
 function scan() {
   clearTimeout(debounceTimer);
+  if (!extensionEnabled) {
+    activePlaceKey = "";
+    document.getElementById(CARD_ID)?.remove();
+    return;
+  }
   debounceTimer = setTimeout(() => {
     const place = extractPlace();
     if (!place) {
@@ -267,4 +273,21 @@ new MutationObserver((mutations) => {
   if (pageChanged) scan();
 }).observe(document.body, { childList: true, subtree: true });
 window.addEventListener("popstate", scan);
-scan();
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local" || !changes.enabled) return;
+  extensionEnabled = changes.enabled.newValue !== false;
+  activePlaceKey = "";
+  if (!extensionEnabled) {
+    lookupSequence += 1;
+    clearTimeout(debounceTimer);
+    document.getElementById(CARD_ID)?.remove();
+    return;
+  }
+  scan();
+});
+
+chrome.storage.local.get({ enabled: true }).then(({ enabled }) => {
+  extensionEnabled = enabled;
+  scan();
+});

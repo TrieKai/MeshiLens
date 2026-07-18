@@ -17,4 +17,43 @@ small { color: #69737d; display: block; font-size: 10px; line-height: 1.4; margi
 .checking { background: #f0ece5; }
 .online { background: #e2f3e8; color: #28613b; }
 .offline { background: #f9e4e1; color: #8d2b21; }
+.paused { background: #f0ece5; color: #69737d; }
 
+.toggle-row {
+  align-items: center;
+  background: #f7f1e8;
+  border: 1px solid #e9ded0;
+  border-radius: 10px;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 10px 11px;
+}
+.toggle-row strong { display: block; font-size: 13px; }
+.toggle-row span { color: #69737d; display: block; font-size: 10px; margin-top: 2px; }
+.switch { cursor: pointer; display: inline-flex; margin: 0; }
+.switch input { height: 1px; opacity: 0; padding: 0; position: absolute; width: 1px; }
+.switch-track {
+  background: #b8b1a7;
+  border-radius: 999px;
+  height: 24px;
+  margin: 0;
+  position: relative;
+  transition: background 160ms ease;
+  width: 42px;
+}
+.switch-track::after {
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 24%);
+  content: "";
+  height: 18px;
+  left: 3px;
+  position: absolute;
+  top: 3px;
+  transition: transform 160ms ease;
+  width: 18px;
+}
+.switch input:checked + .switch-track { background: #bf3a2b; }
+.switch input:checked + .switch-track::after { transform: translateX(18px); }
+.switch input:focus-visible + .switch-track { outline: 2px solid #1f2933; outline-offset: 2px; }

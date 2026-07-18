@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MeshiLens — Tabelog for Maps",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "在 Google Maps 店家頁顯示 Tabelog 評分、多年度百名店與店家資訊。",
   "minimum_chrome_version": "109",
   "permissions": ["storage"],

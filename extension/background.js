@@ -60,10 +60,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (!message || !["MATCH_PLACE", "HEALTH_CHECK"].includes(message.type)) {
     return false;
   }
-  const work =
-    message.type === "HEALTH_CHECK"
-      ? request("/health")
-      : request("/match", {
+  const work = message.type === "HEALTH_CHECK"
+    ? request("/health")
+    : chrome.storage.local.get({ enabled: true }).then(({ enabled }) => {
+        if (!enabled) throw new Error("MeshiLens 已停用");
+        return request("/match", {
           method: "POST",
           body: JSON.stringify({
             name: String(message.place?.name || "").slice(0, 200),
@@ -75,6 +76,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             longitude: message.place?.longitude ?? null,
           }),
         });
+      });
   work.then((data) => sendResponse({ ok: true, data })).catch((error) => {
     sendResponse({ ok: false, error: error.message || "查詢失敗" });
   });
