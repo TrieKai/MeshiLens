@@ -121,6 +121,40 @@ class MichelinTests(unittest.TestCase):
             )
         self.assertIsNone(matched)
 
+    def test_strict_snapshot_match_never_enriches_and_requires_high_confidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "michelin.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "fetched_at": "2026-07-18T00:00:00Z",
+                        "restaurants": parse_michelin_listing(LISTING_HTML),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            provider = MichelinProvider(path)
+            provider._fetch_detail = lambda _restaurant: self.fail("must not enrich")
+            matched = provider.match_snapshot_strict(
+                {
+                    "name": "Example Restaurant",
+                    "latitude": 35.6584466,
+                    "longitude": 139.7021636,
+                }
+            )
+            weak = provider.match_snapshot_strict(
+                {
+                    "name": "Example Restaurant",
+                    "latitude": 35.6592,
+                    "longitude": 139.7021636,
+                }
+            )
+            no_coordinates = provider.match_snapshot_strict({"name": "Example Restaurant"})
+        self.assertEqual(matched["id"], "101")
+        self.assertGreaterEqual(matched["match_score"], 85)
+        self.assertIsNone(weak)
+        self.assertIsNone(no_coordinates)
+
     def test_matches_cross_language_name_by_phone_website_and_coordinates(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "michelin.json"

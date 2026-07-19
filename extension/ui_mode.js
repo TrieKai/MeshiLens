@@ -10,13 +10,9 @@
   }
 
   /*
-   * M2 Michelin batch API contract (not implemented):
-   * The extension may send at most 5–10 currently visible result cards, keyed
-   * primarily by normalized Maps place href and name, with !3d…!4d… coordinates
-   * only when present. The API returns only high-confidence Michelin/Bib
-   * distinctions; it must not look up Tabelog, request AI advice, or scroll Maps.
-   * Redis is server-side and unavailable to the extension, so list badges need a
-   * dedicated API instead of reading the existing cache.
+   * M2 list badges use the snapshot-only Michelin batch API.  At most 10
+   * viewport-visible cards are sent with href/name keys and only !3d…!4d
+   * coordinates.  The list flow never queries Tabelog, AI, or Redis directly.
    */
   globalThis.MeshiLensUiMode = { LIST_MODE, DETAIL_MODE, MAP_MODE, mapsUiMode };
 })();

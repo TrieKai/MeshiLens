@@ -23,6 +23,8 @@ from .provider import GurumeProvider, canonical_restaurant_url
 
 
 class MatchService:
+    MICHELIN_BATCH_MAX_CARDS = 10
+
     def __init__(
         self,
         provider: GurumeProvider | None = None,
@@ -145,6 +147,59 @@ class MatchService:
         }
         self.michelin_cache.set(key, result)
         return result
+
+    def match_michelin_batch(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        """Return only high-confidence, snapshot-backed list badges.
+
+        This deliberately bypasses the normal Michelin cache and detail matcher:
+        Maps list cards must never trigger Michelin detail-page enrichment.
+        """
+        cards = payload.get("cards")
+        if not isinstance(cards, list):
+            raise ValueError("cards 必須是陣列")
+        if len(cards) > self.MICHELIN_BATCH_MAX_CARDS:
+            raise ValueError(f"最多可查詢 {self.MICHELIN_BATCH_MAX_CARDS} 張店家卡片")
+
+        results: list[dict[str, Any]] = []
+        for raw_card in cards:
+            if not isinstance(raw_card, Mapping):
+                results.append({"key": "", "status": "invalid"})
+                continue
+            key = str(raw_card.get("key") or "").strip()[:300]
+            name = str(raw_card.get("name") or "").strip()[:200]
+            if not key or not name:
+                results.append({"key": key, "status": "invalid"})
+                continue
+            try:
+                place = self.validate_place(
+                    {
+                        "name": name,
+                        "latitude": raw_card.get("latitude"),
+                        "longitude": raw_card.get("longitude"),
+                    }
+                )
+            except ValueError:
+                results.append({"key": key, "status": "invalid"})
+                continue
+
+            matched = self.michelin_provider.match_snapshot_strict(place)
+            if not matched:
+                results.append({"key": key, "status": "no_match"})
+                continue
+            results.append(
+                {
+                    "key": key,
+                    "status": "matched",
+                    "badge": {
+                        "distinction": matched.get("distinction"),
+                        "label": matched.get("distinction_label"),
+                        "green_star": bool(matched.get("green_star")),
+                        "url": matched.get("url"),
+                        "snapshot_fetched_at": matched.get("snapshot_fetched_at"),
+                    },
+                }
+            )
+        return {"results": results}
 
     def advice(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(payload.get("facts"), Mapping):

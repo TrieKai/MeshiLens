@@ -194,6 +194,19 @@ function adviceFactsPayload(payload) {
   return { facts };
 }
 
+function michelinBatchPayload(cards) {
+  if (!Array.isArray(cards) || cards.length > 10) return null;
+  return {
+    cards: cards.map((card) => ({
+      key: String(card?.key || "").trim().slice(0, 300),
+      name: String(card?.name || "").trim().slice(0, 200),
+      href: String(card?.href || "").trim().slice(0, 1_000),
+      latitude: card?.latitude ?? null,
+      longitude: card?.longitude ?? null,
+    })),
+  };
+}
+
 async function matchPlace(place, signal) {
   const cached = await getCachedLookup("match", place);
   if (cached) return cached;
@@ -233,8 +246,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: true, cancelled: true });
     return false;
   }
+  if (message.type === "CANCEL_MICHELIN_BATCH") {
+    abortLookup(lookupKey(sender, "michelin_batch"));
+    sendResponse({ ok: true, cancelled: true });
+    return false;
+  }
 
-  if (!["MATCH_PLACE", "MATCH_MICHELIN", "GET_DINING_ADVICE", "HEALTH_CHECK"].includes(message.type)) {
+  if (!["MATCH_PLACE", "MATCH_MICHELIN", "MATCH_MICHELIN_BATCH", "GET_DINING_ADVICE", "HEALTH_CHECK"].includes(message.type)) {
     return false;
   }
 
@@ -243,6 +261,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       ? beginLookup(sender, "match")
       : message.type === "MATCH_MICHELIN"
         ? beginLookup(sender, message.tabelog ? "michelin_tabelog" : "michelin")
+        : message.type === "MATCH_MICHELIN_BATCH"
+          ? beginLookup(sender, "michelin_batch")
         : null;
 
   const work = message.type === "HEALTH_CHECK"
@@ -251,6 +271,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!settings.enabled) throw new Error("MeshiLens 已停用");
         if (message.type === "MATCH_MICHELIN") {
           return matchMichelin(message.place, active.controller.signal, message.tabelog);
+        }
+        if (message.type === "MATCH_MICHELIN_BATCH") {
+          const payload = michelinBatchPayload(message.cards);
+          if (!payload) throw new Error("Michelin 列表卡片格式不正確");
+          return request("/michelin/batch", {
+            method: "POST",
+            body: JSON.stringify(payload),
+            signal: active.controller.signal,
+          });
         }
         if (message.type === "GET_DINING_ADVICE") {
           const payload = adviceFactsPayload(message.payload);

@@ -32,6 +32,26 @@ class FakeMichelinProvider:
         }
 
 
+class BatchMichelinProvider:
+    def __init__(self) -> None:
+        self.strict_calls: list[dict] = []
+
+    def match_snapshot_strict(self, place):
+        self.strict_calls.append(place)
+        if place["name"] != "清水屋":
+            return None
+        return {
+            "distinction": "BIB_GOURMAND",
+            "distinction_label": "必比登推介",
+            "green_star": False,
+            "url": "https://guide.michelin.com/example",
+            "snapshot_fetched_at": "2026-07-18T00:00:00Z",
+        }
+
+    def match(self, *_args, **_kwargs):
+        raise AssertionError("batch must not use detail matcher")
+
+
 class FailingProvider:
     def search(self, _place):
         raise RuntimeError("Tabelog 403")
@@ -61,6 +81,45 @@ class FakeAdvisor:
 
 
 class ServiceTests(unittest.TestCase):
+    def test_michelin_batch_returns_badges_per_card_without_detail_matching(self) -> None:
+        michelin = BatchMichelinProvider()
+        service = MatchService(
+            provider=FakeProvider(),
+            michelin_provider=michelin,
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+        )
+        result = service.match_michelin_batch(
+            {
+                "cards": [
+                    {"key": "one", "name": "清水屋", "latitude": 35.6, "longitude": 139.7},
+                    {"key": "two", "name": "別的店"},
+                    {"key": "three"},
+                    "not-a-card",
+                ]
+            }
+        )
+        self.assertEqual(result["results"][0]["status"], "matched")
+        self.assertEqual(result["results"][0]["badge"]["label"], "必比登推介")
+        self.assertEqual(result["results"][1], {"key": "two", "status": "no_match"})
+        self.assertEqual(result["results"][2], {"key": "three", "status": "invalid"})
+        self.assertEqual(result["results"][3], {"key": "", "status": "invalid"})
+        self.assertEqual(len(michelin.strict_calls), 2)
+
+    def test_michelin_batch_enforces_card_limit(self) -> None:
+        service = MatchService(
+            provider=FakeProvider(),
+            michelin_provider=BatchMichelinProvider(),
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+        )
+        with self.assertRaisesRegex(ValueError, "最多"):
+            service.match_michelin_batch(
+                {"cards": [{"key": str(index), "name": "清水屋"} for index in range(11)]}
+            )
+
     def test_match_and_cache(self) -> None:
         provider = FakeProvider()
         service = MatchService(

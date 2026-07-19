@@ -9,8 +9,16 @@ const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimelin
 const { advicePayload, adviceCacheKey, cachedAdvice } = globalThis.MeshiLensAdvice;
 const { roundCoord } = globalThis.MeshiLensCache;
 const { DETAIL_MODE, LIST_MODE, mapsUiMode } = globalThis.MeshiLensUiMode;
+const {
+  MAX_LIST_CARDS,
+  listCardKey,
+  listCoordinatesFromHref,
+  badgeText,
+} = globalThis.MeshiLensListBadges;
 let activePlaceKey = "";
 let lookupSequence = 0;
+let listBatchSequence = 0;
+let listAbortController = null;
 let detailDebounceTimer = null;
 let listDebounceTimer = null;
 let extensionEnabled = false;
@@ -617,6 +625,92 @@ function showListHint() {
   feed.prepend(hint);
 }
 
+function removeListBadges() {
+  document.querySelectorAll(".meshilens-list-badge").forEach((badge) => badge.remove());
+}
+
+function cancelListBadgeLookup() {
+  listBatchSequence += 1;
+  listAbortController?.abort();
+  listAbortController = null;
+  chrome.runtime.sendMessage({ type: "CANCEL_MICHELIN_BATCH" }).catch(() => {});
+}
+
+function visibleListCards() {
+  const feed = document.querySelector('[role="feed"]');
+  if (!feed) return [];
+  const feedRect = feed.getBoundingClientRect();
+  const top = Math.max(0, feedRect.top);
+  const bottom = Math.min(window.innerHeight, feedRect.bottom);
+  const seen = new Set();
+  const cards = [];
+  for (const link of feed.querySelectorAll('a[href*="/maps/place/"]')) {
+    const name = link.textContent?.trim() || link.getAttribute("aria-label")?.trim() || "";
+    const href = link.href || link.getAttribute("href") || "";
+    const mount = link.closest('[role="article"]') || link.parentElement;
+    if (!name || !href || !mount) continue;
+    const rect = mount.getBoundingClientRect();
+    if (rect.bottom <= top || rect.top >= bottom) continue;
+    const key = listCardKey({ href, name });
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const coordinates = listCoordinatesFromHref(href);
+    cards.push({ key, name, href, ...coordinates, mount });
+    if (cards.length === MAX_LIST_CARDS) break;
+  }
+  return cards;
+}
+
+function mountListBadge(card, badge) {
+  const text = badgeText(badge);
+  if (!text || !card.mount?.isConnected) return;
+  const node = element(badge.url ? "a" : "span", "meshilens-list-badge", text);
+  node.dataset.meshilensListKey = card.key;
+  node.setAttribute("aria-label", `Michelin Guide：${text}`);
+  if (badge.url) {
+    node.href = badge.url;
+    node.target = "_blank";
+    node.rel = "noopener noreferrer";
+  }
+  card.mount.append(node);
+}
+
+async function loadListBadges() {
+  if (currentMapsUiMode() !== LIST_MODE) return;
+  cancelListBadgeLookup();
+  removeListBadges();
+  const cards = visibleListCards();
+  if (!cards.length) return;
+  const controller = new AbortController();
+  listAbortController = controller;
+  const sequence = ++listBatchSequence;
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: "MATCH_MICHELIN_BATCH",
+      cards: cards.map(({ mount, ...card }) => card),
+    });
+    if (
+      controller.signal.aborted
+      || sequence !== listBatchSequence
+      || currentMapsUiMode() !== LIST_MODE
+      || !response?.ok
+    ) return;
+    const badges = new Map(
+      (response.data?.results || [])
+        .filter((result) => result?.status === "matched" && result.badge)
+        .map((result) => [result.key, result.badge]),
+    );
+    for (const card of cards) {
+      const badge = badges.get(card.key);
+      if (badge) mountListBadge(card, badge);
+    }
+  } catch {
+    // List mode remains silent when the optional badge request fails.
+  } finally {
+    if (listAbortController === controller) listAbortController = null;
+  }
+}
+
 function scanDetail() {
   const place = extractPlace();
   if (!place) {
@@ -635,14 +729,18 @@ function scan() {
   clearTimeout(listDebounceTimer);
   if (!extensionEnabled) {
     activePlaceKey = "";
+    cancelListBadgeLookup();
     removeListHint();
+    removeListBadges();
     document.getElementById(CARD_ID)?.remove();
     return;
   }
 
   const mode = currentMapsUiMode();
   if (mode === DETAIL_MODE) {
+    cancelListBadgeLookup();
     removeListHint();
+    removeListBadges();
     detailDebounceTimer = setTimeout(scanDetail, 500);
     return;
   }
@@ -653,19 +751,28 @@ function scan() {
       activePlaceKey = "";
       document.getElementById(CARD_ID)?.remove();
       showListHint();
+      loadListBadges();
     }, 250);
     return;
   }
 
   activePlaceKey = "";
+  cancelListBadgeLookup();
   removeListHint();
+  removeListBadges();
   document.getElementById(CARD_ID)?.remove();
 }
 
 new MutationObserver((mutations) => {
   const pageChanged = mutations.some((mutation) => {
+    const changedNodes = [...mutation.addedNodes, ...mutation.removedNodes];
+    const isMeshiLensUiChange = changedNodes.length > 0 && changedNodes.every(
+      (node) => node instanceof Element
+        && node.matches(`#${CARD_ID}, #${LIST_HINT_ID}, .meshilens-list-badge`),
+    );
+    if (isMeshiLensUiChange) return false;
     const target = mutation.target instanceof Element ? mutation.target : mutation.target.parentElement;
-    return !target?.closest(`#${CARD_ID}`);
+    return !target?.closest(`#${CARD_ID}, #${LIST_HINT_ID}, .meshilens-list-badge`);
   });
   if (pageChanged) scan();
 }).observe(document.body, { childList: true, subtree: true });
@@ -686,7 +793,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       clearTimeout(detailDebounceTimer);
       clearTimeout(listDebounceTimer);
       chrome.runtime.sendMessage({ type: "CANCEL_LOOKUP" }).catch(() => {});
+      cancelListBadgeLookup();
       removeListHint();
+      removeListBadges();
       document.getElementById(CARD_ID)?.remove();
       return;
     }

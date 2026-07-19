@@ -401,3 +401,62 @@ class MichelinProvider:
             source_url=self.dataset.get("source_url") or MICHELIN_JAPAN_URL,
         )
         return result
+
+    def match_snapshot_strict(self, place: Mapping[str, Any]) -> dict[str, Any] | None:
+        """Match a Maps list card using only local snapshot fields.
+
+        List cards intentionally do not have the detail-mode identity signals
+        (phone, website, or Tabelog data), so this accepts only an unambiguous
+        name/coordinate match.  In particular, it never calls ``_fetch_detail``.
+        """
+        name = normalize_name(str(place.get("name") or ""))
+        latitude = _float(place.get("latitude"))
+        longitude = _float(place.get("longitude"))
+        if not name:
+            return None
+
+        ranked: list[tuple[float, float, float | None, Mapping[str, Any]]] = []
+        for restaurant in self.restaurants:
+            candidate_name = str(restaurant.get("_normalized_name") or "")
+            name_score = similarity(name, candidate_name)
+            distance = haversine_meters(
+                latitude,
+                longitude,
+                _float(restaurant.get("latitude")),
+                _float(restaurant.get("longitude")),
+            )
+            if distance is None:
+                # Without a reliable pin coordinate, normalization must resolve
+                # to exactly the same name; near spelling is not enough in a feed.
+                if name != candidate_name:
+                    continue
+                score = 100.0
+            else:
+                if distance > 100 or name_score < 0.88:
+                    continue
+                score = name_score * 70 + max(0.0, 1 - distance / 100) * 30
+            ranked.append((score, name_score, distance, restaurant))
+
+        if not ranked:
+            return None
+        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        score, name_score, distance, winner = ranked[0]
+        if score < 85:
+            return None
+        # Do not label an ambiguous nearby result in a scrolling list.
+        if len(ranked) > 1 and ranked[1][0] >= score - 3:
+            return None
+
+        result = {
+            key: value
+            for key, value in dict(winner).items()
+            if not str(key).startswith("_")
+        }
+        result.update(
+            match_score=round(score, 1),
+            name_score=round(name_score, 3),
+            distance_meters=round(distance) if distance is not None else None,
+            snapshot_fetched_at=self.dataset.get("fetched_at"),
+            source_url=self.dataset.get("source_url") or MICHELIN_JAPAN_URL,
+        )
+        return result
