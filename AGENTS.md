@@ -42,3 +42,5 @@ node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js t
 
 - 店家時間線：以已取得的百名店多年紀錄 + 目前 Michelin 狀態呈現；不做評分歷史曲線或升降星年表。
 - Michelin 詳情（電話／官網）僅在跨語言且必要時低頻補查並快取。
+- `/advice` 只接受結構化 `facts`（或相容的 place／candidate）；不接收評論原文或 Maps DOM。
+- Michelin 初查與 `/match` 並行；若初查未命中且已有 Tabelog 選定店，可再以 Tabelog 識別做一次低頻補配。

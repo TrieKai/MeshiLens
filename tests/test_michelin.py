@@ -88,6 +88,9 @@ class MichelinTests(unittest.TestCase):
                 encoding="utf-8",
             )
             provider = MichelinProvider(path)
+            self.assertTrue(
+                all("_normalized_name" in restaurant for restaurant in provider.restaurants)
+            )
             matched = provider.match(
                 {
                     "name": "Example Restaurant",
@@ -97,6 +100,7 @@ class MichelinTests(unittest.TestCase):
             )
         self.assertIsNotNone(matched)
         self.assertEqual(matched["id"], "101")
+        self.assertNotIn("_normalized_name", matched)
         self.assertLessEqual(matched["distance_meters"], 2)
         self.assertEqual(matched["snapshot_fetched_at"], "2026-07-18T00:00:00Z")
 

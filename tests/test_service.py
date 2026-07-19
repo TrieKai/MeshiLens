@@ -44,7 +44,7 @@ class FakeAdvisor:
     def __init__(self) -> None:
         self.calls = 0
 
-    def summarize(self, _place, _candidate, _michelin):
+    def summarize_facts(self, _facts):
         self.calls += 1
         return {
             "headline": "適合聚餐",
@@ -53,6 +53,11 @@ class FakeAdvisor:
             "cautions": [],
             "evidence": ["Tabelog 評分"],
         }
+
+    def summarize(self, place, candidate, michelin):
+        from meshi_lens.advice import advice_facts
+
+        return self.summarize_facts(advice_facts(place, candidate, michelin))
 
 
 class ServiceTests(unittest.TestCase):
@@ -122,6 +127,70 @@ class ServiceTests(unittest.TestCase):
         result = service.match_michelin({"name": "清水屋"})
         self.assertEqual(result["michelin"]["distinction_label"], "必比登推介")
         self.assertEqual(provider.calls, 0)
+
+    def test_michelin_rematch_uses_tabelog_hint_and_separate_cache(self) -> None:
+        class TrackingMichelin:
+            def __init__(self) -> None:
+                self.calls: list[object] = []
+
+            def match(self, place, tabelog=None):
+                self.calls.append(tabelog)
+                if tabelog and tabelog.get("phone") == "03-1111-2222":
+                    return {
+                        "name": "清水屋",
+                        "distinction_label": "米其林一星",
+                        "url": "https://guide.michelin.com/refined",
+                    }
+                return None
+
+        michelin = TrackingMichelin()
+        service = MatchService(
+            provider=FakeProvider(),
+            michelin_provider=michelin,
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+        )
+        place = {"name": "Shimizuya", "latitude": 35.65, "longitude": 139.70}
+        first = service.match_michelin(place)
+        second = service.match_michelin(
+            {
+                **place,
+                "tabelog": {
+                    "name": "清水屋",
+                    "phone": "03-1111-2222",
+                    "website": "https://example.com",
+                },
+            }
+        )
+        self.assertIsNone(first["michelin"])
+        self.assertEqual(second["michelin"]["distinction_label"], "米其林一星")
+        self.assertEqual(len(michelin.calls), 2)
+        self.assertIsNone(michelin.calls[0])
+        self.assertEqual(michelin.calls[1]["phone"], "03-1111-2222")
+
+    def test_advice_accepts_facts_payload(self) -> None:
+        advisor = FakeAdvisor()
+        service = MatchService(
+            provider=FakeProvider(),
+            michelin_provider=FakeMichelinProvider(),
+            advisor=advisor,
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+        )
+        result = service.advice(
+            {
+                "facts": {
+                    "restaurant_name": "清水屋",
+                    "tabelog_rating": 3.5,
+                    "michelin_distinction": "必比登推介",
+                }
+            }
+        )
+        self.assertTrue(result["available"])
+        self.assertEqual(result["advice"]["headline"], "適合聚餐")
+        self.assertEqual(advisor.calls, 1)
 
     def test_tabelog_match_can_skip_michelin(self) -> None:
         service = MatchService(

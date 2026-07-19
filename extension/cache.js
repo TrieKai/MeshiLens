@@ -11,8 +11,8 @@
     return number.toFixed(decimals);
   }
 
-  function placeCacheKey(place) {
-    return [
+  function placeCacheKey(place, suffix = "") {
+    const key = [
       String(place?.name || "").trim(),
       String(place?.alternate_name || "").trim(),
       String(place?.address || "").trim(),
@@ -22,6 +22,21 @@
       roundCoord(place?.latitude),
       roundCoord(place?.longitude),
     ].join("|");
+    return suffix ? `${key}|${suffix}` : key;
+  }
+
+  function tabelogCacheSuffix(tabelog) {
+    if (!tabelog || typeof tabelog !== "object") return "";
+    const name = String(tabelog.name || "").trim();
+    if (!name) return "";
+    return [
+      "tg",
+      name,
+      String(tabelog.phone || "").trim(),
+      String(tabelog.website || "").trim(),
+      roundCoord(tabelog.latitude),
+      roundCoord(tabelog.longitude),
+    ].join(":");
   }
 
   function lookupCacheKey(kind, placeKey) {
@@ -46,8 +61,10 @@
     return now - entry.savedAt <= LOOKUP_CACHE_TTL_MS ? entry.data : null;
   }
 
-  async function getCachedLookup(kind, place, now = Date.now()) {
-    const placeKey = placeCacheKey(place);
+  async function getCachedLookup(kind, place, options = {}) {
+    const opts = typeof options === "number" ? { now: options } : options || {};
+    const now = opts.now ?? Date.now();
+    const placeKey = placeCacheKey(place, opts.suffix || "");
     const key = lookupCacheKey(kind, placeKey);
     const fromMemory = readMemory(key, now);
     if (fromMemory) return { ...fromMemory, cached: true };
@@ -66,9 +83,11 @@
     }
   }
 
-  async function setCachedLookup(kind, place, data, now = Date.now()) {
+  async function setCachedLookup(kind, place, data, options = {}) {
     if (!data || typeof data !== "object") return;
-    const placeKey = placeCacheKey(place);
+    const opts = typeof options === "number" ? { now: options } : options || {};
+    const now = opts.now ?? Date.now();
+    const placeKey = placeCacheKey(place, opts.suffix || "");
     const key = lookupCacheKey(kind, placeKey);
     const payload = { ...data, cached: false };
     writeMemory(key, payload, now);
@@ -98,6 +117,7 @@
     COORD_DECIMALS,
     roundCoord,
     placeCacheKey,
+    tabelogCacheSuffix,
     lookupCacheKey,
     cachedLookupEntry,
     getCachedLookup,

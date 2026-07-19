@@ -1,7 +1,7 @@
 const CARD_ID = "meshilens-card";
 const ADDRESS_PREFIX = /^(地址|住所|address)\s*[:：]?\s*/i;
 const PHONE_PREFIX = /^(電話|電話番号|phone)\s*[:：]?\s*/i;
-const { foodSignalsFromLabels, isFoodPlace } = globalThis.MeshiLensCategory;
+const { foodSignalsFromLabels, isFoodCategory, isFoodPlace } = globalThis.MeshiLensCategory;
 const { coordinatesFromMapsUrl } = globalThis.MeshiLensMaps;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
@@ -68,7 +68,10 @@ function extractPlace() {
   const category = detailPanel
     ?.querySelector('button[jsaction$=".category"], button.DkEaL')
     ?.textContent?.trim() || "";
-  if (!isFoodPlace({ category, ...diningSignals(detailPanel) })) return null;
+  // Known dining categories skip the heavy button/aria-label scan.
+  if (!isFoodCategory(category) && !isFoodPlace({ category, ...diningSignals(detailPanel) })) {
+    return null;
+  }
   const alternateName = document.querySelector("h2.bwoZTb")?.textContent?.trim() || "";
   const address = labeledValue(
     ['button[data-item-id="address"]', '[data-item-id="address"]'],
@@ -121,7 +124,8 @@ function mountCard(place) {
 
   const titleBlock = place.title?.closest("div");
   const mount = titleBlock?.parentElement;
-  if (mount && mount.getBoundingClientRect().width >= 280 && mount.getBoundingClientRect().width <= 700) {
+  const mountWidth = mount?.getBoundingClientRect().width ?? 0;
+  if (mount && mountWidth >= 280 && mountWidth <= 700) {
     titleBlock.insertAdjacentElement("afterend", card);
   } else {
     card.classList.add("meshilens-floating");
@@ -498,6 +502,14 @@ function renderResult(card, result) {
         card._meshilensMichelin || result.michelin || null,
         card._meshilensSequence,
       );
+      if (!card._meshilensMichelin && card._meshilensPlace) {
+        refineMichelinWithTabelog(
+          card,
+          card._meshilensPlace,
+          candidate,
+          card._meshilensSequence,
+        );
+      }
     });
     list.append(button);
   }
@@ -506,6 +518,32 @@ function renderResult(card, result) {
     toggle.textContent = hidden ? `查看候選店家（${result.candidates.length}）` : "收起候選店家";
   });
   card.append(toggle, list);
+}
+
+function tabelogHint(candidate) {
+  if (!candidate?.name) return null;
+  return {
+    name: candidate.name,
+    phone: candidate.phone || "",
+    website: candidate.website || "",
+    latitude: candidate.latitude ?? null,
+    longitude: candidate.longitude ?? null,
+  };
+}
+
+async function refineMichelinWithTabelog(card, place, candidate, sequence) {
+  if (!candidate || card._meshilensMichelin) return;
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: "MATCH_MICHELIN",
+      place,
+      tabelog: tabelogHint(candidate),
+    });
+    if (sequence !== lookupSequence || !card.isConnected || !response?.ok) return;
+    if (response.data?.michelin) updateMichelin(card, response.data.michelin);
+  } catch {
+    // Optional refinement; keep the card usable without Michelin.
+  }
 }
 
 async function lookup(place) {
@@ -534,6 +572,10 @@ async function lookup(place) {
     if (response.data.selected) {
       loadAdvice(card, place, response.data.selected, card._meshilensMichelin || null, sequence);
     }
+    await michelinRequest;
+    if (response.data.selected && !card._meshilensMichelin) {
+      await refineMichelinWithTabelog(card, place, response.data.selected, sequence);
+    }
   } catch (error) {
     if (sequence !== lookupSequence || !card.isConnected) return;
     renderResult(card, {
@@ -542,8 +584,8 @@ async function lookup(place) {
       source: "Tabelog 日本語版",
       tabelog_error: error.message || "Tabelog 查詢失敗",
     });
+    await michelinRequest;
   }
-  await michelinRequest;
 }
 
 function scan() {

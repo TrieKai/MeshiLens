@@ -7,6 +7,7 @@ const {
   LOOKUP_CACHE_TTL_MS,
   roundCoord,
   placeCacheKey,
+  tabelogCacheSuffix,
   lookupCacheKey,
   cachedLookupEntry,
   getCachedLookup,
@@ -56,4 +57,24 @@ test("memory lookup cache stores match results", async () => {
   assert.equal(cached.matched, true);
   assert.equal(cached.cached, true);
   assert.equal(await getCachedLookup("match", place, 5_000 + LOOKUP_CACHE_TTL_MS + 1), null);
+});
+
+test("tabelog-assisted michelin cache uses a separate suffix", async () => {
+  clearMemoryLookupCache();
+  const place = { name: "Shimizuya", latitude: 35.65, longitude: 139.7 };
+  const tabelog = { name: "清水屋", phone: "03-1111-2222" };
+  const suffix = tabelogCacheSuffix(tabelog);
+  assert.match(suffix, /^tg:清水屋:/);
+  await setCachedLookup("michelin", place, { michelin: null }, { now: 1_000 });
+  await setCachedLookup(
+    "michelin",
+    place,
+    { michelin: { distinction_label: "一星" } },
+    { now: 1_000, suffix },
+  );
+  assert.equal((await getCachedLookup("michelin", place, { now: 2_000 })).michelin, null);
+  assert.equal(
+    (await getCachedLookup("michelin", place, { now: 2_000, suffix })).michelin.distinction_label,
+    "一星",
+  );
 });

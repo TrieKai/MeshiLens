@@ -1,7 +1,13 @@
 import unittest
 from unittest.mock import patch
 
-from meshi_lens.advice import GroqDiningAdvisor, _validate_advice, advice_cache_key, advice_facts
+from meshi_lens.advice import (
+    GroqDiningAdvisor,
+    _validate_advice,
+    advice_cache_key,
+    advice_facts,
+    sanitize_advice_facts,
+)
 
 
 class AdviceTests(unittest.TestCase):
@@ -25,6 +31,22 @@ class AdviceTests(unittest.TestCase):
         self.assertEqual(facts["michelin_distinction"], "必比登推介")
         self.assertNotIn("reviews", facts)
         self.assertNotIn("review_text", facts)
+
+    def test_sanitize_advice_facts_rejects_unknown_noise(self) -> None:
+        facts = sanitize_advice_facts(
+            {
+                "restaurant_name": "清水屋",
+                "tabelog_rating": "3.54",
+                "review_text": "should be dropped",
+                "title": {"tagName": "H1"},
+                "hyakumeiten_years": [2025, "nope", 1990],
+            }
+        )
+        self.assertEqual(facts["restaurant_name"], "清水屋")
+        self.assertEqual(facts["tabelog_rating"], 3.54)
+        self.assertEqual(facts["hyakumeiten_years"], [2025, 1990])
+        self.assertNotIn("review_text", facts)
+        self.assertNotIn("title", facts)
 
     def test_advice_cache_key_tracks_fact_changes(self) -> None:
         michelin = {"distinction_label": "必比登推介", "green_star": False}
@@ -98,7 +120,7 @@ class AdviceTests(unittest.TestCase):
         with patch("meshi_lens.advice.urlopen", return_value=FakeResponse()) as urlopen:
             advisor.summarize(self.place, self.candidate, None)
         request = urlopen.call_args.args[0]
-        self.assertEqual(request.get_header("User-agent"), "MeshiLens/0.4 (+https://meshilens.vercel.app)")
+        self.assertEqual(request.get_header("User-agent"), "MeshiLens/0.5 (+https://meshilens.vercel.app)")
         self.assertEqual(request.get_header("Accept"), "application/json")
 
 

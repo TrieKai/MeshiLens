@@ -10,10 +10,24 @@ const {
   cachedAdvice,
 } = globalThis.MeshiLensAdvice;
 
-test("builds a compact advice request only after a selected candidate exists", () => {
-  const place = { name: "清水屋" };
-  const candidate = { name: "清水屋", url: "https://tabelog.com/example/" };
-  assert.deepEqual(advicePayload(place, candidate, null), { place, candidate, michelin: null });
+test("builds a facts-only advice request after a selected candidate exists", () => {
+  const place = { name: "清水屋", address: "茨城県潮来市", title: { tagName: "H1" } };
+  const candidate = {
+    name: "清水屋",
+    url: "https://tabelog.com/example/",
+    rating: 3.5,
+    review_count: 100,
+  };
+  assert.deepEqual(advicePayload(place, candidate, null), {
+    facts: {
+      restaurant_name: "清水屋",
+      area: "茨城県潮来市",
+      tabelog_rating: 3.5,
+      tabelog_review_count: 100,
+      has_online_reservation: false,
+      michelin_green_star: false,
+    },
+  });
   assert.equal(advicePayload(place, null, null), null);
 });
 

@@ -1,11 +1,6 @@
 (() => {
   const ADVICE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-  function advicePayload(place, candidate, michelin) {
-    if (!place || !candidate?.name) return null;
-    return { place, candidate, michelin: michelin || null };
-  }
-
   function adviceFacts(place, candidate, michelin) {
     const genres = Array.isArray(candidate?.genres)
       ? candidate.genres
@@ -48,6 +43,13 @@
         return true;
       })
     );
+  }
+
+  function advicePayload(place, candidate, michelin) {
+    if (!place || !candidate?.name) return null;
+    const facts = adviceFacts(place, candidate, michelin);
+    if (!facts.restaurant_name) return null;
+    return { facts };
   }
 
   function adviceCacheKey(place, candidate, michelin) {

@@ -3,7 +3,13 @@ from __future__ import annotations
 import time
 from typing import Any, Mapping
 
-from .advice import GroqDiningAdvisor, advice_cache_key, advice_response
+from .advice import (
+    GroqDiningAdvisor,
+    advice_cache_key_from_facts,
+    advice_facts,
+    advice_response_from_facts,
+    sanitize_advice_facts,
+)
 from .cache import (
     DEFAULT_ADVICE_TTL_SECONDS,
     DEFAULT_MATCH_TTL_SECONDS,
@@ -86,35 +92,83 @@ class MatchService:
             )
         )
 
+    @staticmethod
+    def validate_tabelog_hint(payload: Mapping[str, Any]) -> dict[str, Any] | None:
+        value = payload.get("tabelog")
+        if value is None:
+            value = payload.get("selected")
+        if not isinstance(value, Mapping):
+            return None
+        name = str(value.get("name") or "").strip()[:200]
+        if not name:
+            return None
+        hint: dict[str, Any] = {
+            "name": name,
+            "phone": str(value.get("phone") or "").strip()[:50],
+            "website": str(value.get("website") or "").strip()[:500],
+            "latitude": value.get("latitude"),
+            "longitude": value.get("longitude"),
+        }
+        for key in ("latitude", "longitude"):
+            if hint[key] in (None, ""):
+                hint[key] = None
+                continue
+            try:
+                hint[key] = float(hint[key])
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"tabelog.{key} 格式不正確") from exc
+        return hint
+
     def match_michelin(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         place = self.validate_place(payload)
+        tabelog = self.validate_tabelog_hint(payload)
         key = self._cache_key(place)
+        if tabelog:
+            key = "|".join(
+                (
+                    key,
+                    "tg",
+                    str(tabelog.get("name") or ""),
+                    str(tabelog.get("phone") or ""),
+                    str(tabelog.get("website") or ""),
+                    str(tabelog.get("latitude") or ""),
+                    str(tabelog.get("longitude") or ""),
+                )
+            )
         cached = self.michelin_cache.get(key)
         if cached:
             return {**cached, "cached": True}
         result = {
             "place": place,
-            "michelin": self.michelin_provider.match(place),
+            "michelin": self.michelin_provider.match(place, tabelog),
             "cached": False,
         }
         self.michelin_cache.set(key, result)
         return result
 
     def advice(self, payload: Mapping[str, Any]) -> dict[str, Any]:
-        place = self.validate_place(payload.get("place") or {})
-        candidate = payload.get("candidate")
-        if not isinstance(candidate, Mapping) or not str(candidate.get("name") or "").strip():
-            raise ValueError("找不到已配對的 Tabelog 店家")
-        michelin = payload.get("michelin")
-        if michelin is not None and not isinstance(michelin, Mapping):
-            raise ValueError("Michelin 資料格式不正確")
+        if isinstance(payload.get("facts"), Mapping):
+            facts = sanitize_advice_facts(payload["facts"])
+        else:
+            place = self.validate_place(payload.get("place") or {})
+            candidate = payload.get("candidate")
+            if not isinstance(candidate, Mapping) or not str(
+                candidate.get("name") or ""
+            ).strip():
+                raise ValueError("找不到已配對的 Tabelog 店家")
+            michelin = payload.get("michelin")
+            if michelin is not None and not isinstance(michelin, Mapping):
+                raise ValueError("Michelin 資料格式不正確")
+            facts = advice_facts(
+                place, candidate, michelin if isinstance(michelin, Mapping) else None
+            )
         if not self.advisor.configured:
             return {"available": False, "advice": None, "cached": False}
-        key = advice_cache_key(place, candidate, michelin if isinstance(michelin, Mapping) else None)
+        key = advice_cache_key_from_facts(facts)
         cached = self.advice_cache.get(key)
         if cached:
             return {**cached, "cached": True}
-        result = advice_response(self.advisor, place, candidate, michelin)
+        result = advice_response_from_facts(self.advisor, facts)
         result["available"] = True
         result["cached"] = False
         self.advice_cache.set(key, result)

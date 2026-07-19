@@ -166,7 +166,9 @@ class MichelinProvider:
     def __init__(self, data_path: Path | str = DEFAULT_DATA_PATH) -> None:
         self.data_path = Path(data_path)
         self.dataset = self._load()
-        self.restaurants = list(self.dataset.get("restaurants") or [])
+        self.restaurants = self._prepare_restaurants(
+            list(self.dataset.get("restaurants") or [])
+        )
         self._detail_cache: dict[str, tuple[float, dict[str, str]]] = {}
         self._detail_lock = threading.Lock()
 
@@ -176,6 +178,34 @@ class MichelinProvider:
             return value if isinstance(value, dict) else {}
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             return {}
+
+    @staticmethod
+    def _prepare_restaurants(
+        restaurants: list[Mapping[str, Any]],
+    ) -> list[dict[str, Any]]:
+        prepared: list[dict[str, Any]] = []
+        for restaurant in restaurants:
+            item = dict(restaurant)
+            item["_normalized_name"] = normalize_name(str(item.get("name") or ""))
+            item["_normalized_phone"] = normalize_phone(str(item.get("phone") or ""))
+            item["_normalized_website"] = normalize_website(
+                str(item.get("website") or "")
+            )
+            prepared.append(item)
+        return prepared
+
+    @staticmethod
+    def _with_normalized_fields(restaurant: Mapping[str, Any]) -> dict[str, Any]:
+        item = dict(restaurant)
+        if "_normalized_name" not in item:
+            item["_normalized_name"] = normalize_name(str(item.get("name") or ""))
+        if "_normalized_phone" not in item:
+            item["_normalized_phone"] = normalize_phone(str(item.get("phone") or ""))
+        if "_normalized_website" not in item:
+            item["_normalized_website"] = normalize_website(
+                str(item.get("website") or "")
+            )
+        return item
 
     @staticmethod
     def _identity(
@@ -244,7 +274,7 @@ class MichelinProvider:
             )
             if distance is None or distance > 100:
                 continue
-            candidate_name = normalize_name(str(restaurant.get("name") or ""))
+            candidate_name = str(restaurant.get("_normalized_name") or "")
             name_score = max(
                 (similarity(name, candidate_name) for name in names), default=0.0
             )
@@ -252,10 +282,18 @@ class MichelinProvider:
                 continue
             detail = self._fetch_detail(restaurant)
             if detail:
-                replacements[str(restaurant.get("id") or restaurant.get("url"))] = {
-                    **restaurant,
-                    **detail,
-                }
+                merged = {**restaurant, **detail}
+                if "phone" in detail:
+                    merged["_normalized_phone"] = normalize_phone(
+                        str(detail.get("phone") or "")
+                    )
+                if "website" in detail:
+                    merged["_normalized_website"] = normalize_website(
+                        str(detail.get("website") or "")
+                    )
+                replacements[str(restaurant.get("id") or restaurant.get("url"))] = (
+                    self._with_normalized_fields(merged)
+                )
             if len(replacements) >= 4:
                 break
         if not replacements:
@@ -276,24 +314,22 @@ class MichelinProvider:
             tuple[float, float, float | None, bool, bool, Mapping[str, Any]]
         ] = []
         for restaurant in restaurants:
-            candidate_name = normalize_name(str(restaurant.get("name") or ""))
+            prepared = self._with_normalized_fields(restaurant)
+            candidate_name = str(prepared.get("_normalized_name") or "")
             name_score = max(
                 (similarity(name, candidate_name) for name in names), default=0.0
             )
             distance = haversine_meters(
                 latitude,
                 longitude,
-                _float(restaurant.get("latitude")),
-                _float(restaurant.get("longitude")),
+                _float(prepared.get("latitude")),
+                _float(prepared.get("longitude")),
             )
             phone_match = bool(
-                phone
-                and phone == normalize_phone(str(restaurant.get("phone") or ""))
+                phone and phone == str(prepared.get("_normalized_phone") or "")
             )
             website_match = bool(
-                website
-                and website
-                == normalize_website(str(restaurant.get("website") or ""))
+                website and website == str(prepared.get("_normalized_website") or "")
             )
             identity_match = phone_match or website_match
             if distance is None:
@@ -312,7 +348,7 @@ class MichelinProvider:
                 if not identity_match and name_score < 0.45 and distance > 25:
                     continue
             ranked.append(
-                (score, name_score, distance, phone_match, website_match, restaurant)
+                (score, name_score, distance, phone_match, website_match, prepared)
             )
 
         if not ranked:
@@ -345,7 +381,11 @@ class MichelinProvider:
         ):
             return None
 
-        result = dict(winner)
+        result = {
+            key: value
+            for key, value in dict(winner).items()
+            if not str(key).startswith("_")
+        }
         reasons = []
         if phone_match:
             reasons.append("電話完全相同")
