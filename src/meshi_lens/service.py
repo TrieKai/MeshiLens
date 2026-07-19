@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from typing import Any, Mapping
 
-from .advice import GroqDiningAdvisor, advice_response
+from .advice import GroqDiningAdvisor, advice_cache_key, advice_response
 from .cache import (
     DEFAULT_ADVICE_TTL_SECONDS,
     DEFAULT_MATCH_TTL_SECONDS,
@@ -110,18 +110,7 @@ class MatchService:
             raise ValueError("Michelin 資料格式不正確")
         if not self.advisor.configured:
             return {"available": False, "advice": None, "cached": False}
-        key = "|".join(
-            [
-                self._cache_key(place),
-                str(candidate.get("url") or ""),
-                str(candidate.get("rating") or ""),
-                str(candidate.get("review_count") or ""),
-                str(candidate.get("reservation_status") or ""),
-                str(candidate.get("reservation_url") or ""),
-                str(michelin.get("url") or "") if isinstance(michelin, Mapping) else "",
-                str(michelin.get("distinction_label") or "") if isinstance(michelin, Mapping) else "",
-            ]
-        )
+        key = advice_cache_key(place, candidate, michelin if isinstance(michelin, Mapping) else None)
         cached = self.advice_cache.get(key)
         if cached:
             return {**cached, "cached": True}

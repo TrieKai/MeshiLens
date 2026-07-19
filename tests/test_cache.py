@@ -4,6 +4,9 @@ from pathlib import Path
 from unittest import mock
 
 from meshi_lens.cache import (
+    DEFAULT_ADVICE_TTL_SECONDS,
+    DEFAULT_MATCH_TTL_SECONDS,
+    DEFAULT_MICHELIN_TTL_SECONDS,
     FileTTLCache,
     LayeredTTLCache,
     MemoryTTLCache,
@@ -37,6 +40,11 @@ class FakeMichelinProvider:
 
 
 class CacheTests(unittest.TestCase):
+    def test_default_ttls(self) -> None:
+        self.assertEqual(DEFAULT_MATCH_TTL_SECONDS, 21_600)
+        self.assertEqual(DEFAULT_MICHELIN_TTL_SECONDS, 86_400)
+        self.assertEqual(DEFAULT_ADVICE_TTL_SECONDS, 86_400)
+
     def test_memory_ttl_expires(self) -> None:
         cache = MemoryTTLCache(ttl_seconds=10, max_items=8)
         cache.set("a", {"ok": True})

@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from meshi_lens.advice import GroqDiningAdvisor, _validate_advice, advice_facts
+from meshi_lens.advice import GroqDiningAdvisor, _validate_advice, advice_cache_key, advice_facts
 
 
 class AdviceTests(unittest.TestCase):
@@ -25,6 +25,28 @@ class AdviceTests(unittest.TestCase):
         self.assertEqual(facts["michelin_distinction"], "必比登推介")
         self.assertNotIn("reviews", facts)
         self.assertNotIn("review_text", facts)
+
+    def test_advice_cache_key_tracks_fact_changes(self) -> None:
+        michelin = {"distinction_label": "必比登推介", "green_star": False}
+        base = advice_cache_key(self.place, self.candidate, michelin)
+        same = advice_cache_key(
+            self.place,
+            {**self.candidate, "url": "https://tabelog.com/other/", "confidence": "high"},
+            {**michelin, "url": "https://guide.michelin.com/other"},
+        )
+        self.assertEqual(base, same)
+        self.assertNotEqual(
+            base,
+            advice_cache_key(self.place, {**self.candidate, "rating": 3.9}, michelin),
+        )
+        self.assertNotEqual(
+            base,
+            advice_cache_key(self.place, {**self.candidate, "dinner_price": "￥20,000～"}, michelin),
+        )
+        self.assertNotEqual(
+            base,
+            advice_cache_key(self.place, self.candidate, {**michelin, "green_star": True}),
+        )
 
     def test_response_is_bounded(self) -> None:
         advice = _validate_advice(

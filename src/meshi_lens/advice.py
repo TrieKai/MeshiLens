@@ -7,6 +7,7 @@ is available, so it can never block restaurant matching.
 
 from __future__ import annotations
 
+from hashlib import sha256
 import json
 import os
 import time
@@ -63,6 +64,21 @@ def advice_facts(
         "michelin_green_star": bool((michelin or {}).get("green_star")),
     }
     return {key: value for key, value in facts.items() if value not in ("", [], None)}
+
+
+def advice_cache_key(
+    place: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    michelin: Mapping[str, Any] | None,
+) -> str:
+    """Stable cache key bound to the exact facts used for dining advice."""
+    payload = json.dumps(
+        advice_facts(place, candidate, michelin),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _validate_advice(value: Any) -> dict[str, Any]:

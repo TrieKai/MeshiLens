@@ -156,6 +156,41 @@ class ServiceTests(unittest.TestCase):
         self.assertTrue(second["cached"])
         self.assertEqual(advisor.calls, 1)
 
+    def test_advice_cache_misses_when_facts_change(self) -> None:
+        advisor = FakeAdvisor()
+        service = MatchService(
+            provider=FakeProvider(),
+            michelin_provider=FakeMichelinProvider(),
+            advisor=advisor,
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+        )
+        base = {
+            "place": {"name": "清水屋", "address": "茨城県潮来市"},
+            "candidate": {
+                "name": "清水屋",
+                "rating": 3.5,
+                "dinner_price": "￥10,000～￥14,999",
+                "genres": ["割烹・小料理"],
+            },
+            "michelin": None,
+        }
+        first = service.advice(base)
+        same_facts = service.advice(
+            {
+                **base,
+                "candidate": {**base["candidate"], "url": "https://tabelog.com/other/", "score": 88},
+            }
+        )
+        changed = service.advice(
+            {**base, "candidate": {**base["candidate"], "rating": 3.9}}
+        )
+        self.assertFalse(first["cached"])
+        self.assertTrue(same_facts["cached"])
+        self.assertFalse(changed["cached"])
+        self.assertEqual(advisor.calls, 2)
+
     def test_advice_is_hidden_until_groq_is_configured(self) -> None:
         service = MatchService(
             provider=FakeProvider(),

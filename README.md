@@ -61,7 +61,7 @@ uv run python scripts/update_michelin.py
 
 ## 持久化結果快取（選用）
 
-`/match`、`/michelin`、`/advice` 會快取結果（TTL 分別約 6 小時、24 小時、30 天）。
+`/match`、`/michelin`、`/advice` 會快取結果（TTL 分別約 6 小時、24 小時、24 小時）。
 預設為**記憶體 L1 + 本機檔案**（目錄見 `MESHI_CACHE_DIR`，預設系統暫存）。
 在 Vercel Marketplace 連結 Upstash Redis 後，會自動設定：
 
@@ -88,7 +88,7 @@ UPSTASH_REDIS_REST_TOKEN=...
 
 摘要只接收 MeshiLens 已取得的店名、餐廳類型、Tabelog 分數及評論**數量**、價位、
 百名店／米其林、訂位與付款欄位；不接收評論正文、評論者、照片或 Google Maps 評論。
-同一份店家資料會在瀏覽器本機快取 30 天，資料關鍵欄位改變才重新生成。
+同一份店家資料會在瀏覽器本機快取 24 小時，資料關鍵欄位（`advice_facts`）改變才重新生成。
 
 ## 配對規則
 

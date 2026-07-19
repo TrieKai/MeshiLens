@@ -226,7 +226,7 @@ async function loadAdvice(card, place, candidate, michelin, sequence) {
   card._meshilensAdviceRequestKey = requestKey;
   const payload = advicePayload(place, candidate, michelin);
   if (!payload) return;
-  const key = adviceCacheKey(candidate, michelin);
+  const key = adviceCacheKey(place, candidate, michelin);
   card._meshilensAdviceKey = key;
   card._meshilensAdvice = { status: "loading" };
   syncAdvice(card);
