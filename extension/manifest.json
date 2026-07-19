@@ -26,7 +26,7 @@
         "https://www.google.co.jp/maps/*",
         "https://maps.google.com/*"
       ],
-      "js": ["category.js", "maps.js", "settings.js", "timeline.js", "advice.js", "cache.js", "content.js"],
+      "js": ["category.js", "maps.js", "settings.js", "timeline.js", "advice.js", "cache.js", "ui_mode.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }

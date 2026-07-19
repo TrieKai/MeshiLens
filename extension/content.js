@@ -1,4 +1,5 @@
 const CARD_ID = "meshilens-card";
+const LIST_HINT_ID = "meshilens-list-hint";
 const ADDRESS_PREFIX = /^(地址|住所|address)\s*[:：]?\s*/i;
 const PHONE_PREFIX = /^(電話|電話番号|phone)\s*[:：]?\s*/i;
 const { foodSignalsFromLabels, isFoodCategory, isFoodPlace } = globalThis.MeshiLensCategory;
@@ -7,11 +8,24 @@ const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSetting
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 const { advicePayload, adviceCacheKey, cachedAdvice } = globalThis.MeshiLensAdvice;
 const { roundCoord } = globalThis.MeshiLensCache;
+const { DETAIL_MODE, LIST_MODE, mapsUiMode } = globalThis.MeshiLensUiMode;
 let activePlaceKey = "";
 let lookupSequence = 0;
-let debounceTimer = null;
+let detailDebounceTimer = null;
+let listDebounceTimer = null;
 let extensionEnabled = false;
 let themeColor = DEFAULT_THEME_COLOR;
+
+function detailTitle() {
+  return document.querySelector("h1.DUwDvf, h1.fontHeadlineLarge");
+}
+
+function currentMapsUiMode() {
+  return mapsUiMode({
+    hasDetailTitle: Boolean(detailTitle()),
+    hasResultsFeed: Boolean(document.querySelector('[role="feed"]')),
+  });
+}
 
 function labeledValue(selectors, prefix) {
   for (const selector of selectors) {
@@ -61,7 +75,7 @@ function diningSignals(detailPanel) {
 }
 
 function extractPlace() {
-  const title = document.querySelector("h1.DUwDvf, h1.fontHeadlineLarge");
+  const title = detailTitle();
   const name = title?.textContent?.trim() || "";
   if (!name) return null;
   const detailPanel = title.closest('main, [role="main"]');
@@ -588,25 +602,64 @@ async function lookup(place) {
   }
 }
 
-function scan() {
-  clearTimeout(debounceTimer);
-  if (!extensionEnabled) {
+function removeListHint() {
+  document.getElementById(LIST_HINT_ID)?.remove();
+}
+
+function showListHint() {
+  if (currentMapsUiMode() !== LIST_MODE) return;
+  const feed = document.querySelector('[role="feed"]');
+  if (!feed || document.getElementById(LIST_HINT_ID)) return;
+  const hint = element("section", "meshilens-list-hint", "點選店家可查看 MeshiLens");
+  hint.id = LIST_HINT_ID;
+  hint.setAttribute("aria-label", "MeshiLens 提示");
+  hint.style.setProperty("--ml-accent", themeColor);
+  feed.prepend(hint);
+}
+
+function scanDetail() {
+  const place = extractPlace();
+  if (!place) {
     activePlaceKey = "";
     document.getElementById(CARD_ID)?.remove();
     return;
   }
-  debounceTimer = setTimeout(() => {
-    const place = extractPlace();
-    if (!place) {
+  const key = placeKey(place);
+  if (key === activePlaceKey && document.getElementById(CARD_ID)) return;
+  activePlaceKey = key;
+  lookup(place);
+}
+
+function scan() {
+  clearTimeout(detailDebounceTimer);
+  clearTimeout(listDebounceTimer);
+  if (!extensionEnabled) {
+    activePlaceKey = "";
+    removeListHint();
+    document.getElementById(CARD_ID)?.remove();
+    return;
+  }
+
+  const mode = currentMapsUiMode();
+  if (mode === DETAIL_MODE) {
+    removeListHint();
+    detailDebounceTimer = setTimeout(scanDetail, 500);
+    return;
+  }
+  if (mode === LIST_MODE) {
+    // List redraws are presentation-only: never cancel an in-flight detail lookup.
+    listDebounceTimer = setTimeout(() => {
+      if (currentMapsUiMode() !== LIST_MODE) return;
       activePlaceKey = "";
       document.getElementById(CARD_ID)?.remove();
-      return;
-    }
-    const key = placeKey(place);
-    if (key === activePlaceKey && document.getElementById(CARD_ID)) return;
-    activePlaceKey = key;
-    lookup(place);
-  }, 500);
+      showListHint();
+    }, 250);
+    return;
+  }
+
+  activePlaceKey = "";
+  removeListHint();
+  document.getElementById(CARD_ID)?.remove();
 }
 
 new MutationObserver((mutations) => {
@@ -623,14 +676,17 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (changes.themeColor) {
     themeColor = normalizeThemeColor(changes.themeColor.newValue);
     document.getElementById(CARD_ID)?.style.setProperty("--ml-accent", themeColor);
+    document.getElementById(LIST_HINT_ID)?.style.setProperty("--ml-accent", themeColor);
   }
   if (changes.enabled) {
     extensionEnabled = changes.enabled.newValue !== false;
     activePlaceKey = "";
     if (!extensionEnabled) {
       lookupSequence += 1;
-      clearTimeout(debounceTimer);
+      clearTimeout(detailDebounceTimer);
+      clearTimeout(listDebounceTimer);
       chrome.runtime.sendMessage({ type: "CANCEL_LOOKUP" }).catch(() => {});
+      removeListHint();
       document.getElementById(CARD_ID)?.remove();
       return;
     }

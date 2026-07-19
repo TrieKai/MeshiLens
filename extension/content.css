@@ -26,6 +26,21 @@
   z-index: 10000;
 }
 
+.meshilens-list-hint {
+  background: #fff7f2;
+  border: 1px solid #ead4d0;
+  border-left: 3px solid var(--ml-accent, #bf3a2b);
+  border-radius: 9px;
+  box-sizing: border-box;
+  color: #6d352e;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+  margin: 10px 12px 6px;
+  padding: 9px 10px;
+}
+
 .meshilens-header,
 .meshilens-score-row,
 .meshilens-footer,
