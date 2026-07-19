@@ -1,5 +1,6 @@
 import unittest
 
+from meshi_lens.cache import MemoryTTLCache
 from meshi_lens.service import MatchService
 
 
@@ -58,7 +59,11 @@ class ServiceTests(unittest.TestCase):
     def test_match_and_cache(self) -> None:
         provider = FakeProvider()
         service = MatchService(
-            provider=provider, michelin_provider=FakeMichelinProvider()
+            provider=provider,
+            michelin_provider=FakeMichelinProvider(),
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
         )
         place = {
             "name": "割烹 清水屋",
@@ -83,14 +88,22 @@ class ServiceTests(unittest.TestCase):
 
     def test_requires_name(self) -> None:
         service = MatchService(
-            provider=FakeProvider(), michelin_provider=FakeMichelinProvider()
+            provider=FakeProvider(),
+            michelin_provider=FakeMichelinProvider(),
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
         )
         with self.assertRaisesRegex(ValueError, "名稱"):
             service.match({"address": "somewhere"})
 
     def test_returns_michelin_when_tabelog_is_unavailable(self) -> None:
         service = MatchService(
-            provider=FailingProvider(), michelin_provider=FakeMichelinProvider()
+            provider=FailingProvider(),
+            michelin_provider=FakeMichelinProvider(),
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
         )
         result = service.match({"name": "清水屋"})
         self.assertIsNone(result["selected"])
@@ -100,7 +113,11 @@ class ServiceTests(unittest.TestCase):
     def test_michelin_can_return_without_waiting_for_tabelog(self) -> None:
         provider = FakeProvider()
         service = MatchService(
-            provider=provider, michelin_provider=FakeMichelinProvider()
+            provider=provider,
+            michelin_provider=FakeMichelinProvider(),
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
         )
         result = service.match_michelin({"name": "清水屋"})
         self.assertEqual(result["michelin"]["distinction_label"], "必比登推介")
@@ -108,7 +125,11 @@ class ServiceTests(unittest.TestCase):
 
     def test_tabelog_match_can_skip_michelin(self) -> None:
         service = MatchService(
-            provider=FakeProvider(), michelin_provider=FakeMichelinProvider()
+            provider=FakeProvider(),
+            michelin_provider=FakeMichelinProvider(),
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
         )
         result = service.match({"name": "清水屋"}, include_michelin=False)
         self.assertIsNone(result["michelin"])
@@ -116,7 +137,12 @@ class ServiceTests(unittest.TestCase):
     def test_advice_is_separate_and_cached(self) -> None:
         advisor = FakeAdvisor()
         service = MatchService(
-            provider=FakeProvider(), michelin_provider=FakeMichelinProvider(), advisor=advisor
+            provider=FakeProvider(),
+            michelin_provider=FakeMichelinProvider(),
+            advisor=advisor,
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
         )
         payload = {
             "place": {"name": "清水屋"},
@@ -132,7 +158,11 @@ class ServiceTests(unittest.TestCase):
 
     def test_advice_is_hidden_until_groq_is_configured(self) -> None:
         service = MatchService(
-            provider=FakeProvider(), michelin_provider=FakeMichelinProvider()
+            provider=FakeProvider(),
+            michelin_provider=FakeMichelinProvider(),
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
         )
         result = service.advice(
             {"place": {"name": "清水屋"}, "candidate": {"name": "清水屋"}}

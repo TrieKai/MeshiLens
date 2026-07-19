@@ -7,6 +7,7 @@ from meshi_lens.provider import (
     extract_tabelog_urls,
     hyakumeiten_from_tabelog_html,
     merge_candidate_details,
+    parse_tabelog_page,
     payment_from_tabelog_html,
     reservation_from_tabelog_html,
     restaurant_to_dict,
@@ -137,6 +138,7 @@ class ProviderTests(unittest.TestCase):
 
     def test_extracts_reservation_and_payment_information(self) -> None:
         html = """
+        <div id="js-basics" data-lat="36.175271769" data-lng="139.837251778"></div>
         <table>
           <tr><th>予約可否</th><td>予約可<br>週末は早めの予約を推奨</td></tr>
           <tr>
@@ -162,6 +164,11 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(payment["cards"]["details"], "VISA、Master、JCB、AMEX")
         self.assertEqual(payment["electronic_money"]["details"], "Suica、iD、QUICPay")
         self.assertEqual(payment["qr_code"]["details"], "PayPay、楽天ペイ")
+        page = parse_tabelog_page(html)
+        self.assertEqual(page["latitude"], 36.175271769)
+        self.assertEqual(page["longitude"], 139.837251778)
+        self.assertEqual(page["reservation"]["status"], "available")
+        self.assertTrue(page["payment"]["cards"]["accepted"])
 
     def test_online_reservation_wins_and_payment_rejections_are_kept(self) -> None:
         html = """

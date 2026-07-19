@@ -1,41 +1,19 @@
 from __future__ import annotations
 
-from collections import OrderedDict
-import threading
 import time
 from typing import Any, Mapping
 
 from .advice import GroqDiningAdvisor, advice_response
+from .cache import (
+    DEFAULT_ADVICE_TTL_SECONDS,
+    DEFAULT_MATCH_TTL_SECONDS,
+    DEFAULT_MICHELIN_TTL_SECONDS,
+    CacheBackend,
+    build_cache,
+)
 from .matching import rank_candidates
 from .michelin import MichelinProvider
 from .provider import GurumeProvider, canonical_restaurant_url
-
-
-class TTLCache:
-    def __init__(self, ttl_seconds: int = 21_600, max_items: int = 256) -> None:
-        self.ttl_seconds = ttl_seconds
-        self.max_items = max_items
-        self._items: OrderedDict[str, tuple[float, dict[str, Any]]] = OrderedDict()
-        self._lock = threading.Lock()
-
-    def get(self, key: str) -> dict[str, Any] | None:
-        with self._lock:
-            entry = self._items.get(key)
-            if not entry:
-                return None
-            created_at, value = entry
-            if time.time() - created_at > self.ttl_seconds:
-                del self._items[key]
-                return None
-            self._items.move_to_end(key)
-            return value
-
-    def set(self, key: str, value: dict[str, Any]) -> None:
-        with self._lock:
-            self._items[key] = (time.time(), value)
-            self._items.move_to_end(key)
-            while len(self._items) > self.max_items:
-                self._items.popitem(last=False)
 
 
 class MatchService:
@@ -44,13 +22,27 @@ class MatchService:
         provider: GurumeProvider | None = None,
         michelin_provider: MichelinProvider | None = None,
         advisor: GroqDiningAdvisor | None = None,
+        *,
+        cache: CacheBackend | None = None,
+        michelin_cache: CacheBackend | None = None,
+        advice_cache: CacheBackend | None = None,
     ) -> None:
         self.provider = provider or GurumeProvider()
         self.michelin_provider = michelin_provider or MichelinProvider()
         self.advisor = advisor or GroqDiningAdvisor()
-        self.cache = TTLCache()
-        self.michelin_cache = TTLCache(ttl_seconds=86_400, max_items=512)
-        self.advice_cache = TTLCache(ttl_seconds=2_592_000, max_items=512)
+        self.cache = cache or build_cache(
+            ttl_seconds=DEFAULT_MATCH_TTL_SECONDS, max_items=256, namespace="match"
+        )
+        self.michelin_cache = michelin_cache or build_cache(
+            ttl_seconds=DEFAULT_MICHELIN_TTL_SECONDS,
+            max_items=512,
+            namespace="michelin",
+        )
+        self.advice_cache = advice_cache or build_cache(
+            ttl_seconds=DEFAULT_ADVICE_TTL_SECONDS,
+            max_items=512,
+            namespace="advice",
+        )
 
     @staticmethod
     def validate_place(payload: Mapping[str, Any]) -> dict[str, Any]:

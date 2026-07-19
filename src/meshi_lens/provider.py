@@ -190,10 +190,13 @@ def extract_tabelog_urls(html: str, limit: int = 6) -> list[str]:
     return urls
 
 
-def coordinates_from_tabelog_html(html: str) -> tuple[float | None, float | None]:
+def _parse_tabelog_soup(html: str) -> Any:
     from bs4 import BeautifulSoup
 
-    soup = BeautifulSoup(html, "lxml")
+    return BeautifulSoup(html, "lxml")
+
+
+def coordinates_from_tabelog_soup(soup: Any) -> tuple[float | None, float | None]:
     basics = soup.select_one("#js-basics[data-lat][data-lng]")
     if basics:
         try:
@@ -228,11 +231,12 @@ def coordinates_from_tabelog_html(html: str) -> tuple[float | None, float | None
     return None, None
 
 
-def hyakumeiten_from_tabelog_html(html: str) -> list[dict[str, Any]]:
-    """Extract every Hyakumeiten selection listed on a restaurant page."""
-    from bs4 import BeautifulSoup
+def coordinates_from_tabelog_html(html: str) -> tuple[float | None, float | None]:
+    return coordinates_from_tabelog_soup(_parse_tabelog_soup(html))
 
-    soup = BeautifulSoup(html, "lxml")
+
+def hyakumeiten_from_tabelog_soup(soup: Any) -> list[dict[str, Any]]:
+    """Extract every Hyakumeiten selection listed on a restaurant page."""
     anchors = soup.select('a[href*="award.tabelog.com/hyakumeiten/"]')
 
     selections: list[dict[str, Any]] = []
@@ -287,11 +291,12 @@ def hyakumeiten_from_tabelog_html(html: str) -> list[dict[str, Any]]:
     )
 
 
-def _tabelog_info_map(html: str) -> dict[str, str]:
-    """Read the label/value rows used by Tabelog's restaurant information table."""
-    from bs4 import BeautifulSoup
+def hyakumeiten_from_tabelog_html(html: str) -> list[dict[str, Any]]:
+    return hyakumeiten_from_tabelog_soup(_parse_tabelog_soup(html))
 
-    soup = BeautifulSoup(html, "lxml")
+
+def _tabelog_info_map_from_soup(soup: Any) -> dict[str, str]:
+    """Read the label/value rows used by Tabelog's restaurant information table."""
     info: dict[str, str] = {}
     for row in soup.find_all("tr"):
         header = row.find("th")
@@ -305,11 +310,15 @@ def _tabelog_info_map(html: str) -> dict[str, str]:
     return info
 
 
-def reservation_from_tabelog_html(
-    html: str, reservation_url: str = ""
+def _tabelog_info_map(html: str) -> dict[str, str]:
+    return _tabelog_info_map_from_soup(_parse_tabelog_soup(html))
+
+
+def reservation_from_tabelog_info(
+    info: Mapping[str, str], reservation_url: str = ""
 ) -> dict[str, Any]:
     """Return a stable reservation state plus gurume's online-booking URL."""
-    value = _tabelog_info_map(html).get("予約可否", "")
+    value = info.get("予約可否", "")
     if reservation_url:
         status = "online"
     elif re.search(r"予約\s*不可", value):
@@ -325,9 +334,15 @@ def reservation_from_tabelog_html(
     }
 
 
-def payment_from_tabelog_html(html: str) -> dict[str, Any]:
+def reservation_from_tabelog_html(
+    html: str, reservation_url: str = ""
+) -> dict[str, Any]:
+    return reservation_from_tabelog_info(_tabelog_info_map(html), reservation_url)
+
+
+def payment_from_tabelog_info(info: Mapping[str, str]) -> dict[str, Any]:
     """Extract card, electronic-money and QR-payment support from Tabelog."""
-    value = _tabelog_info_map(html).get("支払い方法", "")
+    value = info.get("支払い方法", "")
     if not value:
         return {}
 
@@ -349,34 +364,76 @@ def payment_from_tabelog_html(html: str) -> dict[str, Any]:
     return payment
 
 
-def _add_tabelog_extras(candidate: dict[str, Any], html: str) -> None:
-    selections = hyakumeiten_from_tabelog_html(html)
+def payment_from_tabelog_html(html: str) -> dict[str, Any]:
+    return payment_from_tabelog_info(_tabelog_info_map(html))
+
+
+def parse_tabelog_page(html: str, reservation_url: str = "") -> dict[str, Any]:
+    """Parse a Tabelog restaurant HTML document once for coordinates and extras."""
+    soup = _parse_tabelog_soup(html)
+    info = _tabelog_info_map_from_soup(soup)
+    latitude, longitude = coordinates_from_tabelog_soup(soup)
+    selections = hyakumeiten_from_tabelog_soup(soup)
+    reservation = reservation_from_tabelog_info(info, reservation_url)
+    payment = payment_from_tabelog_info(info)
+    return {
+        "latitude": latitude,
+        "longitude": longitude,
+        "hyakumeiten": selections,
+        "reservation": reservation,
+        "payment": payment,
+    }
+
+
+def _apply_tabelog_page(candidate: dict[str, Any], page: Mapping[str, Any]) -> None:
+    if page.get("latitude") is not None:
+        candidate["latitude"] = page["latitude"]
+    if page.get("longitude") is not None:
+        candidate["longitude"] = page["longitude"]
+    selections = list(page.get("hyakumeiten") or [])
     candidate["is_hyakumeiten"] = bool(selections)
     candidate["hyakumeiten"] = selections
-    reservation = reservation_from_tabelog_html(
-        html, str(candidate.get("reservation_url") or "")
-    )
-    candidate["reservation_status"] = reservation["status"]
-    candidate["reservation_details"] = reservation["details"]
-    if reservation["url"]:
+    reservation = page.get("reservation") or {}
+    candidate["reservation_status"] = reservation.get("status") or "unknown"
+    candidate["reservation_details"] = reservation.get("details") or ""
+    if reservation.get("url"):
         candidate["reservation_url"] = reservation["url"]
-    candidate["payment"] = payment_from_tabelog_html(html)
+    candidate["payment"] = dict(page.get("payment") or {})
+
+
+def _add_tabelog_extras(candidate: dict[str, Any], html: str) -> None:
+    page = parse_tabelog_page(html, str(candidate.get("reservation_url") or ""))
+    _apply_tabelog_page(candidate, page)
 
 
 class GurumeProvider:
     """Small, rate-limited adapter around gurume's public Python API."""
 
+    TABELOG_HOST = "tabelog.com"
+
     def __init__(self, minimum_interval: float = 0.8) -> None:
         self.minimum_interval = minimum_interval
-        self._last_request = 0.0
-        self._lock = threading.Lock()
+        self._last_request_by_host: dict[str, float] = {}
+        self._host_locks: dict[str, threading.Lock] = {}
+        self._meta_lock = threading.Lock()
 
-    def _throttle(self) -> None:
-        with self._lock:
-            delay = self.minimum_interval - (time.monotonic() - self._last_request)
+    def _host_lock(self, host: str) -> threading.Lock:
+        with self._meta_lock:
+            lock = self._host_locks.get(host)
+            if lock is None:
+                lock = threading.Lock()
+                self._host_locks[host] = lock
+            return lock
+
+    def _throttle(self, host: str = TABELOG_HOST) -> None:
+        """Rate-limit per host so Yahoo/DDG are not blocked by Tabelog's interval."""
+        lock = self._host_lock(host)
+        with lock:
+            last = self._last_request_by_host.get(host, 0.0)
+            delay = self.minimum_interval - (time.monotonic() - last)
             if delay > 0:
                 time.sleep(delay)
-            self._last_request = time.monotonic()
+            self._last_request_by_host[host] = time.monotonic()
 
     def _discover_with_web_search(
         self, place: Mapping[str, Any], limit: int
@@ -385,14 +442,14 @@ class GurumeProvider:
         from curl_cffi import requests
 
         search_engines = (
-            ("https://search.yahoo.co.jp/search", "p"),
-            ("https://html.duckduckgo.com/html/", "q"),
+            ("https://search.yahoo.co.jp/search", "p", "search.yahoo.co.jp"),
+            ("https://html.duckduckgo.com/html/", "q", "html.duckduckgo.com"),
         )
         last_error: Exception | None = None
         for query in web_search_queries(place):
-            for url, parameter in search_engines:
+            for url, parameter, host in search_engines:
                 try:
-                    self._throttle()
+                    self._throttle(host)
                     response = requests.get(
                         url,
                         params={parameter: query[:500]},
@@ -436,7 +493,7 @@ class GurumeProvider:
         target_names = [normalize_name(name) for name in names if normalize_name(name)]
         for query in queries:
             try:
-                self._throttle()
+                self._throttle(self.TABELOG_HOST)
                 suggestions = get_keyword_suggestions(query)
             except Exception:
                 continue
@@ -458,7 +515,7 @@ class GurumeProvider:
         urls: list[str] = []
         for restaurant_id in restaurant_ids[:limit]:
             try:
-                self._throttle()
+                self._throttle(self.TABELOG_HOST)
                 response = requests.get(
                     "https://tabelog.com/rst/rstdtl_top",
                     params={"rcd": restaurant_id},
@@ -492,7 +549,7 @@ class GurumeProvider:
         for url in urls:
             if include_coordinates:
                 try:
-                    self._throttle()
+                    self._throttle(self.TABELOG_HOST)
                     map_response = requests.get(
                         f"{url.rstrip('/')}/dtlmap/",
                         headers={"Accept-Language": "ja,en;q=0.8"},
@@ -512,18 +569,17 @@ class GurumeProvider:
                         candidate = restaurant_to_dict(
                             parse_restaurant(map_response.text, url)
                         )
-                        latitude, longitude = coordinates_from_tabelog_html(
-                            map_response.text
+                        page = parse_tabelog_page(
+                            map_response.text,
+                            str(candidate.get("reservation_url") or ""),
                         )
-                        candidate["latitude"] = latitude
-                        candidate["longitude"] = longitude
-                        _add_tabelog_extras(candidate, map_response.text)
+                        _apply_tabelog_page(candidate, page)
                         candidates.append(candidate)
                         continue
                 except Exception:
                     pass
             try:
-                self._throttle()
+                self._throttle(self.TABELOG_HOST)
                 response = request_type(
                     restaurant_url=url,
                     fetch_reviews=False,
@@ -533,7 +589,7 @@ class GurumeProvider:
                 candidate = restaurant_to_dict(getattr(response, "restaurant", response))
                 if include_coordinates and not candidate.get("latitude"):
                     try:
-                        self._throttle()
+                        self._throttle(self.TABELOG_HOST)
                         map_response = requests.get(
                             f"{url.rstrip('/')}/dtlmap/",
                             headers={"Accept-Language": "ja,en;q=0.8"},
@@ -542,12 +598,11 @@ class GurumeProvider:
                             impersonate="chrome",
                         )
                         map_response.raise_for_status()
-                        latitude, longitude = coordinates_from_tabelog_html(
-                            map_response.text
+                        page = parse_tabelog_page(
+                            map_response.text,
+                            str(candidate.get("reservation_url") or ""),
                         )
-                        candidate["latitude"] = latitude
-                        candidate["longitude"] = longitude
-                        _add_tabelog_extras(candidate, map_response.text)
+                        _apply_tabelog_page(candidate, page)
                     except Exception:
                         pass
                 candidate.setdefault("is_hyakumeiten", False)
@@ -562,6 +617,18 @@ class GurumeProvider:
             except Exception:
                 continue
         return candidates
+
+    @staticmethod
+    def _has_phone_match(
+        place: Mapping[str, Any], candidates: list[Mapping[str, Any]]
+    ) -> bool:
+        place_phone = normalize_phone(str(place.get("phone") or ""))
+        if not place_phone:
+            return False
+        return any(
+            place_phone == normalize_phone(str(candidate.get("phone") or ""))
+            for candidate in candidates
+        )
 
     @staticmethod
     def _has_strong_identity_match(
@@ -613,7 +680,8 @@ class GurumeProvider:
                 or int(candidate.get("review_count") or 0) > 0
                 for candidate in suggestion_candidates
             )
-            if (
+            # Phone match or strong geo + reviews: skip Tabelog search and web fallback.
+            if self._has_phone_match(place, suggestion_candidates) or (
                 self._has_strong_identity_match(place, suggestion_candidates)
                 and suggestion_has_reviews
             ):
@@ -624,7 +692,7 @@ class GurumeProvider:
         if suggestion_candidates:
             results = []
         else:
-            self._throttle()
+            self._throttle(self.TABELOG_HOST)
             try:
                 results = query_restaurants(
                     area=area,
@@ -637,6 +705,12 @@ class GurumeProvider:
         candidates = [restaurant_to_dict(item) for item in list(results)[:limit]]
 
         if not candidates:
+            # Prefer returning weak suggestion hits over an extra web crawl when we
+            # already have Tabelog detail pages for the same place name.
+            if suggestion_candidates and self._has_strong_identity_match(
+                place, suggestion_candidates
+            ):
+                return suggestion_candidates
             try:
                 fallback_urls = self._discover_with_web_search(place, min(limit, 4))
                 fallback_candidates = self._fetch_details(
@@ -689,18 +763,20 @@ class GurumeProvider:
             except Exception:
                 enriched.append(candidate)
         enriched.extend(candidates[4:])
-        if not self._has_strong_identity_match(place, enriched):
-            try:
-                fallback_urls = self._discover_with_web_search(place, min(limit, 4))
-                fallback_candidates = self._fetch_details(
-                    fallback_urls, RestaurantDetailRequest
-                )
-                known_urls = {str(item.get("url") or "") for item in enriched}
-                enriched.extend(
-                    item
-                    for item in fallback_candidates
-                    if str(item.get("url") or "") not in known_urls
-                )
-            except Exception:
-                pass
+        # High-confidence identity: do not kick off Yahoo/DDG fallback crawls.
+        if self._has_strong_identity_match(place, enriched):
+            return enriched
+        try:
+            fallback_urls = self._discover_with_web_search(place, min(limit, 4))
+            fallback_candidates = self._fetch_details(
+                fallback_urls, RestaurantDetailRequest
+            )
+            known_urls = {str(item.get("url") or "") for item in enriched}
+            enriched.extend(
+                item
+                for item in fallback_candidates
+                if str(item.get("url") or "") not in known_urls
+            )
+        except Exception:
+            pass
         return enriched

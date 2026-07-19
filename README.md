@@ -24,7 +24,7 @@
 - Tabelog 與 Michelin 以獨立請求並行比對，先完成的一方先顯示，另一方再補入卡片
 - Tabelog 比對完成後，以店名、類型、評分／評論數、價位、獎項、訂位與付款等**結構化資料**非同步產生繁中「AI 用餐建議」；不擷取、不傳送也不摘要 Tabelog 或 Google Maps 評論原文
 - 中低信心時列出候選店家，讓使用者手動切換
-- 六小時記憶體快取與 Tabelog 請求節流
+- 六小時結果快取（記憶體 L1 + 本機檔案或選用 Redis／Upstash）與 Tabelog 依 host 節流
 
 ## 安裝與啟動
 
@@ -59,6 +59,27 @@ uv run python scripts/update_michelin.py
 
 更新器預設只低頻讀取伺服器端渲染的餐廳清單，並檢查官方宣告筆數與解析筆數完全一致。跨語言配對所需的電話與官方網站由後端只在必要時補查附近詳情頁並快取；若要離線預抓全部詳情，可加上 `--include-details`。
 
+## 持久化結果快取（選用）
+
+`/match`、`/michelin`、`/advice` 會快取結果（TTL 分別約 6 小時、24 小時、30 天）。
+預設為**記憶體 L1 + 本機檔案**（目錄見 `MESHI_CACHE_DIR`，預設系統暫存）。
+在 Vercel Marketplace 連結 Upstash Redis 後，會自動設定：
+
+```bash
+KV_REST_API_URL=https://xxxx.upstash.io
+KV_REST_API_TOKEN=...
+```
+
+也可直接設定 Upstash REST 憑證：
+
+```bash
+UPSTASH_REDIS_REST_URL=https://xxxx.upstash.io
+UPSTASH_REDIS_REST_TOKEN=...
+```
+
+或使用 `MESHI_REDIS_URL`／`REDIS_URL`（需 `uv sync --extra redis`）。詳見 `.env.example`。
+擴充功能另有 45 分鐘的 session／記憶體短快取，並會取消過期的店家查詢請求。
+
 ## AI 用餐建議（選用）
 
 設定 Vercel 或本機伺服器的 `GROQ_API_KEY` 後，擴充功能會在配對成功時向
@@ -92,7 +113,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 node --check extension/background.js
 node --check extension/content.js
 node --check extension/popup.js
-node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js tests/test_maps.js tests/test_timeline.js
+node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js tests/test_maps.js tests/test_timeline.js tests/test_lookup_cache.js
 ```
 
 測試包含「割烹 清水屋」對 Tabelog「清水屋」的電話與地址差異案例。
@@ -102,7 +123,7 @@ node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js t
 - 本機服務只監聽 `127.0.0.1`，`/match` 只接受瀏覽器擴充功能來源。
 - 擴充功能只有 Google Maps、本機服務及本機儲存權限，不讀取其他網站。
 - Tabelog 搜尋頁可能依網路環境回覆 403；此時會改用公開搜尋索引尋找 Tabelog URL。若兩條路徑都失敗，擴充功能會顯示明確錯誤，不會誤認為「沒有這家店」。
-- Tabelog 頁面格式調整可能使 `gurume` 暫時失效；正式發布前應增加持久快取、併發限制與監控。
+- Tabelog 頁面格式調整可能使 `gurume` 暫時失效；已提供持久結果快取，正式發布前仍應加強併發限制與監控。
 - 請遵守 Tabelog 的使用條款與 robots 政策，不要大量或自動化濫用請求。
 - Tabelog 商標與資料屬其權利人；本專案不隸屬於 Google 或 Tabelog。
 - Michelin 功能僅保存店家識別、座標、料理類型、價位、獎項與官方連結，不保存照片或評審文章；此非官方授權功能，請維持低頻、個人及非商業用途。

@@ -6,6 +6,7 @@ const { coordinatesFromMapsUrl } = globalThis.MeshiLensMaps;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 const { advicePayload, adviceCacheKey, cachedAdvice } = globalThis.MeshiLensAdvice;
+const { roundCoord } = globalThis.MeshiLensCache;
 let activePlaceKey = "";
 let lookupSequence = 0;
 let debounceTimer = null;
@@ -98,8 +99,8 @@ function placeKey(place) {
     place.address,
     place.phone,
     place.website,
-    place.latitude,
-    place.longitude,
+    roundCoord(place.latitude),
+    roundCoord(place.longitude),
     place.tabelog_url,
   ].join("|");
 }
@@ -508,6 +509,11 @@ function renderResult(card, result) {
 }
 
 async function lookup(place) {
+  try {
+    await chrome.runtime.sendMessage({ type: "CANCEL_LOOKUP" });
+  } catch {
+    // Ignore when the service worker is waking up.
+  }
   const sequence = ++lookupSequence;
   const card = mountCard(place);
   card._meshilensPlace = place;
@@ -522,6 +528,7 @@ async function lookup(place) {
   try {
     const response = await chrome.runtime.sendMessage({ type: "MATCH_PLACE", place });
     if (sequence !== lookupSequence || !card.isConnected) return;
+    if (response?.cancelled) return;
     if (!response?.ok) throw new Error(response?.error || "查詢失敗");
     renderResult(card, response.data);
     if (response.data.selected) {
@@ -581,6 +588,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     if (!extensionEnabled) {
       lookupSequence += 1;
       clearTimeout(debounceTimer);
+      chrome.runtime.sendMessage({ type: "CANCEL_LOOKUP" }).catch(() => {});
       document.getElementById(CARD_ID)?.remove();
       return;
     }
