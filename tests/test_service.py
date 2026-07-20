@@ -120,6 +120,69 @@ class ServiceTests(unittest.TestCase):
                 {"cards": [{"key": str(index), "name": "清水屋"} for index in range(11)]}
             )
 
+    def test_rejects_an_explicit_overseas_place_before_provider_lookup(self) -> None:
+        provider = FakeProvider()
+        service = MatchService(
+            provider=provider,
+            michelin_provider=FakeMichelinProvider(),
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+        )
+        with self.assertRaisesRegex(ValueError, "日本合理範圍外"):
+            service.match(
+                {
+                    "name": "Overseas Restaurant",
+                    "latitude": 40.7128,
+                    "longitude": -74.006,
+                    "coordinates_source": "place",
+                }
+            )
+        self.assertEqual(provider.calls, 0)
+
+    def test_viewport_coordinates_do_not_reject_a_place(self) -> None:
+        service = MatchService(
+            provider=FakeProvider(),
+            michelin_provider=FakeMichelinProvider(),
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+        )
+        result = service.match(
+            {
+                "name": "清水屋",
+                "latitude": 40.7128,
+                "longitude": -74.006,
+                "coordinates_source": "viewport",
+            }
+        )
+        self.assertIn("matched", result)
+
+    def test_batch_skips_explicit_overseas_cards(self) -> None:
+        michelin = BatchMichelinProvider()
+        service = MatchService(
+            provider=FakeProvider(),
+            michelin_provider=michelin,
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+        )
+        result = service.match_michelin_batch(
+            {
+                "cards": [
+                    {
+                        "key": "overseas",
+                        "name": "Overseas Restaurant",
+                        "latitude": 40.7128,
+                        "longitude": -74.006,
+                        "coordinates_source": "place",
+                    }
+                ]
+            }
+        )
+        self.assertEqual(result["results"], [{"key": "overseas", "status": "no_match"}])
+        self.assertEqual(michelin.strict_calls, [])
+
     def test_match_and_cache(self) -> None:
         provider = FakeProvider()
         service = MatchService(

@@ -17,6 +17,7 @@ from .cache import (
     CacheBackend,
     build_cache,
 )
+from .japan import classify_japan_place
 from .matching import rank_candidates
 from .michelin import MichelinProvider
 from .provider import GurumeProvider, canonical_restaurant_url
@@ -69,6 +70,9 @@ class MatchService:
             or "",
             "latitude": payload.get("latitude"),
             "longitude": payload.get("longitude"),
+            "coordinates_source": (
+                "place" if payload.get("coordinates_source") == "place" else ""
+            ),
         }
         for key in ("latitude", "longitude"):
             if result[key] not in (None, ""):
@@ -77,6 +81,11 @@ class MatchService:
                 except (TypeError, ValueError) as exc:
                     raise ValueError(f"{key} 格式不正確") from exc
         return result
+
+    @staticmethod
+    def ensure_not_overseas(place: Mapping[str, Any]) -> None:
+        if classify_japan_place(place) == "not_japan":
+            raise ValueError("此店家明確位於日本合理範圍外")
 
     @staticmethod
     def _cache_key(place: Mapping[str, Any]) -> str:
@@ -123,6 +132,7 @@ class MatchService:
 
     def match_michelin(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         place = self.validate_place(payload)
+        self.ensure_not_overseas(place)
         tabelog = self.validate_tabelog_hint(payload)
         key = self._cache_key(place)
         if tabelog:
@@ -176,10 +186,14 @@ class MatchService:
                         "name": name,
                         "latitude": raw_card.get("latitude"),
                         "longitude": raw_card.get("longitude"),
+                        "coordinates_source": raw_card.get("coordinates_source"),
                     }
                 )
             except ValueError:
                 results.append({"key": key, "status": "invalid"})
+                continue
+            if classify_japan_place(place) == "not_japan":
+                results.append({"key": key, "status": "no_match"})
                 continue
 
             matched = self.michelin_provider.match_snapshot_strict(place)
@@ -233,6 +247,7 @@ class MatchService:
         self, payload: Mapping[str, Any], *, include_michelin: bool = True
     ) -> dict[str, Any]:
         place = self.validate_place(payload)
+        self.ensure_not_overseas(place)
         key = self._cache_key(place)
         cached = self.cache.get(key)
         if cached:

@@ -13,13 +13,13 @@ test("uses the last place coordinates when a Maps URL contains navigation histor
   ].join("");
   assert.deepEqual(
     coordinatesFromMapsUrl(url),
-    { latitude: 35.6584466, longitude: 139.7021636 },
+    { latitude: 35.6584466, longitude: 139.7021636, coordinates_source: "place" },
   );
 });
 
-test("falls back to viewport coordinates when place coordinates are absent", () => {
+test("marks viewport coordinates so they cannot be treated as place coordinates", () => {
   assert.deepEqual(
     coordinatesFromMapsUrl("https://www.google.com/maps/@35.1,139.2,17z"),
-    { latitude: 35.1, longitude: 139.2 },
+    { latitude: 35.1, longitude: 139.2, coordinates_source: "viewport" },
   );
 });

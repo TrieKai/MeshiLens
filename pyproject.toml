@@ -1,6 +1,6 @@
 [project]
 name = "meshilens"
-version = "0.5.4"
+version = "0.5.5"
 description = "Show Tabelog ratings and Michelin Guide Japan distinctions in Google Maps"
 readme = "README.md"
 requires-python = ">=3.12"

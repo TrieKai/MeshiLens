@@ -5,10 +5,22 @@
   function coordinatesFromMapsUrl(value) {
     const url = String(value || "");
     const placeCoordinates = Array.from(url.matchAll(COORDINATE_PATTERN));
-    const match = placeCoordinates[placeCoordinates.length - 1] || url.match(VIEWPORT_PATTERN);
-    return match
-      ? { latitude: Number(match[1]), longitude: Number(match[2]) }
-      : { latitude: null, longitude: null };
+    const placeMatch = placeCoordinates[placeCoordinates.length - 1];
+    if (placeMatch) {
+      return {
+        latitude: Number(placeMatch[1]),
+        longitude: Number(placeMatch[2]),
+        coordinates_source: "place",
+      };
+    }
+    const viewportMatch = url.match(VIEWPORT_PATTERN);
+    return viewportMatch
+      ? {
+        latitude: Number(viewportMatch[1]),
+        longitude: Number(viewportMatch[2]),
+        coordinates_source: "viewport",
+      }
+      : { latitude: null, longitude: null, coordinates_source: "" };
   }
 
   globalThis.MeshiLensMaps = { coordinatesFromMapsUrl };

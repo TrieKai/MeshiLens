@@ -4,6 +4,7 @@ const ADDRESS_PREFIX = /^(地址|住所|address)\s*[:：]?\s*/i;
 const PHONE_PREFIX = /^(電話|電話番号|phone)\s*[:：]?\s*/i;
 const { foodSignalsFromLabels, isFoodCategory, isFoodPlace } = globalThis.MeshiLensCategory;
 const { coordinatesFromMapsUrl } = globalThis.MeshiLensMaps;
+const { classifyJapanPlace } = globalThis.MeshiLensJapan;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 const { advicePayload, adviceCacheKey, cachedAdvice } = globalThis.MeshiLensAdvice;
@@ -725,7 +726,7 @@ function collectListCards({ visibleOnly = true, limit = MAX_LIST_CARDS } = {}) {
     if (seen.has(key)) continue;
     seen.add(key);
     const coordinates = listCoordinatesFromHref(href);
-    cards.push({ key, name, href, ...coordinates, mount });
+    cards.push({ key, name, href, ...coordinates, exact_coordinates: true, mount });
     if (cards.length === limit) break;
   }
   return cards;
@@ -771,7 +772,8 @@ async function loadListBadges() {
   pruneDetachedListBadges();
   const cards = visibleListCards();
   for (const card of cards) syncListBadge(card);
-  const missing = listCardsNeedingLookup(cards, listBadgeCache);
+  const japanCards = cards.filter((card) => classifyJapanPlace(card) === "japan");
+  const missing = listCardsNeedingLookup(japanCards, listBadgeCache);
   if (!missing.length) return;
   if (listBatchCoversKeys(listInFlightKeys, missing)) return;
 
@@ -818,7 +820,7 @@ function scheduleListBadges(delay = 350) {
 
 function scanDetail() {
   const place = extractPlace();
-  if (!place) {
+  if (!place || classifyJapanPlace(place) !== "japan") {
     activePlaceKey = "";
     document.getElementById(CARD_ID)?.remove();
     return;

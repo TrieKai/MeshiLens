@@ -170,6 +170,7 @@ function placePayload(place) {
     tabelog_url: String(place?.tabelog_url || "").slice(0, 300),
     latitude: place?.latitude ?? null,
     longitude: place?.longitude ?? null,
+    coordinates_source: place?.coordinates_source === "place" ? "place" : "",
   };
 }
 
@@ -203,6 +204,7 @@ function michelinBatchPayload(cards) {
       href: String(card?.href || "").trim().slice(0, 1_000),
       latitude: card?.latitude ?? null,
       longitude: card?.longitude ?? null,
+      coordinates_source: card?.exact_coordinates === true ? "place" : "",
     })),
   };
 }

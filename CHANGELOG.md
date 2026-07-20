@@ -2,6 +2,12 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.5] — 2026-07-20
+
+### Fixed
+- 僅在明確日本店家顯示 MeshiLens；海外精確座標店家與訊號不足店家皆靜默略過
+- URL viewport 座標不再作為店家所在地判定，避免拖曳地圖或瀏覽歷史誤判
+
 ## [0.5.4] — 2026-07-20
 
 ### Fixed
