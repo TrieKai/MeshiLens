@@ -11,16 +11,24 @@ const { roundCoord } = globalThis.MeshiLensCache;
 const { DETAIL_MODE, LIST_MODE, mapsUiMode } = globalThis.MeshiLensUiMode;
 const {
   MAX_LIST_CARDS,
+  cleanListPlaceName,
+  listPlaceNameFromHref,
   listCardKey,
   listCoordinatesFromHref,
   badgeText,
+  listCardsNeedingLookup,
+  listBatchCoversKeys,
+  rememberListBadgeResult,
 } = globalThis.MeshiLensListBadges;
 let activePlaceKey = "";
 let lookupSequence = 0;
 let listBatchSequence = 0;
 let listAbortController = null;
+let listInFlightKeys = null;
+let listBadgeCache = new Map();
 let detailDebounceTimer = null;
 let listDebounceTimer = null;
+let listScrollTimer = null;
 let extensionEnabled = false;
 let themeColor = DEFAULT_THEME_COLOR;
 
@@ -614,29 +622,88 @@ function removeListHint() {
   document.getElementById(LIST_HINT_ID)?.remove();
 }
 
+function positionListHint(hint, feed) {
+  const rect = feed.getBoundingClientRect();
+  if (rect.width < 80 || rect.height < 40) {
+    hint.hidden = true;
+    return;
+  }
+  hint.hidden = false;
+  hint.style.top = `${Math.max(10, rect.top + 10)}px`;
+  hint.style.left = `${rect.left + 12}px`;
+  hint.style.width = `${Math.min(360, Math.max(180, rect.width - 24))}px`;
+}
+
 function showListHint() {
   if (currentMapsUiMode() !== LIST_MODE) return;
   const feed = document.querySelector('[role="feed"]');
-  if (!feed || document.getElementById(LIST_HINT_ID)) return;
-  const hint = element("section", "meshilens-list-hint", "點選店家可查看 MeshiLens");
-  hint.id = LIST_HINT_ID;
-  hint.setAttribute("aria-label", "MeshiLens 提示");
+  if (!feed) {
+    removeListHint();
+    return;
+  }
+  let hint = document.getElementById(LIST_HINT_ID);
+  if (!hint) {
+    hint = element("section", "meshilens-list-hint", "點選店家可查看 MeshiLens");
+    hint.id = LIST_HINT_ID;
+    hint.setAttribute("aria-label", "MeshiLens 提示");
+    document.body.append(hint);
+  }
   hint.style.setProperty("--ml-accent", themeColor);
-  feed.prepend(hint);
+  positionListHint(hint, feed);
 }
 
 function removeListBadges() {
   document.querySelectorAll(".meshilens-list-badge").forEach((badge) => badge.remove());
+  document.querySelectorAll(".meshilens-list-card").forEach((card) => {
+    card.classList.remove("meshilens-list-card");
+  });
+}
+
+function clearListBadgeState() {
+  cancelListBadgeLookup();
+  listBadgeCache = new Map();
+  removeListBadges();
+}
+
+function pauseListPresentation() {
+  // Keep cache while detail is open. Maps often rebuilds feed articles on
+  // click, so remount badges from cache whenever the feed is still present.
+  cancelListBadgeLookup();
+  removeListHint();
+  remountListBadgesFromCache();
 }
 
 function cancelListBadgeLookup() {
   listBatchSequence += 1;
   listAbortController?.abort();
   listAbortController = null;
+  listInFlightKeys = null;
   chrome.runtime.sendMessage({ type: "CANCEL_MICHELIN_BATCH" }).catch(() => {});
 }
 
-function visibleListCards() {
+function pruneDetachedListBadges() {
+  document.querySelectorAll(".meshilens-list-badge").forEach((badge) => {
+    if (!badge.isConnected || !badge.parentElement?.isConnected) badge.remove();
+  });
+}
+
+function syncListBadge(card) {
+  if (!card?.mount?.isConnected) return;
+  const existing = [...card.mount.querySelectorAll(".meshilens-list-badge")];
+  for (const node of existing) {
+    if (node.dataset.meshilensListKey !== card.key) node.remove();
+  }
+  if (!listBadgeCache.has(card.key)) return;
+  const badge = listBadgeCache.get(card.key);
+  if (!badge) return;
+  if (existing.some((node) => node.isConnected && node.dataset.meshilensListKey === card.key)) {
+    card.mount.classList.add("meshilens-list-card");
+    return;
+  }
+  mountListBadge(card, badge);
+}
+
+function collectListCards({ visibleOnly = true, limit = MAX_LIST_CARDS } = {}) {
   const feed = document.querySelector('[role="feed"]');
   if (!feed) return [];
   const feedRect = feed.getBoundingClientRect();
@@ -645,25 +712,44 @@ function visibleListCards() {
   const seen = new Set();
   const cards = [];
   for (const link of feed.querySelectorAll('a[href*="/maps/place/"]')) {
-    const name = link.textContent?.trim() || link.getAttribute("aria-label")?.trim() || "";
     const href = link.href || link.getAttribute("href") || "";
+    const rawName = link.textContent?.trim() || link.getAttribute("aria-label")?.trim() || "";
+    const name = cleanListPlaceName(rawName) || listPlaceNameFromHref(href);
     const mount = link.closest('[role="article"]') || link.parentElement;
     if (!name || !href || !mount) continue;
-    const rect = mount.getBoundingClientRect();
-    if (rect.bottom <= top || rect.top >= bottom) continue;
+    if (visibleOnly) {
+      const rect = mount.getBoundingClientRect();
+      if (rect.bottom <= top || rect.top >= bottom) continue;
+    }
     const key = listCardKey({ href, name });
     if (seen.has(key)) continue;
     seen.add(key);
     const coordinates = listCoordinatesFromHref(href);
     cards.push({ key, name, href, ...coordinates, mount });
-    if (cards.length === MAX_LIST_CARDS) break;
+    if (cards.length === limit) break;
   }
   return cards;
+}
+
+function visibleListCards() {
+  return collectListCards({ visibleOnly: true, limit: MAX_LIST_CARDS });
+}
+
+function remountListBadgesFromCache() {
+  if (!extensionEnabled || !listBadgeCache.size) return;
+  if (!document.querySelector('[role="feed"]')) return;
+  pruneDetachedListBadges();
+  // Detail mode may keep the feed off-screen or rebuild nodes; do not require
+  // viewport intersection when restoring cached badges.
+  for (const card of collectListCards({ visibleOnly: false, limit: 30 })) {
+    syncListBadge(card);
+  }
 }
 
 function mountListBadge(card, badge) {
   const text = badgeText(badge);
   if (!text || !card.mount?.isConnected) return;
+  card.mount.classList.add("meshilens-list-card");
   const node = element(badge.url ? "a" : "span", "meshilens-list-badge", text);
   node.dataset.meshilensListKey = card.key;
   node.setAttribute("aria-label", `Michelin Guide：${text}`);
@@ -676,18 +762,28 @@ function mountListBadge(card, badge) {
 }
 
 async function loadListBadges() {
-  if (currentMapsUiMode() !== LIST_MODE) return;
-  cancelListBadgeLookup();
-  removeListBadges();
+  const mode = currentMapsUiMode();
+  if (mode === DETAIL_MODE) {
+    remountListBadgesFromCache();
+    return;
+  }
+  if (mode !== LIST_MODE) return;
+  pruneDetachedListBadges();
   const cards = visibleListCards();
-  if (!cards.length) return;
+  for (const card of cards) syncListBadge(card);
+  const missing = listCardsNeedingLookup(cards, listBadgeCache);
+  if (!missing.length) return;
+  if (listBatchCoversKeys(listInFlightKeys, missing)) return;
+
+  cancelListBadgeLookup();
   const controller = new AbortController();
   listAbortController = controller;
+  listInFlightKeys = new Set(missing.map((card) => card.key));
   const sequence = ++listBatchSequence;
   try {
     const response = await chrome.runtime.sendMessage({
       type: "MATCH_MICHELIN_BATCH",
-      cards: cards.map(({ mount, ...card }) => card),
+      cards: missing.map(({ mount, ...card }) => card),
     });
     if (
       controller.signal.aborted
@@ -695,20 +791,29 @@ async function loadListBadges() {
       || currentMapsUiMode() !== LIST_MODE
       || !response?.ok
     ) return;
-    const badges = new Map(
-      (response.data?.results || [])
-        .filter((result) => result?.status === "matched" && result.badge)
-        .map((result) => [result.key, result.badge]),
-    );
-    for (const card of cards) {
-      const badge = badges.get(card.key);
-      if (badge) mountListBadge(card, badge);
+    for (const result of response.data?.results || []) {
+      rememberListBadgeResult(listBadgeCache, result);
     }
+    for (const card of visibleListCards()) syncListBadge(card);
   } catch {
     // List mode remains silent when the optional badge request fails.
   } finally {
-    if (listAbortController === controller) listAbortController = null;
+    if (listAbortController === controller) {
+      listAbortController = null;
+      listInFlightKeys = null;
+    }
   }
+}
+
+function scheduleListBadges(delay = 350) {
+  clearTimeout(listDebounceTimer);
+  listDebounceTimer = setTimeout(() => {
+    if (currentMapsUiMode() !== LIST_MODE) return;
+    activePlaceKey = "";
+    document.getElementById(CARD_ID)?.remove();
+    showListHint();
+    loadListBadges();
+  }, delay);
 }
 
 function scanDetail() {
@@ -729,37 +834,27 @@ function scan() {
   clearTimeout(listDebounceTimer);
   if (!extensionEnabled) {
     activePlaceKey = "";
-    cancelListBadgeLookup();
+    clearListBadgeState();
     removeListHint();
-    removeListBadges();
     document.getElementById(CARD_ID)?.remove();
     return;
   }
 
   const mode = currentMapsUiMode();
   if (mode === DETAIL_MODE) {
-    cancelListBadgeLookup();
-    removeListHint();
-    removeListBadges();
+    pauseListPresentation();
     detailDebounceTimer = setTimeout(scanDetail, 500);
     return;
   }
   if (mode === LIST_MODE) {
     // List redraws are presentation-only: never cancel an in-flight detail lookup.
-    listDebounceTimer = setTimeout(() => {
-      if (currentMapsUiMode() !== LIST_MODE) return;
-      activePlaceKey = "";
-      document.getElementById(CARD_ID)?.remove();
-      showListHint();
-      loadListBadges();
-    }, 250);
+    scheduleListBadges(350);
     return;
   }
 
   activePlaceKey = "";
-  cancelListBadgeLookup();
+  clearListBadgeState();
   removeListHint();
-  removeListBadges();
   document.getElementById(CARD_ID)?.remove();
 }
 
@@ -777,6 +872,17 @@ new MutationObserver((mutations) => {
   if (pageChanged) scan();
 }).observe(document.body, { childList: true, subtree: true });
 window.addEventListener("popstate", scan);
+window.addEventListener("scroll", () => {
+  if (!extensionEnabled || currentMapsUiMode() !== LIST_MODE) return;
+  const hint = document.getElementById(LIST_HINT_ID);
+  const feed = document.querySelector('[role="feed"]');
+  if (hint && feed) positionListHint(hint, feed);
+  clearTimeout(listScrollTimer);
+  listScrollTimer = setTimeout(() => {
+    if (currentMapsUiMode() !== LIST_MODE) return;
+    loadListBadges();
+  }, 200);
+}, true);
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;
@@ -792,10 +898,10 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       lookupSequence += 1;
       clearTimeout(detailDebounceTimer);
       clearTimeout(listDebounceTimer);
+      clearTimeout(listScrollTimer);
       chrome.runtime.sendMessage({ type: "CANCEL_LOOKUP" }).catch(() => {});
-      cancelListBadgeLookup();
+      clearListBadgeState();
       removeListHint();
-      removeListBadges();
       document.getElementById(CARD_ID)?.remove();
       return;
     }

@@ -2,6 +2,17 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.4] — 2026-07-20
+
+### Fixed
+- 清單店名清除 Maps「開啟過的連結」等造訪尾綴，避免 Michelin badge 配對失敗
+- 清單 badge 改用 session 快取與增量回掛，減少閃爍與滑回後消失
+- 詳情模式下若 feed 仍在，從快取保留／回掛列表 badge
+- 列表 cache key 改採穩定的 `/maps/place/店名`，忽略會變動的 `data=` 片段
+
+### Changed
+- 列表 badge 改絕對定位、hint 改固定浮層，降低側欄重排影響
+
 ## [0.5.3] — 2026-07-20
 
 ### Added
