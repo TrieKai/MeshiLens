@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.7] — 2026-07-22
+
+### Changed
+- 公開評論實驗摘要取樣上限由 8 則調整為約 20 則（對齊 Tabelog 預設一頁），並提高總字數上限；仍只抓第一頁
+
 ## [0.5.6] — 2026-07-22
 
 ### Added

@@ -27,9 +27,9 @@ LOGGER = logging.getLogger("meshilens.review_insights")
 PROMPT_VERSION = "review-insights-v1"
 DEFAULT_REVIEW_INSIGHTS_TTL_SECONDS = _CACHE_TTL
 MIN_REVIEWS = 5
-MAX_REVIEWS = 8
+MAX_REVIEWS = 20
 MAX_CHARS_PER_REVIEW = 480
-MAX_TOTAL_CHARS = 3_600
+MAX_TOTAL_CHARS = 9_000
 SOURCE_NOTE = "僅分析一頁公開評論，可能不完整"
 
 _REVIEW_ITEM_SELECTORS = ("div.rvw-item", "li.rvw-item", "div.js-rvw-item")

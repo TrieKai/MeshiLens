@@ -72,7 +72,7 @@ class ReviewInsightsTests(unittest.TestCase):
     def test_parser_fixture_strips_authors_and_bounds_count(self) -> None:
         html = (FIXTURES / "tabelog_review_list.html").read_text(encoding="utf-8")
         texts = parse_public_review_texts(html)
-        self.assertGreaterEqual(len(texts), 8)
+        self.assertGreaterEqual(len(texts), 20)
         joined = "\n".join(texts)
         self.assertNotIn("太郎レビュアー", joined)
         self.assertNotIn("花子", joined)
@@ -82,7 +82,8 @@ class ReviewInsightsTests(unittest.TestCase):
         bounded = bound_review_texts(texts)
         self.assertLessEqual(len(bounded), MAX_REVIEWS)
         self.assertLessEqual(sum(len(item) for item in bounded), MAX_TOTAL_CHARS)
-        self.assertEqual(len(bounded), 8)
+        self.assertEqual(len(bounded), 20)
+        self.assertEqual(MAX_REVIEWS, 20)
 
     def test_empty_or_changed_markup_degrades(self) -> None:
         empty = (FIXTURES / "tabelog_review_list_empty.html").read_text(encoding="utf-8")

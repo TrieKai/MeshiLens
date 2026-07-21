@@ -44,4 +44,4 @@ node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js t
 - Michelin 詳情（電話／官網）僅在跨語言且必要時低頻補查並快取。
 - `/advice` 只接受結構化 `facts`（或相容的 place／candidate）；不接收評論原文或 Maps DOM；與「公開評論實驗摘要」完全分離。
 - Michelin 初查與 `/match` 並行；若初查未命中且已有 Tabelog 選定店，可再以 Tabelog 識別做一次低頻補配。
-- **公開評論實驗摘要**（`POST /review-insights`）：僅限使用者 **opt-in** 主動點擊後，後端低頻讀取該店**一頁**公開 Tabelog 評論（最多約 5–8 則、總字數受限），暫存於記憶體送 Groq 產生**主題摘要**後立即丟棄原文；只快取摘要（約 7 天）。不做：自動對每店抓評論、擴充功能直接抓 Tabelog、顯示原文／作者／頭像／逐字引言、列表批量抓取、或把評論寫入 `/advice`。不依賴 `gurume` 的 `fetch_reviews=True`。
+- **公開評論實驗摘要**（`POST /review-insights`）：僅限使用者 **opt-in** 主動點擊後，後端低頻讀取該店**一頁**公開 Tabelog 評論（最多約 20 則、對齊預設一頁、總字數受限），暫存於記憶體送 Groq 產生**主題摘要**後立即丟棄原文；只快取摘要（約 7 天）。不做：自動對每店抓評論、擴充功能直接抓 Tabelog、顯示原文／作者／頭像／逐字引言、列表批量抓取、或把評論寫入 `/advice`。不依賴 `gurume` 的 `fetch_reviews=True`。
