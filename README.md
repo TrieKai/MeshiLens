@@ -125,7 +125,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 node --check extension/background.js
 node --check extension/content.js
 node --check extension/popup.js
-node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js tests/test_maps.js tests/test_timeline.js tests/test_lookup_cache.js tests/test_advice.js tests/test_review_insights.js
+node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js tests/test_maps.js tests/test_timeline.js tests/test_lookup_cache.js tests/test_advice.js tests/test_review_insights.js tests/test_runtime.js
 ```
 
 測試包含「割烹 清水屋」對 Tabelog「清水屋」的電話與地址差異案例。

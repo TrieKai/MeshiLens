@@ -31,6 +31,14 @@ const {
   listBatchCoversKeys,
   rememberListBadgeResult,
 } = globalThis.MeshiLensListBadges;
+const {
+  isExtensionContextValid,
+  isExtensionContextInvalidatedError,
+  safeRuntimeSendMessage,
+  softRuntimeSendMessage,
+  safeStorageLocalGet,
+  safeStorageLocalSet,
+} = globalThis.MeshiLensRuntime;
 let activePlaceKey = "";
 let lookupSequence = 0;
 let listBatchSequence = 0;
@@ -42,6 +50,42 @@ let listDebounceTimer = null;
 let listScrollTimer = null;
 let extensionEnabled = false;
 let themeColor = DEFAULT_THEME_COLOR;
+let extensionAlive = true;
+let pageObserver = null;
+
+function handleInvalidatedContext() {
+  if (!extensionAlive) return;
+  extensionAlive = false;
+  lookupSequence += 1;
+  listBatchSequence += 1;
+  listAbortController?.abort();
+  listAbortController = null;
+  listInFlightKeys = null;
+  clearTimeout(detailDebounceTimer);
+  clearTimeout(listDebounceTimer);
+  clearTimeout(listScrollTimer);
+  detailDebounceTimer = null;
+  listDebounceTimer = null;
+  listScrollTimer = null;
+  pageObserver?.disconnect();
+  pageObserver = null;
+}
+
+function ensureExtensionAlive() {
+  if (!extensionAlive) return false;
+  if (isExtensionContextValid()) return true;
+  handleInvalidatedContext();
+  return false;
+}
+
+function notePossibleInvalidation(error) {
+  if (!extensionAlive) return true;
+  if (error?.invalidated || isExtensionContextInvalidatedError(error) || !isExtensionContextValid()) {
+    handleInvalidatedContext();
+    return true;
+  }
+  return false;
+}
 
 function detailTitle() {
   return document.querySelector("h1.DUwDvf, h1.fontHeadlineLarge");
@@ -357,13 +401,14 @@ async function runReviewInsights(card, candidate, sequence) {
   syncReviewInsights(card);
 
   try {
+    if (!ensureExtensionAlive()) return;
     const insights = await beginReviewInsightsFlight(key, async () => {
-      const stored = await chrome.storage.local.get({ reviewInsightsCache: {} });
+      const stored = await safeStorageLocalGet({ reviewInsightsCache: {} });
       const cache = stored.reviewInsightsCache || {};
       const cached = cachedReviewInsights(cache[key], key);
       if (cached) return cached;
 
-      const response = await chrome.runtime.sendMessage({
+      const response = await safeRuntimeSendMessage({
         type: "GET_REVIEW_INSIGHTS",
         payload,
       });
@@ -384,7 +429,7 @@ async function runReviewInsights(card, candidate, sequence) {
       const entries = Object.entries(nextCache)
         .sort(([, a], [, b]) => b.savedAt - a.savedAt)
         .slice(0, 100);
-      await chrome.storage.local.set({ reviewInsightsCache: Object.fromEntries(entries) });
+      await safeStorageLocalSet({ reviewInsightsCache: Object.fromEntries(entries) });
       return nextInsights;
     });
 
@@ -393,7 +438,7 @@ async function runReviewInsights(card, candidate, sequence) {
       syncReviewInsights(card);
     }
   } catch (error) {
-    if (error?.cancelled) {
+    if (notePossibleInvalidation(error) || error?.cancelled) {
       clearReviewInsightsFlight(key);
       return;
     }
@@ -419,7 +464,8 @@ async function loadAdvice(card, place, candidate, michelin, sequence) {
   card._meshilensAdvice = { status: "loading" };
   syncAdvice(card);
   try {
-    const stored = await chrome.storage.local.get({ diningAdviceCache: {} });
+    if (!ensureExtensionAlive()) return;
+    const stored = await safeStorageLocalGet({ diningAdviceCache: {} });
     const cache = stored.diningAdviceCache || {};
     const cached = cachedAdvice(cache[key], key);
     if (cached) {
@@ -429,7 +475,7 @@ async function loadAdvice(card, place, candidate, michelin, sequence) {
       }
       return;
     }
-    const response = await chrome.runtime.sendMessage({ type: "GET_DINING_ADVICE", payload });
+    const response = await safeRuntimeSendMessage({ type: "GET_DINING_ADVICE", payload });
     if (!response?.ok) throw new Error(response?.error || "AI 建議暫時無法取得");
     const advice = response.data?.advice;
     if (!response.data?.available) {
@@ -442,12 +488,13 @@ async function loadAdvice(card, place, candidate, michelin, sequence) {
     if (!advice?.summary) throw new Error("AI 建議暫時無法取得");
     const nextCache = { ...cache, [key]: { key, savedAt: Date.now(), advice } };
     const entries = Object.entries(nextCache).sort(([, a], [, b]) => b.savedAt - a.savedAt).slice(0, 100);
-    await chrome.storage.local.set({ diningAdviceCache: Object.fromEntries(entries) });
+    await safeStorageLocalSet({ diningAdviceCache: Object.fromEntries(entries) });
     if (sequence === lookupSequence && card.isConnected && card._meshilensAdviceKey === key) {
       card._meshilensAdvice = { advice };
       syncAdvice(card);
     }
-  } catch {
+  } catch (error) {
+    if (notePossibleInvalidation(error)) return;
     if (sequence === lookupSequence && card.isConnected && card._meshilensAdviceKey === key) {
       card._meshilensAdvice = { status: "error" };
       syncAdvice(card);
@@ -673,7 +720,9 @@ function renderResult(card, result) {
       card._meshilensAdvice = null;
       card._meshilensAdviceRequestKey = "";
       clearReviewInsightsFlight(card._meshilensReviewInsightsKey);
-      chrome.runtime.sendMessage({ type: "CANCEL_REVIEW_INSIGHTS" });
+      softRuntimeSendMessage({ type: "CANCEL_REVIEW_INSIGHTS" }).then((ok) => {
+        if (!ok && !isExtensionContextValid()) handleInvalidatedContext();
+      });
       card._meshilensReviewInsights = { status: "idle" };
       card._meshilensReviewInsightsKey = "";
       const resultWithMichelin = {
@@ -725,22 +774,26 @@ function tabelogHint(candidate) {
 async function refineMichelinWithTabelog(card, place, candidate, sequence) {
   if (!candidate || card._meshilensMichelin) return;
   try {
-    const response = await chrome.runtime.sendMessage({
+    if (!ensureExtensionAlive()) return;
+    const response = await safeRuntimeSendMessage({
       type: "MATCH_MICHELIN",
       place,
       tabelog: tabelogHint(candidate),
     });
     if (sequence !== lookupSequence || !card.isConnected || !response?.ok) return;
     if (response.data?.michelin) updateMichelin(card, response.data.michelin);
-  } catch {
+  } catch (error) {
+    notePossibleInvalidation(error);
     // Optional refinement; keep the card usable without Michelin.
   }
 }
 
 async function lookup(place) {
+  if (!ensureExtensionAlive()) return;
   try {
-    await chrome.runtime.sendMessage({ type: "CANCEL_LOOKUP" });
-  } catch {
+    await safeRuntimeSendMessage({ type: "CANCEL_LOOKUP" });
+  } catch (error) {
+    if (notePossibleInvalidation(error)) return;
     // Ignore when the service worker is waking up.
   }
   const sequence = ++lookupSequence;
@@ -748,14 +801,16 @@ async function lookup(place) {
   card._meshilensPlace = place;
   card._meshilensSequence = sequence;
   renderStatus(card, "正在查詢 Tabelog 與 Michelin…");
-  const michelinRequest = chrome.runtime.sendMessage({ type: "MATCH_MICHELIN", place })
+  const michelinRequest = safeRuntimeSendMessage({ type: "MATCH_MICHELIN", place })
     .then((response) => {
       if (sequence !== lookupSequence || !card.isConnected || !response?.ok) return;
       if (response.data?.michelin) updateMichelin(card, response.data.michelin);
     })
-    .catch(() => {});
+    .catch((error) => {
+      notePossibleInvalidation(error);
+    });
   try {
-    const response = await chrome.runtime.sendMessage({ type: "MATCH_PLACE", place });
+    const response = await safeRuntimeSendMessage({ type: "MATCH_PLACE", place });
     if (sequence !== lookupSequence || !card.isConnected) return;
     if (response?.cancelled) return;
     if (!response?.ok) throw new Error(response?.error || "查詢失敗");
@@ -768,6 +823,7 @@ async function lookup(place) {
       await refineMichelinWithTabelog(card, place, response.data.selected, sequence);
     }
   } catch (error) {
+    if (notePossibleInvalidation(error)) return;
     if (sequence !== lookupSequence || !card.isConnected) return;
     renderResult(card, {
       candidates: [],
@@ -839,7 +895,10 @@ function cancelListBadgeLookup() {
   listAbortController?.abort();
   listAbortController = null;
   listInFlightKeys = null;
-  chrome.runtime.sendMessage({ type: "CANCEL_MICHELIN_BATCH" }).catch(() => {});
+  if (!extensionAlive) return;
+  softRuntimeSendMessage({ type: "CANCEL_MICHELIN_BATCH" }).then((ok) => {
+    if (!ok && !isExtensionContextValid()) handleInvalidatedContext();
+  });
 }
 
 function pruneDetachedListBadges() {
@@ -923,6 +982,7 @@ function mountListBadge(card, badge) {
 }
 
 async function loadListBadges() {
+  if (!ensureExtensionAlive()) return;
   const mode = currentMapsUiMode();
   if (mode === DETAIL_MODE) {
     remountListBadgesFromCache();
@@ -938,12 +998,13 @@ async function loadListBadges() {
   if (listBatchCoversKeys(listInFlightKeys, missing)) return;
 
   cancelListBadgeLookup();
+  if (!ensureExtensionAlive()) return;
   const controller = new AbortController();
   listAbortController = controller;
   listInFlightKeys = new Set(missing.map((card) => card.key));
   const sequence = ++listBatchSequence;
   try {
-    const response = await chrome.runtime.sendMessage({
+    const response = await safeRuntimeSendMessage({
       type: "MATCH_MICHELIN_BATCH",
       cards: missing.map(({ mount, ...card }) => card),
     });
@@ -957,7 +1018,8 @@ async function loadListBadges() {
       rememberListBadgeResult(listBadgeCache, result);
     }
     for (const card of visibleListCards()) syncListBadge(card);
-  } catch {
+  } catch (error) {
+    notePossibleInvalidation(error);
     // List mode remains silent when the optional badge request fails.
   } finally {
     if (listAbortController === controller) {
@@ -970,6 +1032,7 @@ async function loadListBadges() {
 function scheduleListBadges(delay = 350) {
   clearTimeout(listDebounceTimer);
   listDebounceTimer = setTimeout(() => {
+    if (!ensureExtensionAlive()) return;
     if (currentMapsUiMode() !== LIST_MODE) return;
     activePlaceKey = "";
     document.getElementById(CARD_ID)?.remove();
@@ -979,6 +1042,7 @@ function scheduleListBadges(delay = 350) {
 }
 
 function scanDetail() {
+  if (!ensureExtensionAlive()) return;
   const place = extractPlace();
   if (!place || classifyJapanPlace(place) !== "japan") {
     activePlaceKey = "";
@@ -992,6 +1056,7 @@ function scanDetail() {
 }
 
 function scan() {
+  if (!ensureExtensionAlive()) return;
   clearTimeout(detailDebounceTimer);
   clearTimeout(listDebounceTimer);
   if (!extensionEnabled) {
@@ -1020,7 +1085,8 @@ function scan() {
   document.getElementById(CARD_ID)?.remove();
 }
 
-new MutationObserver((mutations) => {
+pageObserver = new MutationObserver((mutations) => {
+  if (!ensureExtensionAlive()) return;
   const pageChanged = mutations.some((mutation) => {
     const changedNodes = [...mutation.addedNodes, ...mutation.removedNodes];
     const isMeshiLensUiChange = changedNodes.length > 0 && changedNodes.every(
@@ -1032,47 +1098,62 @@ new MutationObserver((mutations) => {
     return !target?.closest(`#${CARD_ID}, #${LIST_HINT_ID}, .meshilens-list-badge`);
   });
   if (pageChanged) scan();
-}).observe(document.body, { childList: true, subtree: true });
-window.addEventListener("popstate", scan);
+});
+pageObserver.observe(document.body, { childList: true, subtree: true });
+window.addEventListener("popstate", () => {
+  if (!ensureExtensionAlive()) return;
+  scan();
+});
 window.addEventListener("scroll", () => {
-  if (!extensionEnabled || currentMapsUiMode() !== LIST_MODE) return;
+  if (!ensureExtensionAlive() || !extensionEnabled || currentMapsUiMode() !== LIST_MODE) return;
   const hint = document.getElementById(LIST_HINT_ID);
   const feed = document.querySelector('[role="feed"]');
   if (hint && feed) positionListHint(hint, feed);
   clearTimeout(listScrollTimer);
   listScrollTimer = setTimeout(() => {
+    if (!ensureExtensionAlive()) return;
     if (currentMapsUiMode() !== LIST_MODE) return;
     loadListBadges();
   }, 200);
 }, true);
 
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local") return;
-  if (changes.themeColor) {
-    themeColor = normalizeThemeColor(changes.themeColor.newValue);
-    document.getElementById(CARD_ID)?.style.setProperty("--ml-accent", themeColor);
-    document.getElementById(LIST_HINT_ID)?.style.setProperty("--ml-accent", themeColor);
-  }
-  if (changes.enabled) {
-    extensionEnabled = changes.enabled.newValue !== false;
-    activePlaceKey = "";
-    if (!extensionEnabled) {
-      lookupSequence += 1;
-      clearTimeout(detailDebounceTimer);
-      clearTimeout(listDebounceTimer);
-      clearTimeout(listScrollTimer);
-      chrome.runtime.sendMessage({ type: "CANCEL_LOOKUP" }).catch(() => {});
-      clearListBadgeState();
-      removeListHint();
-      document.getElementById(CARD_ID)?.remove();
-      return;
+try {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (!ensureExtensionAlive()) return;
+    if (areaName !== "local") return;
+    if (changes.themeColor) {
+      themeColor = normalizeThemeColor(changes.themeColor.newValue);
+      document.getElementById(CARD_ID)?.style.setProperty("--ml-accent", themeColor);
+      document.getElementById(LIST_HINT_ID)?.style.setProperty("--ml-accent", themeColor);
     }
-    scan();
-  }
-});
+    if (changes.enabled) {
+      extensionEnabled = changes.enabled.newValue !== false;
+      activePlaceKey = "";
+      if (!extensionEnabled) {
+        lookupSequence += 1;
+        clearTimeout(detailDebounceTimer);
+        clearTimeout(listDebounceTimer);
+        clearTimeout(listScrollTimer);
+        softRuntimeSendMessage({ type: "CANCEL_LOOKUP" });
+        clearListBadgeState();
+        removeListHint();
+        document.getElementById(CARD_ID)?.remove();
+        return;
+      }
+      scan();
+    }
+  });
+} catch (error) {
+  notePossibleInvalidation(error);
+}
 
-chrome.storage.local.get({ enabled: true, themeColor: DEFAULT_THEME_COLOR }).then(({ enabled, themeColor: savedThemeColor }) => {
-  extensionEnabled = enabled;
-  themeColor = normalizeThemeColor(savedThemeColor);
-  scan();
-});
+safeStorageLocalGet({ enabled: true, themeColor: DEFAULT_THEME_COLOR })
+  .then(({ enabled, themeColor: savedThemeColor }) => {
+    if (!ensureExtensionAlive()) return;
+    extensionEnabled = enabled;
+    themeColor = normalizeThemeColor(savedThemeColor);
+    scan();
+  })
+  .catch((error) => {
+    notePossibleInvalidation(error);
+  });

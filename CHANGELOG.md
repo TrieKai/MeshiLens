@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.8] — 2026-07-22
+
+### Fixed
+- 擴充功能重新載入後，舊 content script 不再因 `Extension context invalidated` 未捕捉錯誤噴 console；失效時停止 MutationObserver／timer，並以安全包裝涵蓋 lookup、list badges、advice、review insights 等持續觸發路徑
+
 ## [0.5.7] — 2026-07-22
 
 ### Changed
