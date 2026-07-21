@@ -241,6 +241,91 @@ a.meshilens-list-badge:focus-visible {
   padding-top: 7px;
 }
 
+.meshilens-review-insights {
+  background: #f9f5ec;
+  border: 1px solid #e6dcc9;
+  border-radius: 10px;
+  margin-top: 11px;
+  padding: 10px 11px;
+}
+
+.meshilens-review-insights-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.meshilens-review-insights-title {
+  color: #6f4e20;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.meshilens-review-insights-badge,
+.meshilens-review-insights-pending,
+.meshilens-review-insights-note {
+  color: var(--ml-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.meshilens-review-insights-pending {
+  margin-top: 7px;
+}
+
+.meshilens-review-insights-button {
+  background: var(--ml-accent);
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  margin-top: 8px;
+  padding: 7px 10px;
+}
+
+.meshilens-review-insights-button:hover,
+.meshilens-review-insights-button:focus-visible {
+  filter: brightness(0.96);
+  outline: 0;
+}
+
+.meshilens-review-insights-summary {
+  color: var(--ml-ink);
+  font-size: 12px;
+  line-height: 1.55;
+  margin-top: 7px;
+}
+
+.meshilens-review-insights-group {
+  display: grid;
+  font-size: 11px;
+  gap: 8px;
+  grid-template-columns: 52px minmax(0, 1fr);
+  line-height: 1.45;
+  margin-top: 7px;
+}
+
+.meshilens-review-insights-label {
+  color: var(--ml-muted);
+}
+
+.meshilens-review-insights-values {
+  color: var(--ml-ink);
+}
+
+.meshilens-review-insights-group.is-cautions .meshilens-review-insights-values {
+  color: #8b5424;
+}
+
+.meshilens-review-insights-note {
+  border-top: 1px solid #e6dcc9;
+  margin-top: 8px;
+  padding-top: 7px;
+}
+
 .meshilens-michelin-awards {
   align-items: center;
   display: flex;

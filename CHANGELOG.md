@@ -2,6 +2,17 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.6] — 2026-07-22
+
+### Added
+- 獨立 `POST /review-insights`「公開評論實驗摘要」：使用者點擊「分析公開評論」後，後端低頻讀取該店一頁公開 Tabelog 評論，暫存於記憶體送 Groq 產生主題摘要；與 facts-only `/advice` 完全分離
+- 自有評論頁 HTML parser 與 fixture 測試（不依賴 `gurume` 的 `fetch_reviews=True`）
+- 擴充功能獨立「評論實驗摘要」卡片（loading／錯誤「暫時無法取得」／成功主題摘要），含同店 single-flight 與本機摘要快取
+
+### Changed
+- 評論實驗路徑只快取最終摘要約 7 天，不保存評論原文；日誌僅匿名化指標
+- 更新 `AGENTS.md`／`README.md` 隱私與功能邊界，允許僅限 opt-in 實驗功能的低頻公開評論摘要
+
 ## [0.5.5] — 2026-07-20
 
 ### Fixed

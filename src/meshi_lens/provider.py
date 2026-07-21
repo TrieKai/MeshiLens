@@ -618,6 +618,27 @@ class GurumeProvider:
                 continue
         return candidates
 
+    def fetch_review_list_html(self, restaurant_url: str) -> str:
+        """Fetch one public review-list page with host throttling. No retries on failure."""
+        from curl_cffi import requests
+
+        canonical = canonical_restaurant_url(restaurant_url)
+        if not canonical:
+            raise ValueError("不是合法的 Tabelog 店家 URL")
+        url = f"{canonical.rstrip('/')}/dtlrvwlst/"
+        self._throttle(self.TABELOG_HOST)
+        response = requests.get(
+            url,
+            headers={"Accept-Language": "ja,en;q=0.8"},
+            timeout=20.0,
+            allow_redirects=True,
+            impersonate="chrome",
+        )
+        if response.status_code == 403:
+            raise RuntimeError("Tabelog 暫時拒絕公開評論頁請求（403）")
+        response.raise_for_status()
+        return response.text
+
     @staticmethod
     def _has_phone_match(
         place: Mapping[str, Any], candidates: list[Mapping[str, Any]]

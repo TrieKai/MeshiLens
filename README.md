@@ -22,7 +22,8 @@
 - Michelin 資料使用繁中 SSR 清單建立低頻本地快照；使用者瀏覽 Maps 時不會向 Michelin 發出請求
 - 跨語言店名且有 Maps 電話或官網時，只低頻補查 100 公尺內的 Michelin 詳情頁，結果快取一天
 - Tabelog 與 Michelin 以獨立請求並行比對，先完成的一方先顯示，另一方再補入卡片
-- Tabelog 比對完成後，以店名、類型、評分／評論數、價位、獎項、訂位與付款等**結構化資料**非同步產生繁中「AI 用餐建議」；不擷取、不傳送也不摘要 Tabelog 或 Google Maps 評論原文
+- Tabelog 比對完成後，以店名、類型、評分／評論數、價位、獎項、訂位與付款等**結構化資料**非同步產生繁中「AI 用餐建議」（**非評論摘要**）；此路徑不擷取、不傳送也不摘要評論原文
+- 另提供獨立的 **「公開評論實驗摘要」**（需使用者主動點擊）：後端低頻讀取該店一頁公開 Tabelog 評論，僅暫存於記憶體送 Groq 整理主題摘要後丟棄原文，只快取摘要；不顯示逐字引用、作者或頭像
 - 中低信心時列出候選店家，讓使用者手動切換
 - 六小時結果快取（記憶體 L1 + 本機檔案或選用 Redis／Upstash）與 Tabelog 依 host 節流
 
@@ -46,8 +47,9 @@ uv run meshilens-server
 ## Vercel 後端部署
 
 專案可部署為 Vercel Python Function，提供 `GET /api/health` 和
-`POST /api/match`、`POST /api/michelin` 與選用的 `POST /api/advice`。目前為測試階段，API 未啟用存取驗證。未來接上瀏覽器
-擴充功能時，再將其正式網址設定到 `MESHI_ALLOWED_ORIGIN` 並啟用驗證。
+`POST /api/match`、`POST /api/michelin`、選用的 `POST /api/advice`，以及選用的
+`POST /api/review-insights`（公開評論實驗摘要）。目前為測試階段，API 未啟用存取驗證。
+未來接上瀏覽器擴充功能時，再將其正式網址設定到 `MESHI_ALLOWED_ORIGIN` 並啟用驗證。
 
 ## 更新 Michelin 日本快照
 
@@ -61,7 +63,7 @@ uv run python scripts/update_michelin.py
 
 ## 持久化結果快取（選用）
 
-`/match`、`/michelin`、`/advice` 會快取結果（TTL 分別約 6 小時、24 小時、24 小時）。
+`/match`、`/michelin`、`/advice`、`/review-insights` 會快取結果（TTL 分別約 6 小時、24 小時、24 小時、7 天；評論實驗路徑**只快取主題摘要**，不保存評論原文）。
 預設為**記憶體 L1 + 本機檔案**（目錄見 `MESHI_CACHE_DIR`，預設系統暫存）。
 在 Vercel Marketplace 連結 Upstash Redis 後，會自動設定：
 
@@ -90,6 +92,16 @@ UPSTASH_REDIS_REST_TOKEN=...
 百名店／米其林、訂位與付款欄位；不接收評論正文、評論者、照片或 Google Maps 評論。
 同一份店家資料會在瀏覽器本機快取 24 小時，資料關鍵欄位（`advice_facts`）改變才重新生成。
 
+## 公開評論實驗摘要（選用、需主動點擊）
+
+與「AI 用餐建議」完全獨立。使用者點擊「分析公開評論」後，
+擴充功能只傳送已配對的 Tabelog URL 與店名至 `POST /review-insights`；後端以既有
+host 節流抓取**一頁**公開評論，最多約 5–8 則並限制總字數，移除作者／照片／連結後
+暫存於記憶體送 Groq 產生主題摘要，隨即丟棄原文。Upstash／本機快取只保存摘要約 7 天。
+
+不做：自動對每家店抓評論、擴充功能直接讀 Tabelog、顯示原文或逐字引言、列表批量分析。
+失敗（403、解析失敗、逾時）時 UI 只顯示「暫時無法取得」，並保留 Tabelog 連結。
+
 ## 配對規則
 
 配對最高為 100 分：
@@ -113,7 +125,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 node --check extension/background.js
 node --check extension/content.js
 node --check extension/popup.js
-node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js tests/test_maps.js tests/test_timeline.js tests/test_lookup_cache.js
+node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js tests/test_maps.js tests/test_timeline.js tests/test_lookup_cache.js tests/test_advice.js tests/test_review_insights.js
 ```
 
 測試包含「割烹 清水屋」對 Tabelog「清水屋」的電話與地址差異案例。
@@ -121,13 +133,14 @@ node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js t
 ## 隱私與限制
 
 - 本機服務只監聽 `127.0.0.1`，`/match` 只接受瀏覽器擴充功能來源。
-- 擴充功能只有 Google Maps、本機服務及本機儲存權限，不讀取其他網站。
+- 擴充功能只有 Google Maps、本機服務及本機儲存權限，不讀取其他網站（含不直接抓 Tabelog 評論頁）。
 - Tabelog 搜尋頁可能依網路環境回覆 403；此時會改用公開搜尋索引尋找 Tabelog URL。若兩條路徑都失敗，擴充功能會顯示明確錯誤，不會誤認為「沒有這家店」。
 - Tabelog 頁面格式調整可能使 `gurume` 暫時失效；已提供持久結果快取，正式發布前仍應加強併發限制與監控。
 - 請遵守 Tabelog 的使用條款與 robots 政策，不要大量或自動化濫用請求。
 - Tabelog 商標與資料屬其權利人；本專案不隸屬於 Google 或 Tabelog。
 - Michelin 功能僅保存店家識別、座標、料理類型、價位、獎項與官方連結，不保存照片或評審文章；此非官方授權功能，請維持低頻、個人及非商業用途。
-- AI 用餐建議是根據有限結構化欄位的輔助判讀，不是評論摘要，也不應取代店家頁最新資訊或個人判斷。
+- AI 用餐建議（`/advice`）是根據有限結構化欄位的輔助判讀，**不是評論摘要**，也不應取代店家頁最新資訊或個人判斷。
+- **公開評論實驗摘要**僅在使用者主動點擊分析按鈕後，由後端低頻讀取少量公開 Tabelog 評論並送 Groq 生成主題摘要；**不保存評論原文**、不自動抓、不做批量、不顯示逐字引用／作者／頭像；日誌與快取只保留匿名化指標與最終摘要。
 
 ## 專案結構
 

@@ -8,6 +8,16 @@ const { classifyJapanPlace } = globalThis.MeshiLensJapan;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 const { advicePayload, adviceCacheKey, cachedAdvice } = globalThis.MeshiLensAdvice;
+const {
+  BUTTON_LABEL,
+  CARD_TITLE,
+  UNAVAILABLE_LABEL,
+  reviewInsightsPayload,
+  reviewInsightsCacheKey,
+  cachedReviewInsights,
+  beginReviewInsightsFlight,
+  clearReviewInsightsFlight,
+} = globalThis.MeshiLensReviewInsights;
 const { roundCoord } = globalThis.MeshiLensCache;
 const { DETAIL_MODE, LIST_MODE, mapsUiMode } = globalThis.MeshiLensUiMode;
 const {
@@ -246,9 +256,152 @@ function syncAdvice(card) {
     existing.replaceWith(section);
     return;
   }
+  const reviewInsights = card.querySelector(".meshilens-review-insights");
   const footer = card.querySelector(".meshilens-footer");
-  if (footer) footer.before(section);
+  if (reviewInsights) reviewInsights.before(section);
+  else if (footer) footer.before(section);
   else card.append(section);
+}
+
+function reviewInsightsView(state, candidate) {
+  const section = element("section", "meshilens-review-insights");
+  section.setAttribute("aria-label", CARD_TITLE);
+
+  const heading = element("div", "meshilens-review-insights-heading");
+  heading.append(element("span", "meshilens-review-insights-title", CARD_TITLE));
+  heading.append(element("span", "meshilens-review-insights-badge", "實驗／公開評論"));
+  section.append(heading);
+
+  if (!state || state.status === "idle") {
+    const button = element("button", "meshilens-review-insights-button", BUTTON_LABEL);
+    button.type = "button";
+    section.append(button);
+    return section;
+  }
+
+  if (state.status === "loading") {
+    section.append(element("div", "meshilens-review-insights-pending", "正在整理公開評論主題…"));
+    return section;
+  }
+
+  if (state.status === "error") {
+    section.append(element("div", "meshilens-review-insights-pending", UNAVAILABLE_LABEL));
+    if (candidate?.url) {
+      const link = element("a", "meshilens-link", "在 Tabelog 開啟 ↗");
+      link.href = candidate.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      section.append(link);
+    }
+    return section;
+  }
+
+  const insights = state.insights;
+  if (!insights?.summary) return null;
+  section.append(element("div", "meshilens-review-insights-summary", insights.summary));
+  const addList = (label, values, className) => {
+    if (!values?.length) return;
+    const group = element("div", `meshilens-review-insights-group ${className}`);
+    group.append(element("span", "meshilens-review-insights-label", label));
+    group.append(element("span", "meshilens-review-insights-values", values.join(" · ")));
+    section.append(group);
+  };
+  addList("常見好評", insights.positive_themes, "is-positive");
+  addList("留意", insights.cautions, "is-cautions");
+  const meta = [];
+  if (insights.sample_size) meta.push(`樣本 ${insights.sample_size} 則`);
+  if (insights.source_note) meta.push(insights.source_note);
+  if (meta.length) {
+    section.append(element("div", "meshilens-review-insights-note", meta.join(" · ")));
+  }
+  return section;
+}
+
+function syncReviewInsights(card) {
+  const existing = card.querySelector(".meshilens-review-insights");
+  const selected = card._meshilensSelected;
+  if (!selected?.url || !reviewInsightsPayload(selected)) {
+    existing?.remove();
+    return;
+  }
+  const section = reviewInsightsView(card._meshilensReviewInsights || { status: "idle" }, selected);
+  if (!section) {
+    existing?.remove();
+    return;
+  }
+  section.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.classList.contains("meshilens-review-insights-button")) {
+      event.preventDefault();
+      void runReviewInsights(card, selected, card._meshilensSequence);
+    }
+  });
+  if (existing) {
+    existing.replaceWith(section);
+    return;
+  }
+  const footer = card.querySelector(".meshilens-footer");
+  const advice = card.querySelector(".meshilens-advice");
+  if (advice) advice.after(section);
+  else if (footer) footer.before(section);
+  else card.append(section);
+}
+
+async function runReviewInsights(card, candidate, sequence) {
+  const payload = reviewInsightsPayload(candidate);
+  if (!payload) return;
+  const key = reviewInsightsCacheKey(candidate);
+  card._meshilensReviewInsightsKey = key;
+  card._meshilensReviewInsights = { status: "loading" };
+  syncReviewInsights(card);
+
+  try {
+    const insights = await beginReviewInsightsFlight(key, async () => {
+      const stored = await chrome.storage.local.get({ reviewInsightsCache: {} });
+      const cache = stored.reviewInsightsCache || {};
+      const cached = cachedReviewInsights(cache[key], key);
+      if (cached) return cached;
+
+      const response = await chrome.runtime.sendMessage({
+        type: "GET_REVIEW_INSIGHTS",
+        payload,
+      });
+      if (response?.cancelled) {
+        const cancelled = new Error("查詢已取消");
+        cancelled.cancelled = true;
+        throw cancelled;
+      }
+      if (!response?.ok) throw new Error(response?.error || UNAVAILABLE_LABEL);
+      if (!response.data?.available || !response.data?.insights?.summary) {
+        throw new Error(UNAVAILABLE_LABEL);
+      }
+      const nextInsights = response.data.insights;
+      const nextCache = {
+        ...cache,
+        [key]: { key, savedAt: Date.now(), insights: nextInsights },
+      };
+      const entries = Object.entries(nextCache)
+        .sort(([, a], [, b]) => b.savedAt - a.savedAt)
+        .slice(0, 100);
+      await chrome.storage.local.set({ reviewInsightsCache: Object.fromEntries(entries) });
+      return nextInsights;
+    });
+
+    if (sequence === lookupSequence && card.isConnected && card._meshilensReviewInsightsKey === key) {
+      card._meshilensReviewInsights = { insights };
+      syncReviewInsights(card);
+    }
+  } catch (error) {
+    if (error?.cancelled) {
+      clearReviewInsightsFlight(key);
+      return;
+    }
+    if (sequence === lookupSequence && card.isConnected && card._meshilensReviewInsightsKey === key) {
+      card._meshilensReviewInsights = { status: "error" };
+      syncReviewInsights(card);
+    }
+  }
 }
 
 async function loadAdvice(card, place, candidate, michelin, sequence) {
@@ -492,6 +645,8 @@ function renderResult(card, result) {
   } else {
     card.append(selectedView(selected, resultWithMichelin));
     syncAdvice(card);
+    card._meshilensReviewInsights = { status: "idle" };
+    syncReviewInsights(card);
   }
 
   if (!result.candidates?.length) return;
@@ -517,12 +672,17 @@ function renderResult(card, result) {
       card._meshilensSelected = candidate;
       card._meshilensAdvice = null;
       card._meshilensAdviceRequestKey = "";
+      clearReviewInsightsFlight(card._meshilensReviewInsightsKey);
+      chrome.runtime.sendMessage({ type: "CANCEL_REVIEW_INSIGHTS" });
+      card._meshilensReviewInsights = { status: "idle" };
+      card._meshilensReviewInsightsKey = "";
       const resultWithMichelin = {
         ...result,
         michelin: card._meshilensMichelin || result.michelin || null,
       };
       card.replaceChildren(...preservedNodes, selectedView(candidate, resultWithMichelin));
       syncAdvice(card);
+      syncReviewInsights(card);
       card.append(toggle, list);
       list.classList.add("meshilens-hidden");
       toggle.textContent = `查看候選店家（${result.candidates.length}）`;

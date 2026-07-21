@@ -195,6 +195,14 @@ function adviceFactsPayload(payload) {
   return { facts };
 }
 
+function reviewInsightsRequestPayload(payload) {
+  const tabelogUrl = String(payload?.tabelog_url || "").trim().slice(0, 300);
+  const restaurantName = String(payload?.restaurant_name || "").trim().slice(0, 120);
+  if (!tabelogUrl || !restaurantName) return null;
+  if (!/^https?:\/\/([a-z0-9-]+\.)*tabelog\.com\//i.test(tabelogUrl)) return null;
+  return { tabelog_url: tabelogUrl, restaurant_name: restaurantName };
+}
+
 function michelinBatchPayload(cards) {
   if (!Array.isArray(cards) || cards.length > 10) return null;
   return {
@@ -253,8 +261,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: true, cancelled: true });
     return false;
   }
+  if (message.type === "CANCEL_REVIEW_INSIGHTS") {
+    abortLookup(lookupKey(sender, "review_insights"));
+    sendResponse({ ok: true, cancelled: true });
+    return false;
+  }
 
-  if (!["MATCH_PLACE", "MATCH_MICHELIN", "MATCH_MICHELIN_BATCH", "GET_DINING_ADVICE", "HEALTH_CHECK"].includes(message.type)) {
+  if (![
+    "MATCH_PLACE",
+    "MATCH_MICHELIN",
+    "MATCH_MICHELIN_BATCH",
+    "GET_DINING_ADVICE",
+    "GET_REVIEW_INSIGHTS",
+    "HEALTH_CHECK",
+  ].includes(message.type)) {
     return false;
   }
 
@@ -265,6 +285,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         ? beginLookup(sender, message.tabelog ? "michelin_tabelog" : "michelin")
         : message.type === "MATCH_MICHELIN_BATCH"
           ? beginLookup(sender, "michelin_batch")
+          : message.type === "GET_REVIEW_INSIGHTS"
+            ? beginLookup(sender, "review_insights")
         : null;
 
   const work = message.type === "HEALTH_CHECK"
@@ -289,6 +311,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return request("/advice", {
             method: "POST",
             body: JSON.stringify(payload),
+          });
+        }
+        if (message.type === "GET_REVIEW_INSIGHTS") {
+          const payload = reviewInsightsRequestPayload(message.payload);
+          if (!payload) throw new Error("找不到可用的公開評論實驗資料");
+          return request("/review-insights", {
+            method: "POST",
+            body: JSON.stringify(payload),
+            signal: active.controller.signal,
           });
         }
         return matchPlace(message.place, active.controller.signal);

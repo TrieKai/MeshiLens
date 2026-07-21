@@ -68,7 +68,13 @@ class handler(BaseHTTPRequestHandler):
         self._send(404, {"error": "找不到路徑"})
 
     def do_POST(self) -> None:  # noqa: N802
-        if self._path() not in {"/match", "/michelin", "/michelin/batch", "/advice"}:
+        if self._path() not in {
+            "/match",
+            "/michelin",
+            "/michelin/batch",
+            "/advice",
+            "/review-insights",
+        }:
             self._send(404, {"error": "找不到路徑"})
             return
         try:
@@ -84,6 +90,8 @@ class handler(BaseHTTPRequestHandler):
                 result = SERVICE.match_michelin(payload)
             elif self._path() == "/advice":
                 result = SERVICE.advice(payload)
+            elif self._path() == "/review-insights":
+                result = SERVICE.review_insights(payload)
             else:
                 result = SERVICE.match(payload, include_michelin=False)
             self._send(200, result)
