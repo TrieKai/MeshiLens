@@ -1,6 +1,6 @@
 (() => {
   const MAX_RECOMMENDATIONS = 3;
-  const SIMILAR_CACHE_VERSION = "nearby-v3";
+  const SIMILAR_CACHE_VERSION = "nearby-v4";
 
   function canonicalTabelogUrl(value) {
     return String(value || "")
@@ -31,10 +31,27 @@
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
   }
 
-  function similarDisplayState(recommendations) {
+  function similarDisplayState(recommendations, diagnostics = null) {
     return Array.isArray(recommendations) && recommendations.length
-      ? { status: "ready", recommendations }
-      : { status: "empty" };
+      ? { status: "ready", recommendations, diagnostics }
+      : { status: "empty", diagnostics };
+  }
+
+  function similarDiagnosticsSummary(diagnostics) {
+    if (!diagnostics || typeof diagnostics !== "object") return "";
+    const count = (key) => Math.max(0, Number.parseInt(diagnostics[key], 10) || 0);
+    const scope = String(diagnostics.search_scope || "").trim();
+    const returned = count("returned_count");
+    if (!returned) return scope ? `搜尋範圍：${scope}；Tabelog 未回傳候選店家。` : "Tabelog 未回傳候選店家。";
+    const parts = [
+      scope ? `搜尋範圍：${scope}` : "",
+      `Tabelog 回傳 ${returned} 家`,
+    ].filter(Boolean);
+    const unverifiedLocation = count("unverified_location_count");
+    if (unverifiedLocation) parts.push(`${unverifiedLocation} 家因地點無法確認而略過`);
+    const belowQuality = count("below_quality_count");
+    if (belowQuality) parts.push(`${belowQuality} 家未達相似度門檻`);
+    return `${parts.join("；")}。`;
   }
 
   function similarPayload(candidate) {
@@ -70,6 +87,7 @@
     alternativeCandidates,
     confidenceLabel,
     mapsSearchUrl,
+    similarDiagnosticsSummary,
     similarDisplayState,
     similarPayload,
   };

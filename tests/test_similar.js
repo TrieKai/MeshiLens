@@ -9,6 +9,7 @@ const {
   alternativeCandidates,
   confidenceLabel,
   mapsSearchUrl,
+  similarDiagnosticsSummary,
   similarDisplayState,
   similarPayload,
 } = globalThis.MeshiLensSimilar;
@@ -42,7 +43,7 @@ test("uses confidence labels and Google Maps place searches for UI links", () =>
 
 test("builds a bounded similar-restaurant request from selected Tabelog facts", () => {
   assert.equal(MAX_RECOMMENDATIONS, 3);
-  assert.equal(SIMILAR_CACHE_VERSION, "nearby-v3");
+  assert.equal(SIMILAR_CACHE_VERSION, "nearby-v4");
   assert.deepEqual(
     similarPayload({
       name: "鮨 みなと",
@@ -71,11 +72,17 @@ test("does not request similar restaurants without Tabelog URL or cuisine", () =
   assert.equal(similarPayload({ name: "鮨 みなと", url: "https://tabelog.com/example/" }), null);
 });
 
-test("keeps an explicit empty state when no nearby recommendation is verified", () => {
-  assert.deepEqual(similarDisplayState([]), { status: "empty" });
-  assert.deepEqual(similarDisplayState(null), { status: "empty" });
+test("keeps an explicit empty state and safe diagnostics when no nearby recommendation is verified", () => {
+  const diagnostics = { search_scope: "銀座駅", returned_count: 5, unverified_location_count: 4, below_quality_count: 1 };
+  assert.deepEqual(similarDisplayState([], diagnostics), { status: "empty", diagnostics });
+  assert.deepEqual(similarDisplayState(null), { status: "empty", diagnostics: null });
   assert.deepEqual(
     similarDisplayState([{ name: "附近店家" }]),
-    { status: "ready", recommendations: [{ name: "附近店家" }] },
+    { status: "ready", recommendations: [{ name: "附近店家" }], diagnostics: null },
   );
+  assert.equal(
+    similarDiagnosticsSummary(diagnostics),
+    "搜尋範圍：銀座駅；Tabelog 回傳 5 家；4 家因地點無法確認而略過；1 家未達相似度門檻。",
+  );
+  assert.equal(similarDiagnosticsSummary(null), "");
 });

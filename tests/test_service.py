@@ -441,6 +441,8 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(first["recommendations"][0]["name"], "近江町割烹")
         self.assertEqual(first["recommendations"][0]["address"], "石川県金沢市下近江町")
         self.assertIn("同為日本料理", first["recommendations"][0]["reasons"])
+        self.assertEqual(first["diagnostics"]["search_scope"], "金沢駅")
+        self.assertEqual(first["diagnostics"]["returned_count"], 1)
 
     def test_similar_requires_a_cuisine_and_canonical_tabelog_url(self) -> None:
         service = MatchService(

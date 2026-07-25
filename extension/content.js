@@ -8,7 +8,7 @@ const { classifyJapanPlace } = globalThis.MeshiLensJapan;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 const { advicePayload, adviceCacheKey, adviceErrorMessage, cachedAdvice, normalizeAdviceNumbers } = globalThis.MeshiLensAdvice;
-const { alternativeCandidates, confidenceLabel, mapsSearchUrl, similarDisplayState, similarPayload } = globalThis.MeshiLensSimilar;
+const { alternativeCandidates, confidenceLabel, mapsSearchUrl, similarDiagnosticsSummary, similarDisplayState, similarPayload } = globalThis.MeshiLensSimilar;
 const {
   BUTTON_LABEL,
   CARD_TITLE,
@@ -334,6 +334,13 @@ function similarRestaurantsView(state) {
   }
   if (state?.status === "empty") {
     section.append(element("div", "meshilens-similar-pending", "目前找不到可確認在附近的相似店家"));
+    const summary = similarDiagnosticsSummary(state.diagnostics);
+    if (summary) {
+      const diagnostics = element("details", "meshilens-similar-diagnostics");
+      diagnostics.append(element("summary", "", "為何沒有推薦？"));
+      diagnostics.append(element("div", "meshilens-similar-diagnostics-detail", summary));
+      section.append(diagnostics);
+    }
     return section;
   }
   const recommendations = Array.isArray(state?.recommendations) ? state.recommendations : [];
@@ -590,7 +597,7 @@ async function loadSimilarRestaurants(card, candidate, sequence) {
     if (!response?.ok) throw new Error(response?.error || "Tabelog 相似店家暫時無法取得");
     const recommendations = response.data?.recommendations;
     if (sequence === lookupSequence && card.isConnected && card._meshilensSimilarRequestKey === requestKey) {
-      card._meshilensSimilar = similarDisplayState(recommendations);
+      card._meshilensSimilar = similarDisplayState(recommendations, response.data?.diagnostics);
       syncSimilarRestaurants(card);
     }
   } catch (error) {

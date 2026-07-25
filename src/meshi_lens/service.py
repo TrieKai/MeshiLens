@@ -34,7 +34,7 @@ from .review_insights import (
     review_insights_response,
     sanitize_review_insights_request,
 )
-from .similar import rank_similar_candidates
+from .similar import rank_similar_candidates_with_diagnostics
 
 
 LOGGER = logging.getLogger("meshilens.service")
@@ -327,10 +327,18 @@ class MatchService:
         except Exception as exc:
             LOGGER.info("similar outcome=failure reason=%s", type(exc).__name__)
             raise RuntimeError("Tabelog 相似店家暫時無法取得") from exc
+        recommendations, ranking_diagnostics = rank_similar_candidates_with_diagnostics(
+            seed, candidates, limit=3
+        )
+        search_scope = str(seed.get("station") or seed.get("address") or "").strip()
         result = {
             "source": "Tabelog 日本語版",
             "seed": {"name": seed["name"], "url": seed["url"]},
-            "recommendations": rank_similar_candidates(seed, candidates, limit=3),
+            "recommendations": recommendations,
+            "diagnostics": {
+                "search_scope": search_scope,
+                **ranking_diagnostics,
+            },
             "cached": False,
         }
         self.similar_cache.set(key, result)

@@ -280,6 +280,24 @@ a.meshilens-list-badge:focus-visible {
   margin-top: 7px;
 }
 
+.meshilens-similar-diagnostics {
+  color: var(--ml-muted);
+  font-size: 10px;
+  line-height: 1.45;
+  margin-top: 6px;
+}
+
+.meshilens-similar-diagnostics summary {
+  color: #8b5424;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.meshilens-similar-diagnostics-detail {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
 .meshilens-similar-list {
   display: grid;
   gap: 6px;

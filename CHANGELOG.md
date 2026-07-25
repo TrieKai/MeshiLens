@@ -2,6 +2,14 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.22] — 2026-07-26
+
+### Added
+- 相似店家沒有結果時，可展開「為何沒有推薦？」查看搜尋範圍、Tabelog 回傳家數與匿名彙總的篩選原因，方便快速判斷是資料不足或篩選條件所致
+
+### Changed
+- 相似店家快取版本升級，讓診斷資訊隨下一次查詢回傳
+
 ## [0.5.21] — 2026-07-26
 
 ### Fixed

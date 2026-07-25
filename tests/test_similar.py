@@ -1,6 +1,9 @@
 import unittest
 
-from meshi_lens.similar import rank_similar_candidates
+from meshi_lens.similar import (
+    rank_similar_candidates,
+    rank_similar_candidates_with_diagnostics,
+)
 from meshi_lens.localization import tabelog_genre_zh_hant_map
 
 
@@ -104,6 +107,29 @@ class SimilarRankingTests(unittest.TestCase):
             ],
         )
         self.assertEqual(ranked, [])
+
+    def test_reports_aggregate_reasons_when_nearby_filter_excludes_results(self) -> None:
+        ranked, diagnostics = rank_similar_candidates_with_diagnostics(
+            {
+                "url": "https://tabelog.com/tokyo/A1301/A130101/1300001/",
+                "genres": ["寿司"],
+                "station": "銀座駅",
+                "address": "東京都中央区銀座1-1-1",
+            },
+            [
+                {
+                    "name": "札幌の寿司店",
+                    "url": "https://tabelog.com/hokkaido/A0101/A010101/1000001/",
+                    "genres": ["寿司"],
+                    "station": "札幌駅",
+                    "address": "北海道札幌市中央区1-1",
+                }
+            ],
+        )
+        self.assertEqual(ranked, [])
+        self.assertEqual(diagnostics["returned_count"], 1)
+        self.assertEqual(diagnostics["unverified_location_count"], 1)
+        self.assertEqual(diagnostics["recommendation_count"], 0)
 
     def test_localizes_tabelog_cuisine_in_display_reasons(self) -> None:
         ranked = rank_similar_candidates(

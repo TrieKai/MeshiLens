@@ -126,24 +126,35 @@ def _same_restaurant(seed: Mapping[str, Any], candidate: Mapping[str, Any]) -> b
     return bool(seed_url and seed_url == candidate_url)
 
 
-def rank_similar_candidates(
+def rank_similar_candidates_with_diagnostics(
     seed: Mapping[str, Any],
     candidates: list[Mapping[str, Any]],
     *,
     limit: int = 3,
-) -> list[dict[str, Any]]:
-    """Return a small, explainable set of similar Tabelog search cards.
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Rank search cards and return aggregate, non-identifying filter diagnostics.
 
     Search results are intentionally used as-is.  This function never asks for a
     candidate's detail page, preserving the one-search-request budget per seed.
     """
     ranked: list[dict[str, Any]] = []
+    diagnostics = {
+        "returned_count": 0,
+        "same_restaurant_count": 0,
+        "unverified_location_count": 0,
+        "below_quality_count": 0,
+    }
     for raw in candidates:
-        if not isinstance(raw, Mapping) or _same_restaurant(seed, raw):
+        if not isinstance(raw, Mapping):
+            continue
+        diagnostics["returned_count"] += 1
+        if _same_restaurant(seed, raw):
+            diagnostics["same_restaurant_count"] += 1
             continue
         name = _text(raw.get("name"))
         url = _text(raw.get("url"))
         if not name or not url:
+            diagnostics["below_quality_count"] += 1
             continue
 
         score = 0.0
@@ -157,6 +168,7 @@ def rank_similar_candidates(
         # Search cards sometimes contain broad ranking results.  A matching
         # cuisine is not sufficient: recommend only a verifiably nearby card.
         if not location_score:
+            diagnostics["unverified_location_count"] += 1
             continue
         score += location_score
         reasons.append(location_reason)
@@ -170,6 +182,7 @@ def rank_similar_candidates(
         # A keyword search can include loosely related restaurants.  Location
         # is already mandatory; retain a small quality threshold as well.
         if score < 35:
+            diagnostics["below_quality_count"] += 1
             continue
         item = {
             "name": name,
@@ -195,4 +208,19 @@ def rank_similar_candidates(
             item["name"],
         )
     )
-    return ranked[: max(1, min(limit, 5))]
+    recommendations = ranked[: max(1, min(limit, 5))]
+    diagnostics["recommendation_count"] = len(recommendations)
+    return recommendations, diagnostics
+
+
+def rank_similar_candidates(
+    seed: Mapping[str, Any],
+    candidates: list[Mapping[str, Any]],
+    *,
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    """Return a small, explainable set of similar Tabelog search cards."""
+    recommendations, _ = rank_similar_candidates_with_diagnostics(
+        seed, candidates, limit=limit
+    )
+    return recommendations
