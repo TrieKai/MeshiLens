@@ -1,0 +1,66 @@
+"""Small Traditional-Chinese presentation helpers for public Tabelog labels."""
+
+from __future__ import annotations
+
+from typing import Any
+
+
+TABELOG_GENRE_ZH_HANT = {
+    "アメリカ料理": "美式料理",
+    "イタリアン": "義大利料理",
+    "インド料理": "印度料理",
+    "うどん": "烏龍麵",
+    "うなぎ": "鰻魚料理",
+    "カフェ": "咖啡廳",
+    "韓国料理": "韓國料理",
+    "割烹・小料理": "割烹／小料理",
+    "串焼き": "串燒",
+    "ケーキ": "蛋糕",
+    "シーフード": "海鮮料理",
+    "スペイン料理": "西班牙料理",
+    "ステーキ": "牛排",
+    "スイーツ": "甜點",
+    "そば": "蕎麥麵",
+    "タイ料理": "泰式料理",
+    "チョコレート": "巧克力",
+    "てんぷら": "天婦羅",
+    "とんかつ": "炸豬排",
+    "バー": "酒吧",
+    "ハンバーガー": "漢堡",
+    "パン": "麵包",
+    "ビストロ": "小酒館",
+    "フレンチ": "法式料理",
+    "ベトナム料理": "越南料理",
+    "メキシコ料理": "墨西哥料理",
+    "ラーメン": "拉麵",
+    "レストラン": "餐廳",
+    "中華料理": "中式料理",
+    "中国料理": "中式料理",
+    "喫茶店": "咖啡店",
+    "寿司": "壽司",
+    "天ぷら": "天婦羅",
+    "天婦羅": "天婦羅",
+    "居酒屋": "居酒屋",
+    "日本料理": "日本料理",
+    "洋食": "西式料理",
+    "焼き鳥": "烤雞肉串",
+    "焼肉": "燒肉",
+    "豚料理": "豬肉料理",
+    "鳥料理": "雞肉料理",
+    "餃子": "餃子",
+}
+
+
+def tabelog_label_zh_hant(value: Any) -> str:
+    """Translate well-known Tabelog cuisine labels while preserving unknown names."""
+    label = str(value or "").strip()
+    if not label:
+        return ""
+    for source in sorted(TABELOG_GENRE_ZH_HANT, key=len, reverse=True):
+        label = label.replace(source, TABELOG_GENRE_ZH_HANT[source])
+    return label
+
+
+def tabelog_station_zh_hant(value: Any) -> str:
+    """Use the Traditional-Chinese station suffix while retaining the station name."""
+    return str(value or "").strip().replace("駅", "站")

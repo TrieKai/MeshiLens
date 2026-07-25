@@ -10,15 +10,20 @@ from __future__ import annotations
 from hashlib import sha256
 import json
 import os
+import re
 import time
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .localization import tabelog_label_zh_hant
+
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "qwen/qwen3.6-27b"
 MAX_FACT_VALUE = 240
+ADVICE_OUTPUT_VERSION = "zh-Hant-v2"
+JAPANESE_SCRIPT_RE = re.compile(r"[\u3040-\u30ff\uff66-\uff9d]")
 ALLOWED_FACT_KEYS = frozenset(
     {
         "restaurant_name",
@@ -86,7 +91,11 @@ def sanitize_advice_facts(value: Mapping[str, Any]) -> dict[str, Any]:
     facts: dict[str, Any] = {
         "restaurant_name": _text(value.get("restaurant_name"), 120),
         "area": _text(value.get("area")),
-        "cuisine": [_text(item, 80) for item in cuisine_raw if _text(item, 80)][:4],
+        "cuisine": [
+            tabelog_label_zh_hant(_text(item, 80))
+            for item in cuisine_raw
+            if _text(item, 80)
+        ][:4],
         "tabelog_rating": _optional_float(value.get("tabelog_rating")),
         "tabelog_review_count": _optional_int(value.get("tabelog_review_count")),
         "lunch_price": _text(value.get("lunch_price")),
@@ -164,7 +173,7 @@ def advice_facts(
 def advice_cache_key_from_facts(facts: Mapping[str, Any]) -> str:
     """Stable cache key bound to the exact facts used for dining advice."""
     payload = json.dumps(
-        facts,
+        {"version": ADVICE_OUTPUT_VERSION, "facts": facts},
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -194,13 +203,25 @@ def _validate_advice(value: Any) -> dict[str, Any]:
     summary = _text(value.get("summary"), 220)
     if not summary:
         raise ValueError("AI 未產生用餐建議")
-    return {
+    result = {
         "headline": _text(value.get("headline"), 60) or "用餐建議",
         "summary": summary,
         "best_for": clean_list("best_for", 3, 48),
         "cautions": clean_list("cautions", 2, 60),
         "evidence": clean_list("evidence", 4, 72),
     }
+    if any(
+        JAPANESE_SCRIPT_RE.search(item)
+        for item in (
+            result["headline"],
+            result["summary"],
+            *result["best_for"],
+            *result["cautions"],
+            *result["evidence"],
+        )
+    ):
+        raise ValueError("AI 未依繁中要求輸出")
+    return result
 
 
 class GroqDiningAdvisor:
@@ -225,7 +246,9 @@ class GroqDiningAdvisor:
         is_qwen = self.model.startswith("qwen/")
         instructions = (
             "你是 MeshiLens 的用餐建議助手。只可根據提供的 JSON 結構化資料，以繁體中文"
-            "輸出 JSON 物件：headline、summary、best_for、cautions、evidence。"
+            "輸出 JSON 物件：headline、summary、best_for、cautions、evidence。所有說明文字"
+            "必須是繁體中文，禁止日文平假名、片假名與日文句式；店名若為日文則以「此店」代稱。"
+            "輸入可能含日文 Tabelog 標籤，僅可將其理解後翻譯為繁中，不可原樣抄寫。"
             "不得假設菜色、口味、排隊、人潮、服務品質、營業狀態或評論意見；資料不足時要"
             "明確說明。headline 與 summary 必須是字串；best_for、cautions、evidence 必須是"
             "字串陣列，最多分別 3、2、4 項。summary 最多 100 字，evidence 只能重述輸入中"

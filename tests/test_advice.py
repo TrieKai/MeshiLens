@@ -32,6 +32,14 @@ class AdviceTests(unittest.TestCase):
         self.assertNotIn("reviews", facts)
         self.assertNotIn("review_text", facts)
 
+    def test_localizes_tabelog_cuisine_before_prompting_the_advisor(self) -> None:
+        facts = advice_facts(
+            self.place,
+            {**self.candidate, "genres": ["アメリカ料理"]},
+            None,
+        )
+        self.assertEqual(facts["cuisine"], ["美式料理"])
+
     def test_sanitize_advice_facts_rejects_unknown_noise(self) -> None:
         facts = sanitize_advice_facts(
             {
@@ -83,6 +91,15 @@ class AdviceTests(unittest.TestCase):
         self.assertEqual(advice["best_for"], ["聚餐", "日式料理"])
         self.assertEqual(advice["evidence"][0], "Tabelog 3.54 分")
 
+    def test_rejects_japanese_kana_in_advice_output(self) -> None:
+        with self.assertRaisesRegex(ValueError, "繁中"):
+            _validate_advice(
+                {
+                    "headline": "おすすめ",
+                    "summary": "予約できるお店です。",
+                }
+            )
+
     def test_unconfigured_advisor_does_not_make_a_network_request(self) -> None:
         advisor = GroqDiningAdvisor(api_key="")
         with self.assertRaisesRegex(RuntimeError, "尚未設定"):
@@ -98,6 +115,7 @@ class AdviceTests(unittest.TestCase):
         self.assertEqual(body["max_completion_tokens"], 700)
         self.assertEqual(body["messages"][0]["role"], "user")
         self.assertIn("清水屋", body["messages"][0]["content"])
+        self.assertIn("禁止日文平假名", body["messages"][0]["content"])
 
     def test_gpt_oss_keeps_its_own_reasoning_effort(self) -> None:
         advisor = GroqDiningAdvisor(api_key="test-key", model="openai/gpt-oss-20b")

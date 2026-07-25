@@ -2,6 +2,12 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.10] — 2026-07-25
+
+### Fixed
+- 相似 Tabelog 店家的料理相似原因改以繁中顯示（例如「同為美式料理」），並使既有推薦快取失效後重新取得
+- AI 用餐建議的提示詞與回傳驗證明確要求繁中、拒絕日文假名輸出，並更新前後端快取版本，避免沿用舊的日文建議
+
 ## [0.5.9] — 2026-07-25
 
 ### Added

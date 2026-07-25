@@ -3,10 +3,11 @@ const test = require("node:test");
 
 require("../extension/similar.js");
 
-const { MAX_RECOMMENDATIONS, similarPayload } = globalThis.MeshiLensSimilar;
+const { MAX_RECOMMENDATIONS, SIMILAR_CACHE_VERSION, similarPayload } = globalThis.MeshiLensSimilar;
 
 test("builds a bounded similar-restaurant request from selected Tabelog facts", () => {
   assert.equal(MAX_RECOMMENDATIONS, 3);
+  assert.equal(SIMILAR_CACHE_VERSION, "zh-Hant-v1");
   assert.deepEqual(
     similarPayload({
       name: "鮨 みなと",

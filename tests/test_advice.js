@@ -5,6 +5,7 @@ require("../extension/advice.js");
 
 const {
   ADVICE_CACHE_TTL_MS,
+  ADVICE_CACHE_VERSION,
   advicePayload,
   adviceCacheKey,
   cachedAdvice,
@@ -33,6 +34,7 @@ test("builds a facts-only advice request after a selected candidate exists", () 
 
 test("advice cache TTL is 24 hours", () => {
   assert.equal(ADVICE_CACHE_TTL_MS, 24 * 60 * 60 * 1000);
+  assert.equal(ADVICE_CACHE_VERSION, "zh-Hant-v2");
 });
 
 test("invalidates advice cache when restaurant facts change", () => {

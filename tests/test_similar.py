@@ -37,7 +37,7 @@ class SimilarRankingTests(unittest.TestCase):
             ],
         )
         self.assertEqual([item["name"] for item in ranked], ["銀座の寿司店", "別の寿司店"])
-        self.assertEqual(ranked[0]["reasons"], ["同為寿司", "同為銀座駅", "晚餐價位接近"])
+        self.assertEqual(ranked[0]["reasons"], ["同為壽司", "同為銀座站", "晚餐價位接近"])
         self.assertNotIn("元の店", [item["name"] for item in ranked])
 
     def test_filters_candidates_without_a_similarity_signal(self) -> None:
@@ -54,3 +54,18 @@ class SimilarRankingTests(unittest.TestCase):
             ],
         )
         self.assertEqual(ranked, [])
+
+    def test_localizes_tabelog_cuisine_in_display_reasons(self) -> None:
+        ranked = rank_similar_candidates(
+            {"url": "https://tabelog.com/tokyo/A1301/A130101/1300001/", "genres": ["アメリカ料理"]},
+            [
+                {
+                    "name": "美式餐廳",
+                    "url": "https://tabelog.com/tokyo/A1301/A130101/1300002/",
+                    "genres": ["アメリカ料理"],
+                    "rating": 3.5,
+                    "review_count": 20,
+                }
+            ],
+        )
+        self.assertEqual(ranked[0]["reasons"], ["同為美式料理"])

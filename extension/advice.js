@@ -1,5 +1,6 @@
 (() => {
   const ADVICE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+  const ADVICE_CACHE_VERSION = "zh-Hant-v2";
 
   function adviceFacts(place, candidate, michelin) {
     const genres = Array.isArray(candidate?.genres)
@@ -53,7 +54,7 @@
   }
 
   function adviceCacheKey(place, candidate, michelin) {
-    return JSON.stringify(adviceFacts(place, candidate, michelin));
+    return JSON.stringify({ version: ADVICE_CACHE_VERSION, facts: adviceFacts(place, candidate, michelin) });
   }
 
   function cachedAdvice(entry, cacheKey, now = Date.now()) {
@@ -63,6 +64,7 @@
 
   globalThis.MeshiLensAdvice = {
     ADVICE_CACHE_TTL_MS,
+    ADVICE_CACHE_VERSION,
     advicePayload,
     adviceFacts,
     adviceCacheKey,

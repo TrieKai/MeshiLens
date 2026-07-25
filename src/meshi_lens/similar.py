@@ -6,6 +6,7 @@ from math import log10
 import re
 from typing import Any, Mapping
 
+from .localization import tabelog_label_zh_hant, tabelog_station_zh_hant
 from .matching import normalize_text
 
 
@@ -110,12 +111,12 @@ def rank_similar_candidates(
         genre = _same_genre(seed, raw)
         if genre:
             score += 45
-            reasons.append(f"同為{genre}")
+            reasons.append(f"同為{tabelog_label_zh_hant(genre)}")
 
         candidate_station = _normalized_station(raw.get("station"))
         if seed_station and candidate_station and seed_station == candidate_station:
             score += 25
-            reasons.append(f"同為{_text(seed.get('station'))}")
+            reasons.append(f"同為{tabelog_station_zh_hant(seed.get('station'))}")
         else:
             candidate_area = normalize_text(_text(raw.get("area")))
             if candidate_area and candidate_area in seed_address:

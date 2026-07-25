@@ -1,5 +1,6 @@
 (() => {
   const MAX_RECOMMENDATIONS = 3;
+  const SIMILAR_CACHE_VERSION = "zh-Hant-v1";
 
   function similarPayload(candidate) {
     if (!candidate || typeof candidate !== "object") return null;
@@ -28,5 +29,5 @@
     };
   }
 
-  globalThis.MeshiLensSimilar = { MAX_RECOMMENDATIONS, similarPayload };
+  globalThis.MeshiLensSimilar = { MAX_RECOMMENDATIONS, SIMILAR_CACHE_VERSION, similarPayload };
 })();
