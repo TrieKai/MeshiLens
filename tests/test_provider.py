@@ -154,6 +154,17 @@ class ProviderTests(unittest.TestCase):
             ],
         )
 
+    def test_localizes_hyakumeiten_category_for_display(self) -> None:
+        html = """
+        <div class="rdheader-badge-award">
+          <a href="https://award.tabelog.com/hyakumeiten/hamburger/2025/">
+            <i>ハンバーガー 百名店 2025 選出店</i>
+          </a>
+        </div>
+        """
+        selection = hyakumeiten_from_tabelog_html(html)[0]
+        self.assertEqual(selection["category"], "漢堡")
+
     def test_keeps_additional_restaurant_details(self) -> None:
         candidate = restaurant_to_dict(
             {

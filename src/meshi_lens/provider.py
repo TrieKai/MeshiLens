@@ -8,6 +8,7 @@ import time
 from typing import Any, Mapping
 from urllib.parse import parse_qs, unquote, urlparse
 
+from .localization import tabelog_label_zh_hant
 from .matching import haversine_meters, normalize_name, normalize_phone, similarity
 
 
@@ -274,7 +275,7 @@ def hyakumeiten_from_tabelog_soup(soup: Any) -> list[dict[str, Any]]:
         selections.append(
             {
                 "label": label or f"百名店 {year} 選出店",
-                "category": category,
+                "category": tabelog_label_zh_hant(category),
                 "area": area,
                 "year": year,
                 "url": url,

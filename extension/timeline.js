@@ -1,6 +1,13 @@
 (() => {
+  // New results arrive with localized categories from the server.  Keep this
+  // small fallback so existing six-hour match cache entries are also legible.
+  const LEGACY_CATEGORY_ZH_HANT = { "ハンバーガー": "漢堡" };
+
   function hyakumeitenLabel(selection) {
-    const category = [selection?.category, selection?.area].filter(Boolean).join(" ");
+    const category = [
+      LEGACY_CATEGORY_ZH_HANT[selection?.category] || selection?.category,
+      selection?.area,
+    ].filter(Boolean).join(" ");
     return category ? `百名店 · ${category}` : "百名店";
   }
 

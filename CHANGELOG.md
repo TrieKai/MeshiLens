@@ -2,6 +2,12 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.18] — 2026-07-25
+
+### Changed
+- 百名店時間線的料理類型改以繁中顯示；既有快取中的「ハンバーガー」也會立即顯示為「漢堡」
+- 頁面內 MeshiLens 卡片左右 margin 改為 0，與 Maps 側欄邊界對齊
+
 ## [0.5.17] — 2026-07-25
 
 ### Changed

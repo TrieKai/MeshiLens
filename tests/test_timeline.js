@@ -69,3 +69,10 @@ test("deduplicates identical hyakumeiten rows", () => {
   const entries = buildTimelineEntries(null, [selection, selection]);
   assert.equal(entries.length, 1);
 });
+
+test("localizes cached hamburger hyakumeiten categories", () => {
+  const entries = buildTimelineEntries(null, [
+    { year: 2025, category: "ハンバーガー", url: "https://award.tabelog.com/hyakumeiten/hamburger/2025/" },
+  ]);
+  assert.equal(entries[0].label, "百名店 · 漢堡");
+});
