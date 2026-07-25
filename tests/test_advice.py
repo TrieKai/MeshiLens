@@ -1,3 +1,4 @@
+import json
 import unittest
 from unittest.mock import patch
 
@@ -132,6 +133,32 @@ class AdviceTests(unittest.TestCase):
         with patch("meshi_lens.advice.urlopen", return_value=FakeResponse()):
             with self.assertRaisesRegex(RuntimeError, "含日文"):
                 advisor.summarize(self.place, self.candidate, None)
+
+    def test_retries_once_when_the_first_ai_output_contains_japanese(self) -> None:
+        class FakeResponse:
+            def __init__(self, content: str) -> None:
+                self.content = content
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self) -> bytes:
+                return json.dumps(
+                    {"choices": [{"message": {"content": self.content}}]}, ensure_ascii=False
+                ).encode()
+
+        first = FakeResponse('{"summary":"予約できるお店です。"}')
+        second = FakeResponse('{"summary":"可查看預約資訊。"}')
+        advisor = GroqDiningAdvisor(api_key="test-key")
+        with patch("meshi_lens.advice.urlopen", side_effect=[first, second]) as urlopen:
+            advice = advisor.summarize(self.place, self.candidate, None)
+        self.assertEqual(advice["summary"], "可查看預約資訊。")
+        self.assertEqual(urlopen.call_count, 2)
+        retry_body = json.loads(urlopen.call_args_list[1].args[0].data.decode())
+        self.assertIn("上一份回覆因含日文", retry_body["messages"][0]["content"])
 
     def test_unconfigured_advisor_does_not_make_a_network_request(self) -> None:
         advisor = GroqDiningAdvisor(api_key="")

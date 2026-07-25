@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.16] — 2026-07-25
+
+### Fixed
+- AI 用餐建議第一次回傳含日文時，會以更嚴格的繁中／阿拉伯數字指令自動重試一次；第二次仍不合格才顯示錯誤，避免偶發模型語言偏移中斷卡片
+
 ## [0.5.15] — 2026-07-25
 
 ### Changed

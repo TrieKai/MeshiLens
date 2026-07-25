@@ -306,7 +306,9 @@ class GroqDiningAdvisor:
     def configured(self) -> bool:
         return bool(self.api_key)
 
-    def _request_body(self, facts: Mapping[str, Any]) -> dict[str, Any]:
+    def _request_body(
+        self, facts: Mapping[str, Any], *, retry_for_language: bool = False
+    ) -> dict[str, Any]:
         """Build a model-compatible JSON-mode request without exposing reasoning."""
         is_qwen = self.model.startswith("qwen/")
         instructions = (
@@ -321,6 +323,11 @@ class GroqDiningAdvisor:
             "字串陣列，最多分別 3、2、4 項。summary 最多 100 字，evidence 只能重述輸入中"
             "可驗證的事實。只輸出 JSON，不要 Markdown 或其他文字。"
         )
+        if retry_for_language:
+            instructions += (
+                "上一份回覆因含日文而被拒絕。這是唯一一次重新生成：所有欄位必須使用繁體"
+                "中文與阿拉伯數字；不得出現任何平假名或片假名。"
+            )
         return {
             "model": self.model,
             # This short structured summary needs deterministic JSON, not a reasoning trace.
@@ -341,10 +348,10 @@ class GroqDiningAdvisor:
             ],
         }
 
-    def summarize_facts(self, facts: Mapping[str, Any]) -> dict[str, Any]:
-        if not self.configured:
-            raise RuntimeError("AI 用餐建議尚未設定")
-        request_body = self._request_body(facts)
+    def _decoded_completion(
+        self, facts: Mapping[str, Any], *, retry_for_language: bool = False
+    ) -> Any:
+        request_body = self._request_body(facts, retry_for_language=retry_for_language)
         request = Request(
             GROQ_API_URL,
             data=json.dumps(request_body).encode("utf-8"),
@@ -371,18 +378,35 @@ class GroqDiningAdvisor:
             raise RuntimeError("AI 回傳格式異常，請稍後再試") from exc
         try:
             content = payload["choices"][0]["message"]["content"]
-            decoded = json.loads(content)
+            return json.loads(content)
         except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
             raise RuntimeError("AI 回傳格式異常，請稍後再試") from exc
+
+    @staticmethod
+    def _output_error(exc: ValueError) -> RuntimeError:
+        message = str(exc)
+        if "未產生用餐建議" in message:
+            return RuntimeError("AI 回傳缺少建議摘要，請稍後再試")
+        if "未依繁中要求" in message:
+            return RuntimeError("AI 回傳含日文，請稍後再試")
+        return RuntimeError("AI 回傳內容未符合格式，請稍後再試")
+
+    def summarize_facts(self, facts: Mapping[str, Any]) -> dict[str, Any]:
+        if not self.configured:
+            raise RuntimeError("AI 用餐建議尚未設定")
+        decoded = self._decoded_completion(facts)
         try:
             return _validate_advice(decoded)
         except ValueError as exc:
-            message = str(exc)
-            if "未產生用餐建議" in message:
-                raise RuntimeError("AI 回傳缺少建議摘要，請稍後再試") from exc
-            if "未依繁中要求" in message:
-                raise RuntimeError("AI 回傳含日文，請稍後再試") from exc
-            raise RuntimeError("AI 回傳內容未符合格式，請稍後再試") from exc
+            if "未依繁中要求" not in str(exc):
+                raise self._output_error(exc) from exc
+            # A single repair attempt prevents a sporadic Japanese reply from
+            # making the card unusable, while bounding extra latency and cost.
+            retry_decoded = self._decoded_completion(facts, retry_for_language=True)
+            try:
+                return _validate_advice(retry_decoded)
+            except ValueError as retry_exc:
+                raise self._output_error(retry_exc) from retry_exc
 
     def summarize(
         self,
