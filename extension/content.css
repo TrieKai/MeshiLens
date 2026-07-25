@@ -497,9 +497,9 @@ a.meshilens-list-badge:focus-visible {
   background: #e2d9cd;
   bottom: 0;
   content: "";
-  left: 51px;
+  left: 58px;
   position: absolute;
-  top: 16px;
+  top: 9px;
   width: 1px;
 }
 

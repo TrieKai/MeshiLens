@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.19] — 2026-07-25
+
+### Fixed
+- 店家時間線的垂直連線改為穿過節點中心並從節點下緣延伸，修正加寬卡片後連線偏左、起點過低的視覺錯位
+
 ## [0.5.18] — 2026-07-25
 
 ### Changed
