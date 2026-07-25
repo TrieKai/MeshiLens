@@ -11,6 +11,9 @@ from .matching import normalize_text
 
 PREFECTURE_RE = re.compile(r"(?:東京都|北海道|(?:京都|大阪)府|.{2,3}県)")
 QUOTED_STATION_RE = re.compile(r"[「『]([^」』]+)[」』]")
+LINE_QUALIFIED_STATION_RE = re.compile(
+    r"^(?:(?:JR|東京メトロ|都営(?:地下鉄)?|東急|京王|京急|小田急|西武|東武|相鉄|京成)[^「『]*線)(.+?駅?)$"
+)
 
 
 def _text(value: Any) -> str:
@@ -29,7 +32,10 @@ def _station_name(value: Any) -> str:
     """Extract the station name from Maps' line-qualified station labels."""
     station = _text(value)
     quoted = QUOTED_STATION_RE.search(station)
-    return quoted.group(1).strip() if quoted else station
+    if quoted:
+        return quoted.group(1).strip()
+    line_qualified = LINE_QUALIFIED_STATION_RE.match(station)
+    return line_qualified.group(1).strip() if line_qualified else station
 
 
 def _normalized_station(value: Any) -> str:

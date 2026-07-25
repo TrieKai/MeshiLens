@@ -115,6 +115,28 @@ class SimilarRankingTests(unittest.TestCase):
         self.assertEqual([item["name"] for item in ranked], ["池袋のハンバーガー店"])
         self.assertEqual(ranked[0]["reasons"][:2], ["同為漢堡", "同為池袋站"])
 
+    def test_matches_a_maps_line_qualified_station_without_quotes(self) -> None:
+        ranked = rank_similar_candidates(
+            {
+                "url": "https://tabelog.com/tokyo/A1323/A132302/1300001/",
+                "genres": ["ラーメン"],
+                "station": "JR山手線大塚駅",
+                "address": "東京都豊島区北大塚1-1-1",
+            },
+            [
+                {
+                    "name": "大塚のラーメン店",
+                    "url": "https://tabelog.com/tokyo/A1323/A132302/1300002/",
+                    "genres": ["ラーメン"],
+                    "station": "大塚駅",
+                    "rating": 3.6,
+                    "review_count": 40,
+                }
+            ],
+        )
+        self.assertEqual([item["name"] for item in ranked], ["大塚のラーメン店"])
+        self.assertEqual(ranked[0]["reasons"][:2], ["同為拉麵", "同為大塚站"])
+
     def test_filters_candidates_without_a_similarity_signal(self) -> None:
         ranked = rank_similar_candidates(
             {"url": "https://tabelog.com/tokyo/A1301/A130101/1300001/", "genres": ["寿司"]},
