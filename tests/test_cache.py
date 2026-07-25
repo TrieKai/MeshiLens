@@ -8,6 +8,7 @@ from meshi_lens.cache import (
     DEFAULT_MATCH_TTL_SECONDS,
     DEFAULT_MICHELIN_TTL_SECONDS,
     DEFAULT_REVIEW_INSIGHTS_TTL_SECONDS,
+    DEFAULT_SIMILAR_TTL_SECONDS,
     FileTTLCache,
     LayeredTTLCache,
     MemoryTTLCache,
@@ -45,6 +46,7 @@ class CacheTests(unittest.TestCase):
         self.assertEqual(DEFAULT_MATCH_TTL_SECONDS, 21_600)
         self.assertEqual(DEFAULT_MICHELIN_TTL_SECONDS, 86_400)
         self.assertEqual(DEFAULT_ADVICE_TTL_SECONDS, 86_400)
+        self.assertEqual(DEFAULT_SIMILAR_TTL_SECONDS, 43_200)
         self.assertEqual(DEFAULT_REVIEW_INSIGHTS_TTL_SECONDS, 7 * 86_400)
 
     def test_memory_ttl_expires(self) -> None:

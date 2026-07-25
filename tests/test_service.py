@@ -7,6 +7,7 @@ from meshi_lens.service import MatchService
 class FakeProvider:
     def __init__(self) -> None:
         self.calls = 0
+        self.similar_calls = 0
 
     def search(self, _place):
         self.calls += 1
@@ -20,6 +21,21 @@ class FakeProvider:
                 "url": "https://tabelog.com/ibaraki/A0804/A080401/8000477/",
             }
         ]
+
+    def search_similar(self, _seed, limit=20):
+        self.similar_calls += 1
+        return [
+            {
+                "name": "近江町割烹",
+                "rating": 3.72,
+                "review_count": 91,
+                "url": "https://tabelog.com/ishikawa/A1701/A170101/1700002/",
+                "genres": ["日本料理"],
+                "station": "金沢駅",
+                "lunch_price": "￥10,000～￥14,999",
+                "dinner_price": "￥10,000～￥14,999",
+            }
+        ][:limit]
 
 
 class FakeMichelinProvider:
@@ -395,6 +411,53 @@ class ServiceTests(unittest.TestCase):
         )
         self.assertFalse(result["available"])
         self.assertIsNone(result["advice"])
+
+    def test_similar_returns_ranked_tabelog_cards_and_caches_one_search(self) -> None:
+        provider = FakeProvider()
+        service = MatchService(
+            provider=provider,
+            michelin_provider=FakeMichelinProvider(),
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+            similar_cache=MemoryTTLCache(),
+        )
+        payload = {
+            "selected": {
+                "name": "割烹 清水屋",
+                "url": "https://tabelog.com/ishikawa/A1701/A170101/1700001/",
+                "genres": ["日本料理"],
+                "station": "金沢駅",
+                "address": "石川県金沢市",
+                "dinner_price": "￥10,000～￥14,999",
+            }
+        }
+        first = service.similar(payload)
+        second = service.similar(payload)
+        self.assertFalse(first["cached"])
+        self.assertTrue(second["cached"])
+        self.assertEqual(provider.similar_calls, 1)
+        self.assertEqual(first["recommendations"][0]["name"], "近江町割烹")
+        self.assertIn("同為日本料理", first["recommendations"][0]["reasons"])
+
+    def test_similar_requires_a_cuisine_and_canonical_tabelog_url(self) -> None:
+        service = MatchService(
+            provider=FakeProvider(),
+            michelin_provider=FakeMichelinProvider(),
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+            similar_cache=MemoryTTLCache(),
+        )
+        with self.assertRaisesRegex(ValueError, "料理類型"):
+            service.similar(
+                {
+                    "selected": {
+                        "name": "清水屋",
+                        "url": "https://tabelog.com/ishikawa/A1701/A170101/1700001/",
+                    }
+                }
+            )
 
 
 if __name__ == "__main__":

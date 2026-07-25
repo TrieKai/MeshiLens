@@ -1,5 +1,7 @@
 import unittest
 from urllib.parse import quote
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from meshi_lens.provider import (
     canonical_restaurant_url,
@@ -12,11 +14,51 @@ from meshi_lens.provider import (
     reservation_from_tabelog_html,
     restaurant_to_dict,
     stable_reservation_url,
+    GurumeProvider,
     web_search_queries,
 )
 
 
 class ProviderTests(unittest.TestCase):
+    def test_similar_search_reads_one_search_page_without_detail_fetches(self) -> None:
+        class FakeSearchRequest:
+            received = None
+
+            def __init__(self, **kwargs):
+                type(self).received = kwargs
+
+            def search_sync(self):
+                return [
+                    {
+                        "name": "銀座の寿司店",
+                        "url": "https://tabelog.com/tokyo/A1301/A130101/1300002/",
+                        "rating": 3.8,
+                        "review_count": 22,
+                        "genres": ["寿司"],
+                        "station": "銀座駅",
+                        "area": "銀座",
+                    }
+                ]
+
+        fake_gurume = SimpleNamespace(
+            RestaurantSearchRequest=FakeSearchRequest,
+            SortType=SimpleNamespace(RANKING="ranking"),
+        )
+        provider = GurumeProvider(minimum_interval=0)
+        with patch.dict("sys.modules", {"gurume": fake_gurume}):
+            results = provider.search_similar(
+                {
+                    "genres": ["寿司"],
+                    "station": "銀座駅",
+                    "address": "東京都中央区銀座",
+                }
+            )
+
+        self.assertEqual(FakeSearchRequest.received["area"], "銀座")
+        self.assertEqual(FakeSearchRequest.received["keyword"], "寿司")
+        self.assertEqual(FakeSearchRequest.received["sort_type"], "ranking")
+        self.assertEqual(results[0]["area"], "銀座")
+
     def test_searches_by_local_phone_before_translated_name(self) -> None:
         self.assertEqual(
             web_search_queries(

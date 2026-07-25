@@ -203,6 +203,61 @@ function reviewInsightsRequestPayload(payload) {
   return { tabelog_url: tabelogUrl, restaurant_name: restaurantName };
 }
 
+function similarRestaurantsPayload(payload) {
+  const selected = payload?.selected;
+  if (!selected || typeof selected !== "object") return null;
+  const name = String(selected.name || "").trim().slice(0, 200);
+  const url = String(selected.url || "").trim().slice(0, 300);
+  const rawGenres = Array.isArray(selected.genres)
+    ? selected.genres
+    : typeof selected.genres === "string"
+      ? [selected.genres]
+      : [];
+  const genres = rawGenres
+    .map((item) => String(item || "").trim().slice(0, 80))
+    .filter(Boolean)
+    .slice(0, 4);
+  if (!name || !url || !genres.length || !/^https?:\/\/([a-z0-9-]+\.)*tabelog\.com\//i.test(url)) {
+    return null;
+  }
+  return {
+    selected: {
+      name,
+      url,
+      genres,
+      station: String(selected.station || "").trim().slice(0, 100),
+      address: String(selected.address || "").trim().slice(0, 500),
+      lunch_price: String(selected.lunch_price || "").trim().slice(0, 100),
+      dinner_price: String(selected.dinner_price || "").trim().slice(0, 100),
+    },
+  };
+}
+
+function similarCachePlace(selected) {
+  return {
+    name: selected.name,
+    address: selected.address,
+    tabelog_url: selected.url,
+    website: selected.genres.join("、"),
+    phone: [selected.station, selected.lunch_price, selected.dinner_price].join("|"),
+  };
+}
+
+async function similarRestaurants(payload, signal) {
+  const normalized = similarRestaurantsPayload(payload);
+  if (!normalized) throw new Error("找不到可用的 Tabelog 店家資料");
+  const cachePlace = similarCachePlace(normalized.selected);
+  const cached = await getCachedLookup("similar", cachePlace);
+  if (cached) return cached;
+  const data = await request("/similar", {
+    method: "POST",
+    body: JSON.stringify(normalized),
+    signal,
+  });
+  await setCachedLookup("similar", cachePlace, data);
+  return data;
+}
+
 function michelinBatchPayload(cards) {
   if (!Array.isArray(cards) || cards.length > 10) return null;
   return {
@@ -266,12 +321,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: true, cancelled: true });
     return false;
   }
+  if (message.type === "CANCEL_SIMILAR_RESTAURANTS") {
+    abortLookup(lookupKey(sender, "similar"));
+    sendResponse({ ok: true, cancelled: true });
+    return false;
+  }
 
   if (![
     "MATCH_PLACE",
     "MATCH_MICHELIN",
     "MATCH_MICHELIN_BATCH",
     "GET_DINING_ADVICE",
+    "GET_SIMILAR_RESTAURANTS",
     "GET_REVIEW_INSIGHTS",
     "HEALTH_CHECK",
   ].includes(message.type)) {
@@ -287,6 +348,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           ? beginLookup(sender, "michelin_batch")
           : message.type === "GET_REVIEW_INSIGHTS"
             ? beginLookup(sender, "review_insights")
+            : message.type === "GET_SIMILAR_RESTAURANTS"
+              ? beginLookup(sender, "similar")
         : null;
 
   const work = message.type === "HEALTH_CHECK"
@@ -312,6 +375,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             method: "POST",
             body: JSON.stringify(payload),
           });
+        }
+        if (message.type === "GET_SIMILAR_RESTAURANTS") {
+          return similarRestaurants(message.payload, active.controller.signal);
         }
         if (message.type === "GET_REVIEW_INSIGHTS") {
           const payload = reviewInsightsRequestPayload(message.payload);

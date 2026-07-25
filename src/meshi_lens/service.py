@@ -17,6 +17,7 @@ from .cache import (
     DEFAULT_MATCH_TTL_SECONDS,
     DEFAULT_MICHELIN_TTL_SECONDS,
     DEFAULT_REVIEW_INSIGHTS_TTL_SECONDS,
+    DEFAULT_SIMILAR_TTL_SECONDS,
     CacheBackend,
     build_cache,
 )
@@ -33,6 +34,7 @@ from .review_insights import (
     review_insights_response,
     sanitize_review_insights_request,
 )
+from .similar import rank_similar_candidates
 
 
 LOGGER = logging.getLogger("meshilens.service")
@@ -51,6 +53,7 @@ class MatchService:
         cache: CacheBackend | None = None,
         michelin_cache: CacheBackend | None = None,
         advice_cache: CacheBackend | None = None,
+        similar_cache: CacheBackend | None = None,
         review_insights_cache: CacheBackend | None = None,
     ) -> None:
         self.provider = provider or GurumeProvider()
@@ -69,6 +72,9 @@ class MatchService:
             ttl_seconds=DEFAULT_ADVICE_TTL_SECONDS,
             max_items=512,
             namespace="advice",
+        )
+        self.similar_cache = similar_cache or build_cache(
+            ttl_seconds=DEFAULT_SIMILAR_TTL_SECONDS, max_items=512, namespace="similar"
         )
         self.review_insights_cache = review_insights_cache or build_cache(
             ttl_seconds=DEFAULT_REVIEW_INSIGHTS_TTL_SECONDS,
@@ -274,6 +280,60 @@ class MatchService:
         result["available"] = True
         result["cached"] = False
         self.advice_cache.set(key, result)
+        return result
+
+    @staticmethod
+    def validate_similar_seed(payload: Mapping[str, Any]) -> dict[str, Any]:
+        value = payload.get("selected")
+        if not isinstance(value, Mapping):
+            raise ValueError("找不到已配對的 Tabelog 店家")
+        name = str(value.get("name") or "").strip()[:200]
+        url = canonical_restaurant_url(str(value.get("url") or "").strip()[:300])
+        if not name or not url:
+            raise ValueError("找不到已配對的 Tabelog 店家")
+        raw_genres = value.get("genres")
+        if isinstance(raw_genres, str):
+            raw_genres = [raw_genres]
+        genres = (
+            [str(item).strip()[:80] for item in raw_genres if str(item).strip()][:4]
+            if isinstance(raw_genres, list)
+            else []
+        )
+        if not genres:
+            raise ValueError("此 Tabelog 店家缺少料理類型，暫時無法推薦")
+        return {
+            "name": name,
+            "url": url,
+            "genres": genres,
+            "station": str(value.get("station") or "").strip()[:100],
+            "address": str(value.get("address") or "").strip()[:500],
+            "lunch_price": str(value.get("lunch_price") or "").strip()[:100],
+            "dinner_price": str(value.get("dinner_price") or "").strip()[:100],
+        }
+
+    def similar(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        """Return three Tabelog search cards similar to the selected restaurant."""
+        seed = self.validate_similar_seed(payload)
+        key = "|".join(
+            str(seed.get(field) or "")
+            for field in ("url", "genres", "station", "address", "lunch_price", "dinner_price")
+        )
+        cached = self.similar_cache.get(key)
+        if cached:
+            return {**cached, "cached": True}
+        try:
+            search_similar = getattr(self.provider, "search_similar")
+            candidates = search_similar(seed, limit=20)
+        except Exception as exc:
+            LOGGER.info("similar outcome=failure reason=%s", type(exc).__name__)
+            raise RuntimeError("Tabelog 相似店家暫時無法取得") from exc
+        result = {
+            "source": "Tabelog 日本語版",
+            "seed": {"name": seed["name"], "url": seed["url"]},
+            "recommendations": rank_similar_candidates(seed, candidates, limit=3),
+            "cached": False,
+        }
+        self.similar_cache.set(key, result)
         return result
 
     def review_insights(self, payload: Mapping[str, Any]) -> dict[str, Any]:

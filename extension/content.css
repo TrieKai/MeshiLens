@@ -241,6 +241,84 @@ a.meshilens-list-badge:focus-visible {
   padding-top: 7px;
 }
 
+.meshilens-similar {
+  background: #fff8ef;
+  border: 1px solid #ebd8bd;
+  border-radius: 10px;
+  margin-top: 11px;
+  padding: 10px 11px;
+}
+
+.meshilens-similar-heading,
+.meshilens-similar-top {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.meshilens-similar-title {
+  color: #8b4721;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.meshilens-similar-source,
+.meshilens-similar-pending,
+.meshilens-similar-meta {
+  color: var(--ml-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.meshilens-similar-pending {
+  margin-top: 7px;
+}
+
+.meshilens-similar-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.meshilens-similar-item {
+  background: #fffdf9;
+  border: 1px solid #eee1cf;
+  border-radius: 7px;
+  color: var(--ml-ink);
+  display: block;
+  padding: 7px 8px;
+  text-decoration: none;
+}
+
+.meshilens-similar-item:hover,
+.meshilens-similar-item:focus-visible {
+  background: #fff1e0;
+  border-color: #ddae78;
+  outline: 0;
+}
+
+.meshilens-similar-name {
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meshilens-similar-rating {
+  color: var(--ml-accent);
+  font-family: Georgia, serif;
+  font-size: 15px;
+  font-weight: 700;
+  margin-left: 8px;
+}
+
+.meshilens-similar-meta {
+  margin-top: 3px;
+}
+
 .meshilens-review-insights {
   background: #f9f5ec;
   border: 1px solid #e6dcc9;

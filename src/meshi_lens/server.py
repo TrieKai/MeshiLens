@@ -57,6 +57,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/michelin",
             "/michelin/batch",
             "/advice",
+            "/similar",
             "/review-insights",
         }:
             self._send(404, {"error": "找不到路徑"})
@@ -77,6 +78,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 result = SERVICE.match_michelin(payload)
             elif self.path == "/advice":
                 result = SERVICE.advice(payload)
+            elif self.path == "/similar":
+                result = SERVICE.similar(payload)
             elif self.path == "/review-insights":
                 result = SERVICE.review_insights(payload)
             else:

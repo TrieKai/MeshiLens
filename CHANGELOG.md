@@ -2,6 +2,14 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.9] — 2026-07-25
+
+### Added
+- 已配對店家下方新增「相似 Tabelog 店家」：以料理類型、車站／地區、午晚餐價位與搜尋卡片的評分／評論數，顯示最多三家相近店與可解釋原因
+
+### Changed
+- 相似店家每個原店只讀取一次受限的 Tabelog 搜尋頁（最多 20 筆），不自動補抓推薦候選詳情、評論或使用外部搜尋備援；結果快取約 12 小時
+
 ## [0.5.8] — 2026-07-22
 
 ### Fixed

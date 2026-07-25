@@ -1,4 +1,4 @@
-"""Pluggable TTL caches for match / Michelin / advice / review-insights results.
+"""Pluggable TTL caches for match / Michelin / advice / similar / review-insights results.
 
 Backends (auto-selected):
 1. Redis / Upstash when a URL is configured
@@ -27,6 +27,7 @@ LOGGER = logging.getLogger("meshilens.cache")
 DEFAULT_MATCH_TTL_SECONDS = 21_600
 DEFAULT_MICHELIN_TTL_SECONDS = 86_400
 DEFAULT_ADVICE_TTL_SECONDS = 86_400
+DEFAULT_SIMILAR_TTL_SECONDS = 43_200
 DEFAULT_REVIEW_INSIGHTS_TTL_SECONDS = 7 * 86_400
 
 

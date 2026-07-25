@@ -8,6 +8,7 @@ const { classifyJapanPlace } = globalThis.MeshiLensJapan;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 const { advicePayload, adviceCacheKey, cachedAdvice } = globalThis.MeshiLensAdvice;
+const { similarPayload } = globalThis.MeshiLensSimilar;
 const {
   BUTTON_LABEL,
   CARD_TITLE,
@@ -307,6 +308,65 @@ function syncAdvice(card) {
   else card.append(section);
 }
 
+function similarRestaurantsView(state) {
+  const section = element("section", "meshilens-similar");
+  section.setAttribute("aria-label", "相似 Tabelog 店家");
+  const heading = element("div", "meshilens-similar-heading");
+  heading.append(element("span", "meshilens-similar-title", "相似 Tabelog 店家"));
+  heading.append(element("span", "meshilens-similar-source", "同類型搜尋"));
+  section.append(heading);
+
+  if (state?.status === "loading") {
+    section.append(element("div", "meshilens-similar-pending", "正在尋找相近店家…"));
+    return section;
+  }
+  if (state?.status === "error") {
+    section.append(element("div", "meshilens-similar-pending", "Tabelog 相似店家暫時無法取得"));
+    return section;
+  }
+  const recommendations = Array.isArray(state?.recommendations) ? state.recommendations : [];
+  if (!recommendations.length) return null;
+  const list = element("div", "meshilens-similar-list");
+  for (const recommendation of recommendations.slice(0, 3)) {
+    const item = element("a", "meshilens-similar-item");
+    item.href = recommendation.url;
+    item.target = "_blank";
+    item.rel = "noopener noreferrer";
+    const top = element("div", "meshilens-similar-top");
+    top.append(element("span", "meshilens-similar-name", recommendation.name || "未命名店家"));
+    if (recommendation.rating != null) {
+      top.append(element("span", "meshilens-similar-rating", `${recommendation.rating}`));
+    }
+    item.append(top);
+    const meta = [
+      ...(Array.isArray(recommendation.reasons) ? recommendation.reasons : []),
+      recommendation.review_count != null ? `${recommendation.review_count} 則評論` : "",
+    ].filter(Boolean);
+    if (meta.length) item.append(element("div", "meshilens-similar-meta", meta.join(" · ")));
+    list.append(item);
+  }
+  section.append(list);
+  return section;
+}
+
+function syncSimilarRestaurants(card) {
+  const existing = card.querySelector(".meshilens-similar");
+  const section = similarRestaurantsView(card._meshilensSimilar);
+  if (!section) {
+    existing?.remove();
+    return;
+  }
+  if (existing) {
+    existing.replaceWith(section);
+    return;
+  }
+  const reviewInsights = card.querySelector(".meshilens-review-insights");
+  const footer = card.querySelector(".meshilens-footer");
+  if (reviewInsights) reviewInsights.before(section);
+  else if (footer) footer.before(section);
+  else card.append(section);
+}
+
 function reviewInsightsView(state, candidate) {
   const section = element("section", "meshilens-review-insights");
   section.setAttribute("aria-label", CARD_TITLE);
@@ -502,6 +562,35 @@ async function loadAdvice(card, place, candidate, michelin, sequence) {
   }
 }
 
+async function loadSimilarRestaurants(card, candidate, sequence) {
+  const payload = similarPayload(candidate);
+  if (!payload) return;
+  const requestKey = candidate.url;
+  if (card._meshilensSimilarRequestKey === requestKey) return;
+  card._meshilensSimilarRequestKey = requestKey;
+  card._meshilensSimilar = { status: "loading" };
+  syncSimilarRestaurants(card);
+  try {
+    if (!ensureExtensionAlive()) return;
+    const response = await safeRuntimeSendMessage({ type: "GET_SIMILAR_RESTAURANTS", payload });
+    if (response?.cancelled) return;
+    if (!response?.ok) throw new Error(response?.error || "Tabelog 相似店家暫時無法取得");
+    const recommendations = response.data?.recommendations;
+    if (sequence === lookupSequence && card.isConnected && card._meshilensSimilarRequestKey === requestKey) {
+      card._meshilensSimilar = Array.isArray(recommendations) && recommendations.length
+        ? { recommendations }
+        : null;
+      syncSimilarRestaurants(card);
+    }
+  } catch (error) {
+    if (notePossibleInvalidation(error) || error?.cancelled) return;
+    if (sequence === lookupSequence && card.isConnected && card._meshilensSimilarRequestKey === requestKey) {
+      card._meshilensSimilar = { status: "error" };
+      syncSimilarRestaurants(card);
+    }
+  }
+}
+
 function timelineView(entries) {
   if (!shouldShowTimeline(entries)) return null;
   const section = element("section", "meshilens-timeline");
@@ -692,6 +781,8 @@ function renderResult(card, result) {
   } else {
     card.append(selectedView(selected, resultWithMichelin));
     syncAdvice(card);
+    card._meshilensSimilar = null;
+    syncSimilarRestaurants(card);
     card._meshilensReviewInsights = { status: "idle" };
     syncReviewInsights(card);
   }
@@ -719,6 +810,11 @@ function renderResult(card, result) {
       card._meshilensSelected = candidate;
       card._meshilensAdvice = null;
       card._meshilensAdviceRequestKey = "";
+      card._meshilensSimilar = null;
+      card._meshilensSimilarRequestKey = "";
+      softRuntimeSendMessage({ type: "CANCEL_SIMILAR_RESTAURANTS" }).then((ok) => {
+        if (!ok && !isExtensionContextValid()) handleInvalidatedContext();
+      });
       clearReviewInsightsFlight(card._meshilensReviewInsightsKey);
       softRuntimeSendMessage({ type: "CANCEL_REVIEW_INSIGHTS" }).then((ok) => {
         if (!ok && !isExtensionContextValid()) handleInvalidatedContext();
@@ -731,6 +827,7 @@ function renderResult(card, result) {
       };
       card.replaceChildren(...preservedNodes, selectedView(candidate, resultWithMichelin));
       syncAdvice(card);
+      syncSimilarRestaurants(card);
       syncReviewInsights(card);
       card.append(toggle, list);
       list.classList.add("meshilens-hidden");
@@ -742,6 +839,7 @@ function renderResult(card, result) {
         card._meshilensMichelin || result.michelin || null,
         card._meshilensSequence,
       );
+      loadSimilarRestaurants(card, candidate, card._meshilensSequence);
       if (!card._meshilensMichelin && card._meshilensPlace) {
         refineMichelinWithTabelog(
           card,
@@ -817,6 +915,7 @@ async function lookup(place) {
     renderResult(card, response.data);
     if (response.data.selected) {
       loadAdvice(card, place, response.data.selected, card._meshilensMichelin || null, sequence);
+      loadSimilarRestaurants(card, response.data.selected, sequence);
     }
     await michelinRequest;
     if (response.data.selected && !card._meshilensMichelin) {

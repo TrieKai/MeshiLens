@@ -114,6 +114,7 @@ def restaurant_to_dict(value: Any) -> dict[str, Any]:
         "latitude": latitude,
         "longitude": longitude,
         "genres": genres,
+        "area": _first(data, "area", "location_area") or "",
         "station": _first(data, "station", "nearest_station") or "",
         "lunch_price": _first(data, "lunch_price", "lunch_budget") or "",
         "dinner_price": _first(data, "dinner_price", "dinner_budget") or "",
@@ -638,6 +639,48 @@ class GurumeProvider:
             raise RuntimeError("Tabelog 暫時拒絕公開評論頁請求（403）")
         response.raise_for_status()
         return response.text
+
+    def search_similar(
+        self, seed: Mapping[str, Any], limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Read one Tabelog search page for similar restaurants.
+
+        Unlike identity matching, this deliberately has no web-search fallback
+        and never fetches candidate detail pages.  One search page, bounded to
+        its first result set, is the entire network budget for a recommendation.
+        """
+        try:
+            from gurume import RestaurantSearchRequest, SortType
+        except ImportError as exc:
+            raise RuntimeError(
+                "尚未安裝 gurume；請先執行 `uv sync`，再啟動服務。"
+            ) from exc
+
+        raw_genres = seed.get("genres")
+        if isinstance(raw_genres, str):
+            raw_genres = [raw_genres]
+        genre = next(
+            (
+                str(item).strip()
+                for item in raw_genres or []
+                if str(item).strip()
+            ),
+            "",
+        )
+        if not genre:
+            return []
+        station = str(seed.get("station") or "").strip().removesuffix("駅")
+        area = station or area_from_address(str(seed.get("address") or ""))
+        if not area:
+            return []
+
+        self._throttle(self.TABELOG_HOST)
+        results = RestaurantSearchRequest(
+            area=area,
+            keyword=genre,
+            sort_type=SortType.RANKING,
+        ).search_sync()
+        return [restaurant_to_dict(item) for item in list(results)[: max(1, min(limit, 20))]]
 
     @staticmethod
     def _has_phone_match(
