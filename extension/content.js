@@ -49,6 +49,7 @@ let listBadgeCache = new Map();
 let detailDebounceTimer = null;
 let listDebounceTimer = null;
 let listScrollTimer = null;
+let similarLookupTimer = null;
 let extensionEnabled = false;
 let themeColor = DEFAULT_THEME_COLOR;
 let extensionAlive = true;
@@ -65,9 +66,11 @@ function handleInvalidatedContext() {
   clearTimeout(detailDebounceTimer);
   clearTimeout(listDebounceTimer);
   clearTimeout(listScrollTimer);
+  clearTimeout(similarLookupTimer);
   detailDebounceTimer = null;
   listDebounceTimer = null;
   listScrollTimer = null;
+  similarLookupTimer = null;
   pageObserver?.disconnect();
   pageObserver = null;
 }
@@ -77,6 +80,11 @@ function ensureExtensionAlive() {
   if (isExtensionContextValid()) return true;
   handleInvalidatedContext();
   return false;
+}
+
+function cancelSimilarLookupTimer() {
+  clearTimeout(similarLookupTimer);
+  similarLookupTimer = null;
 }
 
 function notePossibleInvalidation(error) {
@@ -591,6 +599,16 @@ async function loadSimilarRestaurants(card, candidate, sequence) {
   }
 }
 
+function scheduleSimilarRestaurants(card, candidate, sequence) {
+  if (!similarPayload(candidate)) return;
+  cancelSimilarLookupTimer();
+  similarLookupTimer = setTimeout(() => {
+    similarLookupTimer = null;
+    if (sequence !== lookupSequence || !card.isConnected) return;
+    void loadSimilarRestaurants(card, candidate, sequence);
+  }, 900);
+}
+
 function timelineView(entries) {
   if (!shouldShowTimeline(entries)) return null;
   const section = element("section", "meshilens-timeline");
@@ -812,6 +830,7 @@ function renderResult(card, result) {
       card._meshilensAdviceRequestKey = "";
       card._meshilensSimilar = null;
       card._meshilensSimilarRequestKey = "";
+      cancelSimilarLookupTimer();
       softRuntimeSendMessage({ type: "CANCEL_SIMILAR_RESTAURANTS" }).then((ok) => {
         if (!ok && !isExtensionContextValid()) handleInvalidatedContext();
       });
@@ -839,7 +858,7 @@ function renderResult(card, result) {
         card._meshilensMichelin || result.michelin || null,
         card._meshilensSequence,
       );
-      loadSimilarRestaurants(card, candidate, card._meshilensSequence);
+      scheduleSimilarRestaurants(card, candidate, card._meshilensSequence);
       if (!card._meshilensMichelin && card._meshilensPlace) {
         refineMichelinWithTabelog(
           card,
@@ -888,6 +907,7 @@ async function refineMichelinWithTabelog(card, place, candidate, sequence) {
 
 async function lookup(place) {
   if (!ensureExtensionAlive()) return;
+  cancelSimilarLookupTimer();
   try {
     await safeRuntimeSendMessage({ type: "CANCEL_LOOKUP" });
   } catch (error) {
@@ -915,7 +935,7 @@ async function lookup(place) {
     renderResult(card, response.data);
     if (response.data.selected) {
       loadAdvice(card, place, response.data.selected, card._meshilensMichelin || null, sequence);
-      loadSimilarRestaurants(card, response.data.selected, sequence);
+      scheduleSimilarRestaurants(card, response.data.selected, sequence);
     }
     await michelinRequest;
     if (response.data.selected && !card._meshilensMichelin) {

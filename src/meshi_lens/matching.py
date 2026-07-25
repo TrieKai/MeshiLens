@@ -149,6 +149,47 @@ def score_candidate(place: Mapping[str, Any], candidate: Mapping[str, Any]) -> M
     return MatchResult(score, confidence, tuple(reasons), distance)
 
 
+def _canonical_candidate_url(value: Any) -> str:
+    url = str(value or "").strip().rstrip("/").casefold()
+    return re.sub(r"tabelog\.com/(?:en|tw|cn|kr)/", "tabelog.com/", url)
+
+
+def _same_candidate_listing(
+    left: Mapping[str, Any], right: Mapping[str, Any]
+) -> bool:
+    """Identify duplicate Tabelog listings without merging distinct branches."""
+    left_url = _canonical_candidate_url(left.get("url"))
+    right_url = _canonical_candidate_url(right.get("url"))
+    if left_url and left_url == right_url:
+        return True
+
+    same_name = similarity(
+        normalize_name(str(left.get("name") or "")),
+        normalize_name(str(right.get("name") or "")),
+    ) >= 0.95
+    if not same_name:
+        return False
+    left_phone = normalize_phone(str(left.get("phone") or ""))
+    right_phone = normalize_phone(str(right.get("phone") or ""))
+    if left_phone and right_phone and left_phone == right_phone:
+        return True
+    distance = haversine_meters(
+        _float(left.get("latitude")),
+        _float(left.get("longitude")),
+        _float(right.get("latitude")),
+        _float(right.get("longitude")),
+    )
+    if distance is not None and distance <= 50:
+        return True
+    left_address = normalize_address(str(left.get("address") or ""))
+    right_address = normalize_address(str(right.get("address") or ""))
+    return bool(
+        left_address
+        and right_address
+        and similarity(left_address, right_address) >= 0.92
+    )
+
+
 def rank_candidates(
     place: Mapping[str, Any], candidates: list[Mapping[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -174,29 +215,20 @@ def rank_candidates(
         reverse=True,
     )
 
-    if ranked:
-        winner = ranked[0]
-        winner_phone = normalize_phone(str(winner.get("phone") or ""))
-        winner_name = normalize_name(str(winner.get("name") or ""))
-        duplicates = []
-        for other in ranked[1:]:
-            other_phone = normalize_phone(str(other.get("phone") or ""))
-            candidate_distance = haversine_meters(
-                _float(winner.get("latitude")),
-                _float(winner.get("longitude")),
-                _float(other.get("latitude")),
-                _float(other.get("longitude")),
-            )
-            same_phone = bool(
-                winner_phone and other_phone and winner_phone == other_phone
-            )
-            same_name = similarity(
-                winner_name, normalize_name(str(other.get("name") or ""))
-            ) >= 0.95
-            same_location = candidate_distance is not None and candidate_distance <= 50
-            if same_name and same_location and (same_phone or not winner_phone):
-                duplicates.append(other)
-        if duplicates and winner.get("review_count"):
-            winner["match_reasons"].append("同址重複頁面中評論資料較完整")
-            winner["duplicate_urls"] = [item.get("url") for item in duplicates]
-    return ranked
+    unique: list[dict[str, Any]] = []
+    for candidate in ranked:
+        duplicate_of = next(
+            (winner for winner in unique if _same_candidate_listing(winner, candidate)),
+            None,
+        )
+        if duplicate_of is None:
+            unique.append(candidate)
+            continue
+        duplicate_urls = duplicate_of.setdefault("duplicate_urls", [])
+        if candidate.get("url") and candidate.get("url") not in duplicate_urls:
+            duplicate_urls.append(candidate["url"])
+        if duplicate_of.get("review_count"):
+            reasons = duplicate_of.setdefault("match_reasons", [])
+            if "同址重複頁面中評論資料較完整" not in reasons:
+                reasons.append("同址重複頁面中評論資料較完整")
+    return unique

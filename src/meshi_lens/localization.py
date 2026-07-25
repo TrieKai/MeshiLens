@@ -2,53 +2,29 @@
 
 from __future__ import annotations
 
+from functools import cache
+from importlib.resources import files
+import json
 from typing import Any
 
-
-TABELOG_GENRE_ZH_HANT = {
-    "アメリカ料理": "美式料理",
-    "イタリアン": "義大利料理",
-    "インド料理": "印度料理",
-    "うどん": "烏龍麵",
-    "うなぎ": "鰻魚料理",
-    "カフェ": "咖啡廳",
-    "韓国料理": "韓國料理",
-    "割烹・小料理": "割烹／小料理",
-    "串焼き": "串燒",
-    "ケーキ": "蛋糕",
-    "シーフード": "海鮮料理",
-    "スペイン料理": "西班牙料理",
-    "ステーキ": "牛排",
-    "スイーツ": "甜點",
-    "そば": "蕎麥麵",
-    "タイ料理": "泰式料理",
-    "チョコレート": "巧克力",
-    "てんぷら": "天婦羅",
-    "とんかつ": "炸豬排",
-    "バー": "酒吧",
-    "ハンバーガー": "漢堡",
-    "パン": "麵包",
-    "ビストロ": "小酒館",
-    "フレンチ": "法式料理",
-    "ベトナム料理": "越南料理",
-    "メキシコ料理": "墨西哥料理",
-    "ラーメン": "拉麵",
-    "レストラン": "餐廳",
-    "中華料理": "中式料理",
-    "中国料理": "中式料理",
-    "喫茶店": "咖啡店",
-    "寿司": "壽司",
-    "天ぷら": "天婦羅",
-    "天婦羅": "天婦羅",
-    "居酒屋": "居酒屋",
-    "日本料理": "日本料理",
-    "洋食": "西式料理",
-    "焼き鳥": "烤雞肉串",
-    "焼肉": "燒肉",
-    "豚料理": "豬肉料理",
-    "鳥料理": "雞肉料理",
-    "餃子": "餃子",
-}
+@cache
+def tabelog_genre_zh_hant_map() -> dict[str, str]:
+    """Load the editable cuisine-label mapping bundled with MeshiLens."""
+    try:
+        payload = json.loads(
+            files("meshi_lens")
+            .joinpath("data/tabelog-genres-zh-hant.json")
+            .read_text(encoding="utf-8")
+        )
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        str(source): str(target)
+        for source, target in payload.items()
+        if str(source).strip() and str(target).strip()
+    }
 
 
 def tabelog_label_zh_hant(value: Any) -> str:
@@ -56,8 +32,9 @@ def tabelog_label_zh_hant(value: Any) -> str:
     label = str(value or "").strip()
     if not label:
         return ""
-    for source in sorted(TABELOG_GENRE_ZH_HANT, key=len, reverse=True):
-        label = label.replace(source, TABELOG_GENRE_ZH_HANT[source])
+    translations = tabelog_genre_zh_hant_map()
+    for source in sorted(translations, key=len, reverse=True):
+        label = label.replace(source, translations[source])
     return label
 
 

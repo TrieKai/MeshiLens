@@ -2,6 +2,16 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.11] — 2026-07-25
+
+### Fixed
+- 合併完全相同 URL、語言 URL 變體，以及同名同電話／同址的 Tabelog 候選，避免同一家店重複列出
+- 相似店家卡片補上可收縮與斷行限制，避免長店名或理由超出卡片寬度
+
+### Changed
+- 相似店家搜尋改在主 Tabelog 卡片顯示 900ms 後才啟動；切換店家時會取消尚未發出的低優先請求，避免與下一筆配對競用節流
+- 料理繁中對照表移至 `src/meshi_lens/data/tabelog-genres-zh-hant.json`，未知標籤保留原文，方便獨立增修與審核
+
 ## [0.5.10] — 2026-07-25
 
 ### Fixed

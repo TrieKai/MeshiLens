@@ -1,9 +1,13 @@
 import unittest
 
 from meshi_lens.similar import rank_similar_candidates
+from meshi_lens.localization import tabelog_genre_zh_hant_map
 
 
 class SimilarRankingTests(unittest.TestCase):
+    def test_cuisine_translation_map_is_loaded_from_editable_data_file(self) -> None:
+        self.assertEqual(tabelog_genre_zh_hant_map()["アメリカ料理"], "美式料理")
+
     def test_prefers_same_cuisine_station_and_budget_without_fetching_details(self) -> None:
         seed = {
             "url": "https://tabelog.com/tokyo/A1301/A130101/1300001/",

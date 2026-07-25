@@ -100,6 +100,12 @@ class MatchingTests(unittest.TestCase):
         ranked = rank_candidates(place, [duplicate, established])
         self.assertEqual(ranked[0]["url"], established["url"])
         self.assertIn("評論資料較完整", ranked[0]["match_reasons"][-1])
+        self.assertEqual(len(ranked), 1)
+
+    def test_deduplicates_equivalent_tabelog_language_urls(self) -> None:
+        first = {**self.candidate, "url": "https://tabelog.com/tw/ibaraki/A0804/A080401/8000477/"}
+        ranked = rank_candidates(self.place, [self.candidate, first])
+        self.assertEqual(len(ranked), 1)
 
 
 if __name__ == "__main__":
