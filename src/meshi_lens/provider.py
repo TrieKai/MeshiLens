@@ -178,6 +178,13 @@ def canonical_restaurant_url(value: str) -> str | None:
     return f"https://tabelog.com/{match.group('path')}/" if match else None
 
 
+def tabelog_area_path(value: str) -> str:
+    match = TABELOG_RESULT_RE.search(str(value or ""))
+    if not match:
+        return ""
+    return "/".join(match.group("path").split("/")[:3])
+
+
 def extract_tabelog_urls(html: str, limit: int = 6) -> list[str]:
     from bs4 import BeautifulSoup
 
@@ -670,6 +677,22 @@ class GurumeProvider:
         )
         if not genre:
             return []
+        area_path = tabelog_area_path(str(seed.get("url") or ""))
+        if area_path:
+            from curl_cffi import requests
+
+            self._throttle(self.TABELOG_HOST)
+            response = requests.get(
+                f"https://tabelog.com/{area_path}/rstLst/",
+                params={"SrtT": "rt", "PG": "1", "sk": genre, "sw": genre},
+                headers={"Accept-Language": "ja,en;q=0.8"}, timeout=20.0,
+                allow_redirects=True, impersonate="chrome",
+            )
+            response.raise_for_status()
+            parser = RestaurantSearchRequest()
+            parse = getattr(parser, "_parse_restaurants", None)
+            if callable(parse):
+                return [restaurant_to_dict(item) for item in list(parse(response.text))[: max(1, min(limit, 20))]]
         station = str(seed.get("station") or "").strip().removesuffix("駅")
         area = station or area_from_address(str(seed.get("address") or ""))
         if not area:

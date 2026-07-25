@@ -137,7 +137,7 @@ class SimilarRankingTests(unittest.TestCase):
         self.assertEqual([item["name"] for item in ranked], ["大塚のラーメン店"])
         self.assertEqual(ranked[0]["reasons"][:2], ["同為拉麵", "同為大塚站"])
 
-    def test_uses_tabelog_station_search_scope_when_result_card_omits_location(self) -> None:
+    def test_uses_precise_tabelog_area_scope_when_result_card_omits_location(self) -> None:
         ranked = rank_similar_candidates(
             {
                 "url": "https://tabelog.com/tokyo/A1323/A132302/13276342/",
@@ -154,11 +154,11 @@ class SimilarRankingTests(unittest.TestCase):
                     "review_count": 40,
                 }
             ],
-            search_station="JR山手線大塚駅",
+            search_area_path="tokyo/A1323/A132302",
         )
         self.assertEqual([item["name"] for item in ranked], ["大塚のおにぎり店"])
         self.assertEqual(
-            ranked[0]["reasons"][:2], ["同為おにぎり", "Tabelog 大塚站搜尋範圍"]
+            ranked[0]["reasons"][:2], ["同為おにぎり", "同一 Tabelog 區域"]
         )
 
     def test_filters_candidates_without_a_similarity_signal(self) -> None:

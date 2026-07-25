@@ -24,7 +24,7 @@ from .cache import (
 from .japan import classify_japan_place
 from .matching import rank_candidates
 from .michelin import MichelinProvider
-from .provider import GurumeProvider, canonical_restaurant_url
+from .provider import GurumeProvider, canonical_restaurant_url, tabelog_area_path
 from .review_insights import (
     GroqReviewInsightsAdvisor,
     bound_review_texts,
@@ -38,7 +38,7 @@ from .similar import rank_similar_candidates_with_diagnostics
 
 
 LOGGER = logging.getLogger("meshilens.service")
-SIMILAR_CACHE_VERSION = "nearby-v8"
+SIMILAR_CACHE_VERSION = "nearby-v9"
 
 
 class MatchService:
@@ -329,7 +329,7 @@ class MatchService:
             LOGGER.info("similar outcome=failure reason=%s", type(exc).__name__)
             raise RuntimeError("Tabelog 相似店家暫時無法取得") from exc
         recommendations, ranking_diagnostics = rank_similar_candidates_with_diagnostics(
-            seed, candidates, limit=3, search_station=seed.get("station")
+            seed, candidates, limit=3, search_area_path=tabelog_area_path(seed["url"])
         )
         search_scope = str(seed.get("station") or seed.get("address") or "").strip()
         result = {

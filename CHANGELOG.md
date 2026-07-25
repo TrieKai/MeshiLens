@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.27] — 2026-07-26
+
+### Fixed
+- 相似店家改以已配對店家的 Tabelog URL 精確區域路徑搜尋，避免無法辨識的車站字串導致全國排名；候選缺少位置時也只接受此精確區域作為附近依據
+
 ## [0.5.26] — 2026-07-26
 
 ### Fixed

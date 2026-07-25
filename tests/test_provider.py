@@ -14,12 +14,16 @@ from meshi_lens.provider import (
     reservation_from_tabelog_html,
     restaurant_to_dict,
     stable_reservation_url,
+    tabelog_area_path,
     GurumeProvider,
     web_search_queries,
 )
 
 
 class ProviderTests(unittest.TestCase):
+    def test_extracts_precise_area_path_from_tabelog_restaurant_url(self) -> None:
+        self.assertEqual(tabelog_area_path("https://tabelog.com/tokyo/A1323/A132302/13276342/"), "tokyo/A1323/A132302")
+
     def test_similar_search_reads_one_search_page_without_detail_fetches(self) -> None:
         class FakeSearchRequest:
             received = None
