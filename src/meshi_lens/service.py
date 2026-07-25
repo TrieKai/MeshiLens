@@ -328,7 +328,7 @@ class MatchService:
             LOGGER.info("similar outcome=failure reason=%s", type(exc).__name__)
             raise RuntimeError("Tabelog 相似店家暫時無法取得") from exc
         recommendations, ranking_diagnostics = rank_similar_candidates_with_diagnostics(
-            seed, candidates, limit=3
+            seed, candidates, limit=3, search_station=seed.get("station")
         )
         search_scope = str(seed.get("station") or seed.get("address") or "").strip()
         result = {

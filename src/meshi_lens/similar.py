@@ -53,7 +53,7 @@ def _address_locality(value: Any) -> str:
 
 
 def _nearby_location(
-    seed: Mapping[str, Any], candidate: Mapping[str, Any]
+    seed: Mapping[str, Any], candidate: Mapping[str, Any], *, search_station: Any = ""
 ) -> tuple[float, str]:
     """Return a verified local signal; never treat cuisine alone as nearby."""
     seed_station = _normalized_station(seed.get("station"))
@@ -63,6 +63,17 @@ def _nearby_location(
         if not station_label.endswith("站"):
             station_label = f"{station_label}站"
         return 25.0, f"同為{station_label}"
+
+    # Tabelog's result cards do not always expose a parseable station or
+    # address. When the provider explicitly searched by the seed's station,
+    # that server-side station scope is still a reliable local signal. Do not
+    # use this fallback for broader address/prefecture searches.
+    scoped_station = _normalized_station(search_station)
+    if scoped_station:
+        station_label = tabelog_station_zh_hant(_station_name(search_station))
+        if not station_label.endswith("站"):
+            station_label = f"{station_label}站"
+        return 20.0, f"Tabelog {station_label}搜尋範圍"
 
     seed_address = normalize_text(_text(seed.get("address")))
     candidate_area = _text(candidate.get("area"))
@@ -148,6 +159,7 @@ def rank_similar_candidates_with_diagnostics(
     candidates: list[Mapping[str, Any]],
     *,
     limit: int = 3,
+    search_station: Any = "",
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Rank search cards and return aggregate, non-identifying filter diagnostics.
 
@@ -181,7 +193,9 @@ def rank_similar_candidates_with_diagnostics(
             score += 45
             reasons.append(f"同為{tabelog_label_zh_hant(genre)}")
 
-        location_score, location_reason = _nearby_location(seed, raw)
+        location_score, location_reason = _nearby_location(
+            seed, raw, search_station=search_station
+        )
         # Search cards sometimes contain broad ranking results.  A matching
         # cuisine is not sufficient: recommend only a verifiably nearby card.
         if not location_score:
@@ -235,9 +249,10 @@ def rank_similar_candidates(
     candidates: list[Mapping[str, Any]],
     *,
     limit: int = 3,
+    search_station: Any = "",
 ) -> list[dict[str, Any]]:
     """Return a small, explainable set of similar Tabelog search cards."""
     recommendations, _ = rank_similar_candidates_with_diagnostics(
-        seed, candidates, limit=limit
+        seed, candidates, limit=limit, search_station=search_station
     )
     return recommendations
