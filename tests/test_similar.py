@@ -161,13 +161,13 @@ class SimilarRankingTests(unittest.TestCase):
             ranked[0]["reasons"][:2], ["同為おにぎり", "同一 Tabelog 區域"]
         )
 
-    def test_accepts_a_well_rated_nearby_card_without_the_same_genre(self) -> None:
+    def test_filters_a_nearby_card_without_a_similarity_signal(self) -> None:
         ranked = rank_similar_candidates(
             {"url": "https://tabelog.com/tokyo/A1323/A132302/13276342/", "genres": ["おにぎり"]},
             [{"name": "附近餐廳", "url": "https://tabelog.com/tokyo/A1323/A132302/1300002/", "genres": ["定食"], "rating": 3.5, "review_count": 100}],
             search_area_path="tokyo/A1323/A132302",
         )
-        self.assertEqual(ranked[0]["reasons"], ["同一 Tabelog 區域"])
+        self.assertEqual(ranked, [])
 
     def test_filters_candidates_without_a_similarity_signal(self) -> None:
         ranked = rank_similar_candidates(

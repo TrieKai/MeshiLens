@@ -204,7 +204,7 @@ def rank_similar_candidates_with_diagnostics(
 
         # A keyword search can include loosely related restaurants.  Location
         # is already mandatory; retain a small quality threshold as well.
-        minimum_score = 25 if search_area_path else 35
+        minimum_score = 35
         if score < minimum_score:
             diagnostics["below_quality_count"] += 1
             continue

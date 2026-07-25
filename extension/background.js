@@ -238,7 +238,7 @@ function similarCachePlace(selected) {
     name: selected.name,
     address: selected.address,
     tabelog_url: selected.url,
-    website: `nearby-v11|${selected.genres.join("、")}`,
+    website: `nearby-v13|${selected.genres.join("、")}`,
     phone: [selected.station, selected.lunch_price, selected.dinner_price].join("|"),
   };
 }

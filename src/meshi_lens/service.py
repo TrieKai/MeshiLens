@@ -38,7 +38,7 @@ from .similar import rank_similar_candidates_with_diagnostics
 
 
 LOGGER = logging.getLogger("meshilens.service")
-SIMILAR_CACHE_VERSION = "nearby-v11"
+SIMILAR_CACHE_VERSION = "nearby-v13"
 
 
 class MatchService:
