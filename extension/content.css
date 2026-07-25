@@ -22,7 +22,8 @@
   position: fixed;
   right: 18px;
   top: 78px;
-  width: 310px;
+  max-width: calc(100vw - 36px);
+  width: 380px;
   z-index: 10000;
 }
 
@@ -647,6 +648,13 @@ a.meshilens-timeline-label:focus-visible {
   border-top: 1px solid var(--ml-border);
   margin-top: 10px;
   padding-top: 6px;
+}
+
+.meshilens-candidate-note {
+  color: var(--ml-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  margin-top: 3px;
 }
 
 .meshilens-candidate {

@@ -21,6 +21,14 @@ test("omits the selected Tabelog listing from manual candidate choices", () => {
   assert.deepEqual(alternativeCandidates(candidates, selected), [candidates[1]]);
 });
 
+test("does not show low-confidence Tabelog matches as manual choices", () => {
+  const candidates = [
+    { name: "低信心店", url: "https://tabelog.com/hyogo/A2803/A280303/28000001/", confidence: "low" },
+    { name: "待確認店", url: "https://tabelog.com/hyogo/A2803/A280303/28000002/", confidence: "medium" },
+  ];
+  assert.deepEqual(alternativeCandidates(candidates, null), [candidates[1]]);
+});
+
 test("uses confidence labels and Google Maps place searches for UI links", () => {
   assert.equal(confidenceLabel("high"), "高信心");
   assert.equal(confidenceLabel("medium"), "待確認");

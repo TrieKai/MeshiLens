@@ -91,6 +91,22 @@ class AdviceTests(unittest.TestCase):
         self.assertEqual(advice["best_for"], ["聚餐", "日式料理"])
         self.assertEqual(advice["evidence"][0], "Tabelog 3.54 分")
 
+    def test_normalizes_chinese_numerals_in_model_output(self) -> None:
+        advice = _validate_advice(
+            {
+                "summary": "地址為東京都豐島區東池袋二丁目五七之二，科斯摩東池袋一零五。",
+                "evidence": [
+                    "Tabelog 評分三点六八，評論數一千四百零五則",
+                    "午晚餐價格均為一千至一千九百九十九日元",
+                    "曾於二零零一、二零零七、二零零八、二零二一、二零二二、二零二四年入選百名店",
+                ],
+            }
+        )
+        self.assertEqual(advice["summary"], "地址為東京都豐島區東池袋2丁目57之2，科斯摩東池袋105。")
+        self.assertEqual(advice["evidence"][0], "Tabelog 評分3.68，評論數1405則")
+        self.assertEqual(advice["evidence"][1], "午晚餐價格均為1000至1999日元")
+        self.assertEqual(advice["evidence"][2], "曾於2001、2007、2008、2021、2022、2024年入選百名店")
+
     def test_rejects_japanese_kana_in_advice_output(self) -> None:
         with self.assertRaisesRegex(ValueError, "繁中"):
             _validate_advice(
@@ -116,6 +132,7 @@ class AdviceTests(unittest.TestCase):
         self.assertEqual(body["messages"][0]["role"], "user")
         self.assertIn("清水屋", body["messages"][0]["content"])
         self.assertIn("禁止日文平假名", body["messages"][0]["content"])
+        self.assertIn("半形阿拉伯數字", body["messages"][0]["content"])
 
     def test_gpt_oss_keeps_its_own_reasoning_effort(self) -> None:
         advisor = GroqDiningAdvisor(api_key="test-key", model="openai/gpt-oss-20b")

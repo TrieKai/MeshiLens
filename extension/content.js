@@ -7,7 +7,7 @@ const { coordinatesFromMapsUrl } = globalThis.MeshiLensMaps;
 const { classifyJapanPlace } = globalThis.MeshiLensJapan;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
-const { advicePayload, adviceCacheKey, cachedAdvice } = globalThis.MeshiLensAdvice;
+const { advicePayload, adviceCacheKey, adviceErrorMessage, cachedAdvice, normalizeAdviceNumbers } = globalThis.MeshiLensAdvice;
 const { alternativeCandidates, confidenceLabel, mapsSearchUrl, similarPayload } = globalThis.MeshiLensSimilar;
 const {
   BUTTON_LABEL,
@@ -275,7 +275,7 @@ function adviceView(state) {
     return section;
   }
   if (state?.status === "error") {
-    section.append(element("div", "meshilens-advice-pending", "AI 建議暫時無法取得"));
+    section.append(element("div", "meshilens-advice-pending", state.message || "AI 建議暫時無法取得，請稍後再試"));
     return section;
   }
   const advice = state?.advice;
@@ -539,14 +539,14 @@ async function loadAdvice(card, place, candidate, michelin, sequence) {
     const cached = cachedAdvice(cache[key], key);
     if (cached) {
       if (sequence === lookupSequence && card.isConnected && card._meshilensAdviceKey === key) {
-        card._meshilensAdvice = { advice: cached };
+        card._meshilensAdvice = { advice: normalizeAdviceNumbers(cached) };
         syncAdvice(card);
       }
       return;
     }
     const response = await safeRuntimeSendMessage({ type: "GET_DINING_ADVICE", payload });
     if (!response?.ok) throw new Error(response?.error || "AI 建議暫時無法取得");
-    const advice = response.data?.advice;
+    const advice = normalizeAdviceNumbers(response.data?.advice);
     if (!response.data?.available) {
       if (sequence === lookupSequence && card.isConnected && card._meshilensAdviceKey === key) {
         card._meshilensAdvice = null;
@@ -565,7 +565,7 @@ async function loadAdvice(card, place, candidate, michelin, sequence) {
   } catch (error) {
     if (notePossibleInvalidation(error)) return;
     if (sequence === lookupSequence && card.isConnected && card._meshilensAdviceKey === key) {
-      card._meshilensAdvice = { status: "error" };
+      card._meshilensAdvice = { status: "error", message: adviceErrorMessage(error?.message) };
       syncAdvice(card);
     }
   }
@@ -806,14 +806,13 @@ function renderResult(card, result) {
     syncReviewInsights(card);
   }
 
-  const candidateOptions = selected
-    ? alternativeCandidates(result.candidates, selected)
-    : (Array.isArray(result.candidates) ? result.candidates : []);
+  const candidateOptions = alternativeCandidates(result.candidates, selected);
   if (!candidateOptions.length) return;
-  const candidateLabel = selected ? "其他候選店家" : "候選店家";
-  const toggle = element("button", "meshilens-toggle", `查看${candidateLabel}（${candidateOptions.length}）`);
+  const candidateLabel = "Tabelog 配對結果";
+  const toggle = element("button", "meshilens-toggle", `核對${candidateLabel}（${candidateOptions.length}）`);
   toggle.type = "button";
   const list = element("div", "meshilens-candidates meshilens-hidden");
+  list.append(element("div", "meshilens-candidate-note", "這些是同一店的可能配對，不是推薦店家。"));
   for (const candidate of candidateOptions) {
     const button = element("button", "meshilens-candidate");
     button.type = "button";
@@ -868,7 +867,7 @@ function renderResult(card, result) {
   }
   toggle.addEventListener("click", () => {
     const hidden = list.classList.toggle("meshilens-hidden");
-    toggle.textContent = hidden ? `查看${candidateLabel}（${candidateOptions.length}）` : `收起${candidateLabel}`;
+    toggle.textContent = hidden ? `核對${candidateLabel}（${candidateOptions.length}）` : `收起${candidateLabel}`;
   });
   card.append(toggle, list);
 }

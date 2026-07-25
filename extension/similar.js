@@ -13,8 +13,11 @@
   function alternativeCandidates(candidates, selected) {
     if (!Array.isArray(candidates)) return [];
     const selectedUrl = canonicalTabelogUrl(selected?.url);
-    if (!selectedUrl) return candidates;
-    return candidates.filter((candidate) => canonicalTabelogUrl(candidate?.url) !== selectedUrl);
+    return candidates.filter(
+      (candidate) =>
+        candidate?.confidence !== "low" &&
+        (!selectedUrl || canonicalTabelogUrl(candidate?.url) !== selectedUrl),
+    );
   }
 
   function confidenceLabel(confidence) {

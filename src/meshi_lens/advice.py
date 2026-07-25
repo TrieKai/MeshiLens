@@ -22,8 +22,26 @@ from .localization import tabelog_label_zh_hant
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "qwen/qwen3.6-27b"
 MAX_FACT_VALUE = 240
-ADVICE_OUTPUT_VERSION = "zh-Hant-v2"
+ADVICE_OUTPUT_VERSION = "zh-Hant-v3"
 JAPANESE_SCRIPT_RE = re.compile(r"[\u3040-\u30ff\uff66-\uff9d]")
+CHINESE_NUMBER_RE = re.compile(r"[零〇○一二三四五六七八九兩两十百千萬万億亿點点]+")
+CHINESE_DIGITS = {
+    "零": "0",
+    "〇": "0",
+    "○": "0",
+    "一": "1",
+    "二": "2",
+    "三": "3",
+    "四": "4",
+    "五": "5",
+    "六": "6",
+    "七": "7",
+    "八": "8",
+    "九": "9",
+    "兩": "2",
+    "两": "2",
+}
+CHINESE_UNITS = {"十": 10, "百": 100, "千": 1_000, "萬": 10_000, "万": 10_000, "億": 100_000_000, "亿": 100_000_000}
 ALLOWED_FACT_KEYS = frozenset(
     {
         "restaurant_name",
@@ -66,6 +84,53 @@ def _optional_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _chinese_numeral_to_ascii(value: str) -> str:
+    """Normalize Chinese-number runs in model output to ASCII digits.
+
+    This protects factual address, price, rating, review-count and year details
+    even when a model interprets "traditional Chinese" as a request to spell
+    digits out in Chinese.
+    """
+    if not value:
+        return value
+    if "點" in value or "点" in value:
+        integer, decimal = re.split(r"[點点]", value, maxsplit=1)
+        normalized_integer = _chinese_numeral_to_ascii(integer)
+        normalized_decimal = "".join(CHINESE_DIGITS.get(char, char) for char in decimal)
+        return f"{normalized_integer}.{normalized_decimal}"
+    if all(char in CHINESE_DIGITS for char in value):
+        return "".join(CHINESE_DIGITS[char] for char in value)
+
+    total = 0
+    section = 0
+    number = 0
+    for char in value:
+        if char in CHINESE_DIGITS:
+            number = int(CHINESE_DIGITS[char])
+            continue
+        unit = CHINESE_UNITS.get(char)
+        if unit is None:
+            return value
+        if unit >= 10_000:
+            total += (section + number) * unit
+            section = 0
+            number = 0
+        else:
+            section += (number or 1) * unit
+            number = 0
+    return str(total + section + number)
+
+
+def _normalize_display_numbers(value: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        # 「百名店」是獎項名稱，不是要顯示的數量。
+        if match.group(0) == "百" and value[match.end() :].startswith("名店"):
+            return "百"
+        return _chinese_numeral_to_ascii(match.group(0))
+
+    return CHINESE_NUMBER_RE.sub(replace, value)
 
 
 def sanitize_advice_facts(value: Mapping[str, Any]) -> dict[str, Any]:
@@ -200,15 +265,15 @@ def _validate_advice(value: Any) -> dict[str, Any]:
             return []
         return [_text(item, max_length) for item in items if _text(item, max_length)][:max_items]
 
-    summary = _text(value.get("summary"), 220)
+    summary = _normalize_display_numbers(_text(value.get("summary"), 220))
     if not summary:
         raise ValueError("AI 未產生用餐建議")
     result = {
-        "headline": _text(value.get("headline"), 60) or "用餐建議",
+        "headline": _normalize_display_numbers(_text(value.get("headline"), 60)) or "用餐建議",
         "summary": summary,
-        "best_for": clean_list("best_for", 3, 48),
-        "cautions": clean_list("cautions", 2, 60),
-        "evidence": clean_list("evidence", 4, 72),
+        "best_for": [_normalize_display_numbers(item) for item in clean_list("best_for", 3, 48)],
+        "cautions": [_normalize_display_numbers(item) for item in clean_list("cautions", 2, 60)],
+        "evidence": [_normalize_display_numbers(item) for item in clean_list("evidence", 4, 72)],
     }
     if any(
         JAPANESE_SCRIPT_RE.search(item)
@@ -248,6 +313,8 @@ class GroqDiningAdvisor:
             "你是 MeshiLens 的用餐建議助手。只可根據提供的 JSON 結構化資料，以繁體中文"
             "輸出 JSON 物件：headline、summary、best_for、cautions、evidence。所有說明文字"
             "必須是繁體中文，禁止日文平假名、片假名與日文句式；店名若為日文則以「此店」代稱。"
+            "所有數字、地址番地、年份、評分、評論數與金額一律使用半形阿拉伯數字 0-9；不可"
+            "使用中文數字（例如必須寫 3.68、1,405、2024、1,000～1,999）。"
             "輸入可能含日文 Tabelog 標籤，僅可將其理解後翻譯為繁中，不可原樣抄寫。"
             "不得假設菜色、口味、排隊、人潮、服務品質、營業狀態或評論意見；資料不足時要"
             "明確說明。headline 與 summary 必須是字串；best_for、cautions、evidence 必須是"
@@ -293,16 +360,24 @@ class GroqDiningAdvisor:
             with urlopen(request, timeout=self.timeout_seconds) as response:  # noqa: S310
                 payload = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
+            if exc.code in {401, 403}:
+                raise RuntimeError("AI 服務驗證失敗，請檢查伺服器設定") from exc
             if exc.code == 429:
                 raise RuntimeError("AI 暫時忙碌，請稍後再試") from exc
             raise RuntimeError("AI 用餐建議暫時無法取得") from exc
-        except (URLError, TimeoutError, json.JSONDecodeError) as exc:
-            raise RuntimeError("AI 用餐建議暫時無法取得") from exc
+        except (URLError, TimeoutError) as exc:
+            raise RuntimeError("AI 服務連線逾時，請稍後再試") from exc
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("AI 回傳格式異常，請稍後再試") from exc
         try:
             content = payload["choices"][0]["message"]["content"]
-            return _validate_advice(json.loads(content))
-        except (KeyError, IndexError, TypeError, json.JSONDecodeError, ValueError) as exc:
-            raise RuntimeError("AI 用餐建議暫時無法取得") from exc
+            decoded = json.loads(content)
+        except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("AI 回傳格式異常，請稍後再試") from exc
+        try:
+            return _validate_advice(decoded)
+        except ValueError as exc:
+            raise RuntimeError("AI 回傳內容未符合格式，請稍後再試") from exc
 
     def summarize(
         self,

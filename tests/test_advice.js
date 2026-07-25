@@ -6,9 +6,11 @@ require("../extension/advice.js");
 const {
   ADVICE_CACHE_TTL_MS,
   ADVICE_CACHE_VERSION,
+  adviceErrorMessage,
   advicePayload,
   adviceCacheKey,
   cachedAdvice,
+  normalizeAdviceNumbers,
 } = globalThis.MeshiLensAdvice;
 
 test("builds a facts-only advice request after a selected candidate exists", () => {
@@ -34,7 +36,25 @@ test("builds a facts-only advice request after a selected candidate exists", () 
 
 test("advice cache TTL is 24 hours", () => {
   assert.equal(ADVICE_CACHE_TTL_MS, 24 * 60 * 60 * 1000);
-  assert.equal(ADVICE_CACHE_VERSION, "zh-Hant-v2");
+  assert.equal(ADVICE_CACHE_VERSION, "zh-Hant-v4");
+  assert.equal(adviceErrorMessage("AI 暫時忙碌，請稍後再試"), "AI 暫時忙碌，請稍後再試");
+  assert.equal(adviceErrorMessage("unexpected"), "AI 建議暫時無法取得，請稍後再試");
+});
+
+test("normalizes Chinese numerals in advice returned by an older server or cache", () => {
+  assert.deepEqual(
+    normalizeAdviceNumbers({
+      summary: "東池袋二丁目五七之二，三点六八分",
+      evidence: ["評論數一千四百零五則", "二零二四年百名店"],
+    }),
+    {
+      summary: "東池袋2丁目57之2，3.68分",
+      evidence: ["評論數1405則", "2024年百名店"],
+      headline: "",
+      best_for: undefined,
+      cautions: undefined,
+    },
+  );
 });
 
 test("invalidates advice cache when restaurant facts change", () => {
