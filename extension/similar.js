@@ -31,6 +31,12 @@
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
   }
 
+  function similarDisplayState(recommendations) {
+    return Array.isArray(recommendations) && recommendations.length
+      ? { status: "ready", recommendations }
+      : { status: "empty" };
+  }
+
   function similarPayload(candidate) {
     if (!candidate || typeof candidate !== "object") return null;
     const name = String(candidate.name || "").trim().slice(0, 200);
@@ -64,6 +70,7 @@
     alternativeCandidates,
     confidenceLabel,
     mapsSearchUrl,
+    similarDisplayState,
     similarPayload,
   };
 })();

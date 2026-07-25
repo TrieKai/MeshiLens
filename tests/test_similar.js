@@ -9,6 +9,7 @@ const {
   alternativeCandidates,
   confidenceLabel,
   mapsSearchUrl,
+  similarDisplayState,
   similarPayload,
 } = globalThis.MeshiLensSimilar;
 
@@ -68,4 +69,13 @@ test("builds a bounded similar-restaurant request from selected Tabelog facts", 
 test("does not request similar restaurants without Tabelog URL or cuisine", () => {
   assert.equal(similarPayload({ name: "鮨 みなと", genres: ["寿司"] }), null);
   assert.equal(similarPayload({ name: "鮨 みなと", url: "https://tabelog.com/example/" }), null);
+});
+
+test("keeps an explicit empty state when no nearby recommendation is verified", () => {
+  assert.deepEqual(similarDisplayState([]), { status: "empty" });
+  assert.deepEqual(similarDisplayState(null), { status: "empty" });
+  assert.deepEqual(
+    similarDisplayState([{ name: "附近店家" }]),
+    { status: "ready", recommendations: [{ name: "附近店家" }] },
+  );
 });

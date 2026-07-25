@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.21] — 2026-07-26
+
+### Fixed
+- 相似店家完成智慧附近篩選卻沒有候選時，保留區塊並清楚說明原因，不再讓載入提示直接消失
+
 ## [0.5.20] — 2026-07-26
 
 ### Fixed
