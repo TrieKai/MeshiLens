@@ -17,12 +17,18 @@ from meshi_lens.provider import (
     tabelog_area_path,
     tabelog_peripheral_map_url,
     peripheral_genre_slug,
+    parse_peripheral_restaurants,
     GurumeProvider,
     web_search_queries,
 )
 
 
 class ProviderTests(unittest.TestCase):
+    def test_parses_peripheral_map_compact_cards(self) -> None:
+        cards = parse_peripheral_restaurants('''<div><h5><a href="https://tabelog.com/tokyo/A1304/A130401/13000001/">鮨 近所</a></h5>西新宿 / 寿司、日本料理 3.61 124人</div>''')
+        self.assertEqual(cards[0]["name"], "鮨 近所")
+        self.assertEqual(cards[0]["genres"], ["寿司", "日本料理"])
+        self.assertEqual(cards[0]["review_count"], 124)
     def test_extracts_precise_area_path_from_tabelog_restaurant_url(self) -> None:
         self.assertEqual(tabelog_area_path("https://tabelog.com/tokyo/A1323/A132302/13276342/"), "tokyo/A1323/A132302")
 

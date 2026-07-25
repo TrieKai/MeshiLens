@@ -43,7 +43,7 @@ test("uses confidence labels and Google Maps place searches for UI links", () =>
 
 test("builds a bounded similar-restaurant request from selected Tabelog facts", () => {
   assert.equal(MAX_RECOMMENDATIONS, 3);
-  assert.equal(SIMILAR_CACHE_VERSION, "nearby-v9");
+  assert.equal(SIMILAR_CACHE_VERSION, "nearby-v10");
   assert.deepEqual(
     similarPayload({
       name: "鮨 みなと",

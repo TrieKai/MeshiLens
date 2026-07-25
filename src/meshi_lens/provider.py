@@ -200,6 +200,38 @@ def tabelog_peripheral_map_url(value: str, genre_slug: str = "") -> str:
     return f"{canonical}peripheral_map/{suffix}"
 
 
+def parse_peripheral_restaurants(html: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Parse the compact restaurant cards on a Tabelog peripheral-map page."""
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "lxml")
+    found: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for anchor in soup.select("h5 a[href], h4 a[href], .list-rst__rst-name-target[href]"):
+        url = canonical_restaurant_url(str(anchor.get("href") or ""))
+        name = anchor.get_text(" ", strip=True)
+        if not url or not name or url in seen:
+            continue
+        card = anchor.find_parent(["li", "div"])
+        text = card.get_text(" ", strip=True) if card else ""
+        rating_match = re.search(r"\b([2-4]\.\d{2})\b", text)
+        reviews_match = re.search(r"([\d,]+)人", text)
+        parts = [part.strip() for part in text.split("/") if part.strip()]
+        genres = []
+        if len(parts) >= 2:
+            genre_text = re.sub(r"\s+[2-4]\.\d{2}\s+[\d,]+人.*$", "", parts[1])
+            genres = [item.strip() for item in genre_text.split("、") if item.strip()]
+        found.append({
+            "name": name, "url": url, "rating": float(rating_match.group(1)) if rating_match else None,
+            "review_count": int(reviews_match.group(1).replace(",", "")) if reviews_match else None,
+            "genres": genres, "area": parts[0] if parts else "", "station": "", "address": "",
+        })
+        seen.add(url)
+        if len(found) >= max(1, min(limit, 20)):
+            break
+    return found
+
+
 def peripheral_genre_slug(genres: Any) -> str:
     values = [genres] if isinstance(genres, str) else genres if isinstance(genres, list) else []
     for value in values:
@@ -716,10 +748,7 @@ class GurumeProvider:
                 allow_redirects=True, impersonate="chrome",
             )
             response.raise_for_status()
-            parser = RestaurantSearchRequest()
-            parse = getattr(parser, "_parse_restaurants", None)
-            if callable(parse):
-                return [restaurant_to_dict(item) for item in list(parse(response.text))[: max(1, min(limit, 20))]]
+            return parse_peripheral_restaurants(response.text, limit)
         station = str(seed.get("station") or "").strip().removesuffix("駅")
         area = station or area_from_address(str(seed.get("address") or ""))
         if not area:
