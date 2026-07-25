@@ -3,11 +3,37 @@ const test = require("node:test");
 
 require("../extension/similar.js");
 
-const { MAX_RECOMMENDATIONS, SIMILAR_CACHE_VERSION, similarPayload } = globalThis.MeshiLensSimilar;
+const {
+  MAX_RECOMMENDATIONS,
+  SIMILAR_CACHE_VERSION,
+  alternativeCandidates,
+  confidenceLabel,
+  mapsSearchUrl,
+  similarPayload,
+} = globalThis.MeshiLensSimilar;
+
+test("omits the selected Tabelog listing from manual candidate choices", () => {
+  const selected = { url: "https://tabelog.com/tw/hyogo/A2803/A280303/28071372/" };
+  const candidates = [
+    { name: "麥當勞", url: "https://tabelog.com/hyogo/A2803/A280303/28071372/" },
+    { name: "另一家店", url: "https://tabelog.com/hyogo/A2803/A280303/28000001/" },
+  ];
+  assert.deepEqual(alternativeCandidates(candidates, selected), [candidates[1]]);
+});
+
+test("uses confidence labels and Google Maps place searches for UI links", () => {
+  assert.equal(confidenceLabel("high"), "高信心");
+  assert.equal(confidenceLabel("medium"), "待確認");
+  assert.equal(confidenceLabel("low"), "低信心");
+  assert.equal(
+    mapsSearchUrl("鮨 みなと", "東京都中央区銀座"),
+    "https://www.google.com/maps/search/?api=1&query=%E9%AE%A8%20%E3%81%BF%E3%81%AA%E3%81%A8%20%E6%9D%B1%E4%BA%AC%E9%83%BD%E4%B8%AD%E5%A4%AE%E5%8C%BA%E9%8A%80%E5%BA%A7",
+  );
+});
 
 test("builds a bounded similar-restaurant request from selected Tabelog facts", () => {
   assert.equal(MAX_RECOMMENDATIONS, 3);
-  assert.equal(SIMILAR_CACHE_VERSION, "zh-Hant-v1");
+  assert.equal(SIMILAR_CACHE_VERSION, "zh-Hant-v2");
   assert.deepEqual(
     similarPayload({
       name: "鮨 みなと",

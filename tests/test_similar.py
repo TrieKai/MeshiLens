@@ -25,6 +25,7 @@ class SimilarRankingTests(unittest.TestCase):
                     "url": "https://tabelog.com/tokyo/A1301/A130101/1300002/",
                     "genres": ["寿司"],
                     "station": "銀座駅",
+                    "address": "東京都中央区銀座1-1-1",
                     "rating": 3.81,
                     "review_count": 210,
                     "dinner_price": "￥20,000～￥29,999",
@@ -42,6 +43,7 @@ class SimilarRankingTests(unittest.TestCase):
         )
         self.assertEqual([item["name"] for item in ranked], ["銀座の寿司店", "別の寿司店"])
         self.assertEqual(ranked[0]["reasons"], ["同為壽司", "同為銀座站", "晚餐價位接近"])
+        self.assertEqual(ranked[0]["address"], "東京都中央区銀座1-1-1")
         self.assertNotIn("元の店", [item["name"] for item in ranked])
 
     def test_filters_candidates_without_a_similarity_signal(self) -> None:

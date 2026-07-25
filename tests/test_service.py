@@ -32,6 +32,7 @@ class FakeProvider:
                 "url": "https://tabelog.com/ishikawa/A1701/A170101/1700002/",
                 "genres": ["日本料理"],
                 "station": "金沢駅",
+                "address": "石川県金沢市下近江町",
                 "lunch_price": "￥10,000～￥14,999",
                 "dinner_price": "￥10,000～￥14,999",
             }
@@ -438,6 +439,7 @@ class ServiceTests(unittest.TestCase):
         self.assertTrue(second["cached"])
         self.assertEqual(provider.similar_calls, 1)
         self.assertEqual(first["recommendations"][0]["name"], "近江町割烹")
+        self.assertEqual(first["recommendations"][0]["address"], "石川県金沢市下近江町")
         self.assertIn("同為日本料理", first["recommendations"][0]["reasons"])
 
     def test_similar_requires_a_cuisine_and_canonical_tabelog_url(self) -> None:

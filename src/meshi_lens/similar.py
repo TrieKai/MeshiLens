@@ -138,6 +138,7 @@ def rank_similar_candidates(
             "rating": raw.get("rating"),
             "review_count": raw.get("review_count"),
             "url": url,
+            "address": _text(raw.get("address")),
             "genres": _genres(raw.get("genres"))[:4],
             "station": _text(raw.get("station")),
             "area": _text(raw.get("area")),

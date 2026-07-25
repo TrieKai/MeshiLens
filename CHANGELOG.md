@@ -2,6 +2,14 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.12] — 2026-07-25
+
+### Fixed
+- 候選清單不再重複顯示目前已選定的 Tabelog 店家，並以「高信心／待確認／低信心」取代容易誤解為機率的百分比分數
+
+### Changed
+- 相似 Tabelog 店家卡片改為以店名與地址直接開啟 Google Maps 搜尋結果，方便查看地圖上的商家；Tabelog 仍為推薦資料來源
+
 ## [0.5.11] — 2026-07-25
 
 ### Fixed

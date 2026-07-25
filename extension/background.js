@@ -238,7 +238,7 @@ function similarCachePlace(selected) {
     name: selected.name,
     address: selected.address,
     tabelog_url: selected.url,
-    website: `zh-Hant-v1|${selected.genres.join("、")}`,
+    website: `zh-Hant-v2|${selected.genres.join("、")}`,
     phone: [selected.station, selected.lunch_price, selected.dinner_price].join("|"),
   };
 }

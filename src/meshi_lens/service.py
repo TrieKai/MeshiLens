@@ -314,7 +314,7 @@ class MatchService:
     def similar(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Return three Tabelog search cards similar to the selected restaurant."""
         seed = self.validate_similar_seed(payload)
-        key = "zh-Hant-v1|" + "|".join(
+        key = "zh-Hant-v2|" + "|".join(
             str(seed.get(field) or "")
             for field in ("url", "genres", "station", "address", "lunch_price", "dinner_price")
         )

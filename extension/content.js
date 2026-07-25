@@ -8,7 +8,7 @@ const { classifyJapanPlace } = globalThis.MeshiLensJapan;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 const { advicePayload, adviceCacheKey, cachedAdvice } = globalThis.MeshiLensAdvice;
-const { similarPayload } = globalThis.MeshiLensSimilar;
+const { alternativeCandidates, confidenceLabel, mapsSearchUrl, similarPayload } = globalThis.MeshiLensSimilar;
 const {
   BUTTON_LABEL,
   CARD_TITLE,
@@ -318,10 +318,10 @@ function syncAdvice(card) {
 
 function similarRestaurantsView(state) {
   const section = element("section", "meshilens-similar");
-  section.setAttribute("aria-label", "相似 Tabelog 店家");
+  section.setAttribute("aria-label", "相似店家");
   const heading = element("div", "meshilens-similar-heading");
-  heading.append(element("span", "meshilens-similar-title", "相似 Tabelog 店家"));
-  heading.append(element("span", "meshilens-similar-source", "同類型搜尋"));
+  heading.append(element("span", "meshilens-similar-title", "相似店家"));
+  heading.append(element("span", "meshilens-similar-source", "Tabelog 推薦 · 地圖開啟"));
   section.append(heading);
 
   if (state?.status === "loading") {
@@ -337,9 +337,10 @@ function similarRestaurantsView(state) {
   const list = element("div", "meshilens-similar-list");
   for (const recommendation of recommendations.slice(0, 3)) {
     const item = element("a", "meshilens-similar-item");
-    item.href = recommendation.url;
+    item.href = mapsSearchUrl(recommendation.name, recommendation.address || recommendation.area);
     item.target = "_blank";
     item.rel = "noopener noreferrer";
+    item.title = "在 Google Maps 開啟";
     const top = element("div", "meshilens-similar-top");
     top.append(element("span", "meshilens-similar-name", recommendation.name || "未命名店家"));
     if (recommendation.rating != null) {
@@ -805,11 +806,15 @@ function renderResult(card, result) {
     syncReviewInsights(card);
   }
 
-  if (!result.candidates?.length) return;
-  const toggle = element("button", "meshilens-toggle", `查看候選店家（${result.candidates.length}）`);
+  const candidateOptions = selected
+    ? alternativeCandidates(result.candidates, selected)
+    : (Array.isArray(result.candidates) ? result.candidates : []);
+  if (!candidateOptions.length) return;
+  const candidateLabel = selected ? "其他候選店家" : "候選店家";
+  const toggle = element("button", "meshilens-toggle", `查看${candidateLabel}（${candidateOptions.length}）`);
   toggle.type = "button";
   const list = element("div", "meshilens-candidates meshilens-hidden");
-  for (const candidate of result.candidates) {
+  for (const candidate of candidateOptions) {
     const button = element("button", "meshilens-candidate");
     button.type = "button";
     const top = element("span", "meshilens-candidate-top");
@@ -818,14 +823,10 @@ function renderResult(card, result) {
       const count = candidate.hyakumeiten?.length || 1;
       top.append(element("span", "meshilens-candidate-award", count > 1 ? `百名店 ×${count}` : "百名店"));
     }
-    top.append(element("span", "meshilens-candidate-score", `配對 ${candidate.score}%`));
+    top.append(element("span", "meshilens-candidate-score", confidenceLabel(candidate.confidence)));
     button.append(top);
     button.append(element("span", "meshilens-candidate-address", candidate.address || "地址未提供"));
     button.addEventListener("click", () => {
-      const headerNode = card.querySelector(".meshilens-header");
-      const michelinNode = card.querySelector(".meshilens-michelin");
-      const preservedNodes = [headerNode, michelinNode].filter(Boolean);
-      card._meshilensSelected = candidate;
       card._meshilensAdvice = null;
       card._meshilensAdviceRequestKey = "";
       card._meshilensSimilar = null;
@@ -842,15 +843,10 @@ function renderResult(card, result) {
       card._meshilensReviewInsightsKey = "";
       const resultWithMichelin = {
         ...result,
+        selected: candidate,
         michelin: card._meshilensMichelin || result.michelin || null,
       };
-      card.replaceChildren(...preservedNodes, selectedView(candidate, resultWithMichelin));
-      syncAdvice(card);
-      syncSimilarRestaurants(card);
-      syncReviewInsights(card);
-      card.append(toggle, list);
-      list.classList.add("meshilens-hidden");
-      toggle.textContent = `查看候選店家（${result.candidates.length}）`;
+      renderResult(card, resultWithMichelin);
       loadAdvice(
         card,
         card._meshilensPlace,
@@ -872,7 +868,7 @@ function renderResult(card, result) {
   }
   toggle.addEventListener("click", () => {
     const hidden = list.classList.toggle("meshilens-hidden");
-    toggle.textContent = hidden ? `查看候選店家（${result.candidates.length}）` : "收起候選店家";
+    toggle.textContent = hidden ? `查看${candidateLabel}（${candidateOptions.length}）` : `收起${candidateLabel}`;
   });
   card.append(toggle, list);
 }
