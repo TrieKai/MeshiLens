@@ -41,10 +41,54 @@ class SimilarRankingTests(unittest.TestCase):
                 },
             ],
         )
-        self.assertEqual([item["name"] for item in ranked], ["銀座の寿司店", "別の寿司店"])
+        self.assertEqual([item["name"] for item in ranked], ["銀座の寿司店"])
         self.assertEqual(ranked[0]["reasons"], ["同為壽司", "同為銀座站", "晚餐價位接近"])
         self.assertEqual(ranked[0]["address"], "東京都中央区銀座1-1-1")
         self.assertNotIn("元の店", [item["name"] for item in ranked])
+
+    def test_rejects_a_same_cuisine_restaurant_in_a_different_prefecture(self) -> None:
+        ranked = rank_similar_candidates(
+            {
+                "url": "https://tabelog.com/tokyo/A1301/A130101/1300001/",
+                "genres": ["寿司"],
+                "station": "銀座駅",
+                "address": "東京都中央区銀座1-1-1",
+            },
+            [
+                {
+                    "name": "札幌の寿司店",
+                    "url": "https://tabelog.com/hokkaido/A0101/A010101/1000001/",
+                    "genres": ["寿司"],
+                    "station": "札幌駅",
+                    "address": "北海道札幌市中央区1-1",
+                    "rating": 4.2,
+                    "review_count": 5000,
+                }
+            ],
+        )
+        self.assertEqual(ranked, [])
+
+    def test_accepts_a_nearby_different_station_in_the_same_ward(self) -> None:
+        ranked = rank_similar_candidates(
+            {
+                "url": "https://tabelog.com/tokyo/A1301/A130101/1300001/",
+                "genres": ["寿司"],
+                "station": "銀座駅",
+                "address": "東京都中央区銀座1-1-1",
+            },
+            [
+                {
+                    "name": "築地の寿司店",
+                    "url": "https://tabelog.com/tokyo/A1301/A130101/1300002/",
+                    "genres": ["寿司"],
+                    "station": "築地駅",
+                    "address": "東京都中央区築地2-2-2",
+                    "rating": 3.8,
+                    "review_count": 100,
+                }
+            ],
+        )
+        self.assertEqual(ranked[0]["reasons"][:2], ["同為壽司", "同一行政區"])
 
     def test_filters_candidates_without_a_similarity_signal(self) -> None:
         ranked = rank_similar_candidates(
@@ -63,15 +107,20 @@ class SimilarRankingTests(unittest.TestCase):
 
     def test_localizes_tabelog_cuisine_in_display_reasons(self) -> None:
         ranked = rank_similar_candidates(
-            {"url": "https://tabelog.com/tokyo/A1301/A130101/1300001/", "genres": ["アメリカ料理"]},
+            {
+                "url": "https://tabelog.com/tokyo/A1301/A130101/1300001/",
+                "genres": ["アメリカ料理"],
+                "station": "銀座駅",
+            },
             [
                 {
                     "name": "美式餐廳",
                     "url": "https://tabelog.com/tokyo/A1301/A130101/1300002/",
                     "genres": ["アメリカ料理"],
+                    "station": "銀座駅",
                     "rating": 3.5,
                     "review_count": 20,
                 }
             ],
         )
-        self.assertEqual(ranked[0]["reasons"], ["同為美式料理"])
+        self.assertEqual(ranked[0]["reasons"][:2], ["同為美式料理", "同為銀座站"])

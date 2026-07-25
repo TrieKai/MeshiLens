@@ -9,6 +9,8 @@ from typing import Any, Mapping
 from .localization import tabelog_label_zh_hant, tabelog_station_zh_hant
 from .matching import normalize_text
 
+PREFECTURE_RE = re.compile(r"(?:東京都|北海道|(?:京都|大阪)府|.{2,3}県)")
+
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
@@ -24,6 +26,46 @@ def _genres(value: Any) -> list[str]:
 
 def _normalized_station(value: Any) -> str:
     return normalize_text(_text(value).removesuffix("駅"))
+
+
+def _address_locality(value: Any) -> str:
+    """Return the city/ward-like segment used for a conservative nearby check."""
+    address = _text(value)
+    prefecture = PREFECTURE_RE.search(address)
+    if prefecture:
+        address = address[prefecture.end() :]
+    match = re.match(r"([^\d\s,，]{1,14}?(?:区|市|町|村))", address)
+    return normalize_text(match.group(1)) if match else ""
+
+
+def _nearby_location(
+    seed: Mapping[str, Any], candidate: Mapping[str, Any]
+) -> tuple[float, str]:
+    """Return a verified local signal; never treat cuisine alone as nearby."""
+    seed_station = _normalized_station(seed.get("station"))
+    candidate_station = _normalized_station(candidate.get("station"))
+    if seed_station and candidate_station and seed_station == candidate_station:
+        return 25.0, f"同為{tabelog_station_zh_hant(seed.get('station'))}"
+
+    seed_address = normalize_text(_text(seed.get("address")))
+    candidate_area = _text(candidate.get("area"))
+    normalized_area = normalize_text(candidate_area)
+    if normalized_area and len(normalized_area) >= 2 and normalized_area in seed_address:
+        return 14.0, f"同在{candidate_area}"
+
+    seed_prefecture = normalize_text(PREFECTURE_RE.search(_text(seed.get("address"))).group(0)) if PREFECTURE_RE.search(_text(seed.get("address"))) else ""
+    candidate_prefecture_match = PREFECTURE_RE.search(_text(candidate.get("address")))
+    candidate_prefecture = normalize_text(candidate_prefecture_match.group(0)) if candidate_prefecture_match else ""
+    seed_locality = _address_locality(seed.get("address"))
+    candidate_locality = _address_locality(candidate.get("address"))
+    if (
+        seed_prefecture
+        and seed_prefecture == candidate_prefecture
+        and seed_locality
+        and seed_locality == candidate_locality
+    ):
+        return 18.0, "同一行政區"
+    return 0.0, ""
 
 
 def _price_midpoint(value: Any) -> float | None:
@@ -96,8 +138,6 @@ def rank_similar_candidates(
     candidate's detail page, preserving the one-search-request budget per seed.
     """
     ranked: list[dict[str, Any]] = []
-    seed_station = _normalized_station(seed.get("station"))
-    seed_address = normalize_text(_text(seed.get("address")))
     for raw in candidates:
         if not isinstance(raw, Mapping) or _same_restaurant(seed, raw):
             continue
@@ -113,15 +153,13 @@ def rank_similar_candidates(
             score += 45
             reasons.append(f"同為{tabelog_label_zh_hant(genre)}")
 
-        candidate_station = _normalized_station(raw.get("station"))
-        if seed_station and candidate_station and seed_station == candidate_station:
-            score += 25
-            reasons.append(f"同為{tabelog_station_zh_hant(seed.get('station'))}")
-        else:
-            candidate_area = normalize_text(_text(raw.get("area")))
-            if candidate_area and candidate_area in seed_address:
-                score += 14
-                reasons.append(f"同在{_text(raw.get('area'))}")
+        location_score, location_reason = _nearby_location(seed, raw)
+        # Search cards sometimes contain broad ranking results.  A matching
+        # cuisine is not sufficient: recommend only a verifiably nearby card.
+        if not location_score:
+            continue
+        score += location_score
+        reasons.append(location_reason)
 
         price_score, price_reason = _price_similarity(seed, raw)
         if price_score:
@@ -129,8 +167,8 @@ def rank_similar_candidates(
             reasons.append(price_reason)
         score += _rating_score(raw)
 
-        # A keyword search can include loosely related restaurants.  Do not
-        # promote a card unless it shares a strong cuisine or location signal.
+        # A keyword search can include loosely related restaurants.  Location
+        # is already mandatory; retain a small quality threshold as well.
         if score < 35:
             continue
         item = {

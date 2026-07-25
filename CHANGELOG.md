@@ -2,6 +2,14 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.20] — 2026-07-26
+
+### Fixed
+- 相似店家改為必須具有可驗證的附近訊號：同一車站、同一地址區域或同一行政區；料理相同但跨區（例如東京與北海道）不再入選
+
+### Changed
+- 相似店家快取版本升級，避免沿用舊版可能跨區的推薦結果
+
 ## [0.5.19] — 2026-07-25
 
 ### Fixed

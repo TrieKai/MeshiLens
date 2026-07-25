@@ -1,6 +1,6 @@
 (() => {
   const MAX_RECOMMENDATIONS = 3;
-  const SIMILAR_CACHE_VERSION = "zh-Hant-v2";
+  const SIMILAR_CACHE_VERSION = "nearby-v3";
 
   function canonicalTabelogUrl(value) {
     return String(value || "")
