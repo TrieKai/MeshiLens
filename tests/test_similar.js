@@ -9,6 +9,7 @@ const {
   alternativeCandidates,
   confidenceLabel,
   mapsSearchUrl,
+  similarMapTargetPayload,
   similarDiagnosticsSummary,
   similarDisplayState,
   similarPayload,
@@ -39,6 +40,11 @@ test("uses confidence labels and Google Maps place searches for UI links", () =>
     mapsSearchUrl("鮨 みなと", "東京都中央区銀座"),
     "https://www.google.com/maps/search/?api=1&query=%E9%AE%A8%20%E3%81%BF%E3%81%AA%E3%81%A8%20%E6%9D%B1%E4%BA%AC%E9%83%BD%E4%B8%AD%E5%A4%AE%E5%8C%BA%E9%8A%80%E5%BA%A7",
   );
+  assert.deepEqual(
+    similarMapTargetPayload({ name: "MENSHO", url: "https://tabelog.com/tokyo/A1323/A132302/13203848/" }),
+    { name: "MENSHO", url: "https://tabelog.com/tokyo/a1323/a132302/13203848/" },
+  );
+  assert.equal(similarMapTargetPayload({ name: "MENSHO", url: "https://example.com/" }), null);
 });
 
 test("builds a bounded similar-restaurant request from selected Tabelog facts", () => {

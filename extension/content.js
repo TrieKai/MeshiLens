@@ -8,7 +8,7 @@ const { classifyJapanPlace } = globalThis.MeshiLensJapan;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 const { advicePayload, adviceCacheKey, adviceErrorMessage, cachedAdvice, normalizeAdviceNumbers } = globalThis.MeshiLensAdvice;
-const { alternativeCandidates, confidenceLabel, mapsSearchUrl, similarDiagnosticsSummary, similarDisplayState, similarPayload } = globalThis.MeshiLensSimilar;
+const { alternativeCandidates, confidenceLabel, mapsSearchUrl, similarDiagnosticsSummary, similarDisplayState, similarMapTargetPayload, similarPayload } = globalThis.MeshiLensSimilar;
 const {
   BUTTON_LABEL,
   CARD_TITLE,
@@ -348,10 +348,23 @@ function similarRestaurantsView(state) {
   const list = element("div", "meshilens-similar-list");
   for (const recommendation of recommendations.slice(0, 3)) {
     const item = element("a", "meshilens-similar-item");
-    item.href = mapsSearchUrl(recommendation.name, recommendation.address || recommendation.area);
+    const fallbackMapsUrl = mapsSearchUrl(recommendation.name, recommendation.address || recommendation.area);
+    item.href = fallbackMapsUrl;
     item.target = "_blank";
     item.rel = "noopener noreferrer";
-    item.title = "在 Google Maps 開啟";
+    item.title = "在 Google Maps 開啟（點擊時確認完整地址）";
+    item.addEventListener("click", (event) => {
+      const payload = similarMapTargetPayload(recommendation);
+      if (!payload || !ensureExtensionAlive()) return;
+      const mapWindow = window.open("about:blank", "_blank");
+      if (!mapWindow) return;
+      event.preventDefault();
+      mapWindow.opener = null;
+      void safeRuntimeSendMessage({ type: "GET_SIMILAR_MAP_TARGET", payload })
+        .then((response) => response?.data?.maps_url || fallbackMapsUrl)
+        .catch(() => fallbackMapsUrl)
+        .then((mapsUrl) => mapWindow.location.replace(mapsUrl));
+    });
     const top = element("div", "meshilens-similar-top");
     top.append(element("span", "meshilens-similar-name", recommendation.name || "未命名店家"));
     if (recommendation.rating != null) {

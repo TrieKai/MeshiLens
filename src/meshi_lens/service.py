@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 from typing import Any, Mapping
+from urllib.parse import urlencode
 
 from .advice import (
     GroqDiningAdvisor,
@@ -344,6 +345,41 @@ class MatchService:
         }
         self.similar_cache.set(key, result)
         return result
+
+    @staticmethod
+    def validate_similar_map_target(payload: Mapping[str, Any]) -> dict[str, str]:
+        name = str(payload.get("name") or "").strip()[:200]
+        url = canonical_restaurant_url(str(payload.get("url") or "").strip()[:300])
+        if not name or not url:
+            raise ValueError("找不到可用的相似店家資料")
+        return {"name": name, "url": url}
+
+    def similar_map_target(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        """Resolve an exact Maps search only after a recommendation click."""
+        selected = self.validate_similar_map_target(payload)
+        key = f"similar-map-v1|{selected['url']}"
+        target = self.similar_cache.get(key)
+        cached = target is not None
+        if target is None:
+            try:
+                fetch_target = getattr(self.provider, "fetch_similar_map_target")
+                target = dict(fetch_target(selected["url"]))
+            except Exception as exc:
+                LOGGER.info("similar_map outcome=failure reason=%s", type(exc).__name__)
+                raise RuntimeError("Tabelog 地圖位置暫時無法取得") from exc
+            self.similar_cache.set(key, target)
+        address = str(target.get("address") or "").strip()
+        if not address:
+            raise RuntimeError("Tabelog 地圖頁未提供地址")
+        query = f"{selected['name']} {address}"
+        return {
+            "name": selected["name"],
+            "address": address,
+            "latitude": target.get("latitude"),
+            "longitude": target.get("longitude"),
+            "maps_url": "https://www.google.com/maps/search/?api=1&" + urlencode({"query": query}),
+            "cached": cached,
+        }
 
     def review_insights(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Opt-in public-review theme summary. Never caches review bodies."""

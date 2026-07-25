@@ -18,12 +18,22 @@ from meshi_lens.provider import (
     tabelog_peripheral_map_url,
     peripheral_genre_slug,
     parse_peripheral_restaurants,
+    parse_tabelog_map_target_html,
     GurumeProvider,
     web_search_queries,
 )
 
 
 class ProviderTests(unittest.TestCase):
+    def test_parses_map_only_frame_for_explicit_maps_click(self) -> None:
+        target = parse_tabelog_map_target_html('''
+          <script>var point = new google.maps.LatLng(35.71633803787633, 139.72868848360375)</script>
+          <strong>住所：</strong>東京都文京区音羽1-17-16 中銀音羽マンシオン１F<br>
+        ''')
+        self.assertEqual(target["address"], "東京都文京区音羽1-17-16 中銀音羽マンシオン１F")
+        self.assertEqual(target["latitude"], 35.71633803787633)
+        self.assertEqual(target["longitude"], 139.72868848360375)
+
     def test_parses_peripheral_map_compact_cards(self) -> None:
         cards = parse_peripheral_restaurants('''<div><h5><a href="https://tabelog.com/tokyo/A1304/A130401/13000001/">鮨 近所</a></h5>西新宿 / 寿司、日本料理 3.61 124人</div>''')
         self.assertEqual(cards[0]["name"], "鮨 近所")

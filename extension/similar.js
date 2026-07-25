@@ -31,6 +31,13 @@
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
   }
 
+  function similarMapTargetPayload(recommendation) {
+    const name = String(recommendation?.name || "").trim().slice(0, 200);
+    const url = canonicalTabelogUrl(recommendation?.url);
+    if (!name || !/^https:\/\/tabelog\.com\/[a-z-]+\/a\d+\/a\d+\/\d+$/.test(url)) return null;
+    return { name, url: `${url}/` };
+  }
+
   function similarDisplayState(recommendations, diagnostics = null) {
     return Array.isArray(recommendations) && recommendations.length
       ? { status: "ready", recommendations, diagnostics }
@@ -87,6 +94,7 @@
     alternativeCandidates,
     confidenceLabel,
     mapsSearchUrl,
+    similarMapTargetPayload,
     similarDiagnosticsSummary,
     similarDisplayState,
     similarPayload,

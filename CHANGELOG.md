@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.33] — 2026-07-26
+
+### Fixed
+- 相似店家點擊後才低頻讀取 Tabelog 地圖的完整地址，再以店名加完整地址開啟 Google Maps，避免站距或同名搜尋導向多個不相干店家
+
 ## [0.5.32] — 2026-07-26
 
 ### Fixed

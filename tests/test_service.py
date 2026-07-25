@@ -8,6 +8,7 @@ class FakeProvider:
     def __init__(self) -> None:
         self.calls = 0
         self.similar_calls = 0
+        self.map_target_calls = 0
 
     def search(self, _place):
         self.calls += 1
@@ -37,6 +38,10 @@ class FakeProvider:
                 "dinner_price": "￥10,000～￥14,999",
             }
         ][:limit]
+
+    def fetch_similar_map_target(self, _url):
+        self.map_target_calls += 1
+        return {"address": "東京都文京区音羽1-17-16 中銀音羽マンシオン１F", "latitude": 35.7163, "longitude": 139.7287}
 
 
 class FakeMichelinProvider:
@@ -450,6 +455,25 @@ class ServiceTests(unittest.TestCase):
             first["recommendations"][0]["reasons"][:2],
             ["同為日本料理", "同為金沢站"],
         )
+
+    def test_similar_map_target_uses_full_tabelog_address_after_explicit_click(self) -> None:
+        provider = FakeProvider()
+        service = MatchService(
+            provider=provider,
+            michelin_provider=FakeMichelinProvider(),
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+            similar_cache=MemoryTTLCache(),
+        )
+        payload = {"name": "MENSHO", "url": "https://tabelog.com/tokyo/A1323/A132302/13203848/"}
+        first = service.similar_map_target(payload)
+        second = service.similar_map_target(payload)
+        self.assertFalse(first["cached"])
+        self.assertTrue(second["cached"])
+        self.assertEqual(provider.map_target_calls, 1)
+        self.assertEqual(first["address"], "東京都文京区音羽1-17-16 中銀音羽マンシオン１F")
+        self.assertIn("MENSHO+%E6%9D%B1%E4%BA%AC%E9%83%BD", first["maps_url"])
 
     def test_similar_requires_a_cuisine_and_canonical_tabelog_url(self) -> None:
         service = MatchService(

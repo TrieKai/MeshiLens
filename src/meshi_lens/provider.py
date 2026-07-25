@@ -301,6 +301,37 @@ def coordinates_from_tabelog_html(html: str) -> tuple[float | None, float | None
     return coordinates_from_tabelog_soup(_parse_tabelog_soup(html))
 
 
+def parse_tabelog_map_target_html(html: str) -> dict[str, Any]:
+    """Read the exact address and coordinates from Tabelog's map-only frame.
+
+    This parser is only used after the user explicitly asks to open one
+    recommendation in Google Maps. It deliberately does not read reviews.
+    """
+    soup = _parse_tabelog_soup(html)
+    latitude, longitude = coordinates_from_tabelog_soup(soup)
+    if latitude is None or longitude is None:
+        match = re.search(
+            r"new\s+google\.maps\.LatLng\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)",
+            html,
+        )
+        if match:
+            latitude, longitude = float(match.group(1)), float(match.group(2))
+    address = ""
+    for label in soup.find_all("strong"):
+        if "住所" not in label.get_text(" ", strip=True):
+            continue
+        parts: list[str] = []
+        for sibling in label.next_siblings:
+            if getattr(sibling, "name", None) == "br":
+                break
+            text = sibling.get_text(" ", strip=True) if hasattr(sibling, "get_text") else str(sibling)
+            if text.strip():
+                parts.append(text.strip())
+        address = re.sub(r"\s+", " ", " ".join(parts)).strip()
+        break
+    return {"address": address, "latitude": latitude, "longitude": longitude}
+
+
 def hyakumeiten_from_tabelog_soup(soup: Any) -> list[dict[str, Any]]:
     """Extract every Hyakumeiten selection listed on a restaurant page."""
     anchors = soup.select('a[href*="award.tabelog.com/hyakumeiten/"]')
@@ -761,6 +792,29 @@ class GurumeProvider:
             sort_type=SortType.RANKING,
         ).search_sync()
         return [restaurant_to_dict(item) for item in list(results)[: max(1, min(limit, 20))]]
+
+    def fetch_similar_map_target(self, restaurant_url: str) -> dict[str, Any]:
+        """Read one map-only frame after an explicit recommendation click."""
+        from curl_cffi import requests
+
+        canonical = canonical_restaurant_url(restaurant_url)
+        restaurant_id = canonical.rstrip("/").split("/")[-1] if canonical else ""
+        if not restaurant_id.isdigit():
+            raise ValueError("不是合法的 Tabelog 店家 URL")
+        self._throttle(self.TABELOG_HOST)
+        response = requests.get(
+            "https://tabelog.com/badge/google_badge_frame",
+            params={"rcd": restaurant_id},
+            headers={"Accept-Language": "ja,en;q=0.8"},
+            timeout=20.0,
+            allow_redirects=True,
+            impersonate="chrome",
+        )
+        response.raise_for_status()
+        target = parse_tabelog_map_target_html(response.text)
+        if not target.get("address"):
+            raise RuntimeError("Tabelog 地圖頁未提供地址")
+        return target
 
     @staticmethod
     def _has_phone_match(
