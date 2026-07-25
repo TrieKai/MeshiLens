@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.30] — 2026-07-26
+
+### Fixed
+- Tabelog 官方附近頁的候選即使料理標籤不同，只要評分品質足夠仍可推薦，避免附近頁解析成功後被過嚴的同料理門檻全部排除
+
 ## [0.5.29] — 2026-07-26
 
 ### Fixed
