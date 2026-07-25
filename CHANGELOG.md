@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.15] — 2026-07-25
+
+### Changed
+- AI 建議格式驗證失敗時，分別提示「缺少建議摘要」或「回傳含日文」，不再只顯示籠統的內容格式錯誤
+
 ## [0.5.14] — 2026-07-25
 
 ### Fixed

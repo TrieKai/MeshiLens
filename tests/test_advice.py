@@ -116,6 +116,23 @@ class AdviceTests(unittest.TestCase):
                 }
             )
 
+    def test_surfaces_a_specific_reason_when_ai_output_contains_japanese(self) -> None:
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            @staticmethod
+            def read() -> bytes:
+                return '{"choices":[{"message":{"content":"{\\"summary\\":\\"予約できるお店です。\\"}"}}]}'.encode()
+
+        advisor = GroqDiningAdvisor(api_key="test-key")
+        with patch("meshi_lens.advice.urlopen", return_value=FakeResponse()):
+            with self.assertRaisesRegex(RuntimeError, "含日文"):
+                advisor.summarize(self.place, self.candidate, None)
+
     def test_unconfigured_advisor_does_not_make_a_network_request(self) -> None:
         advisor = GroqDiningAdvisor(api_key="")
         with self.assertRaisesRegex(RuntimeError, "尚未設定"):

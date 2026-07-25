@@ -377,6 +377,11 @@ class GroqDiningAdvisor:
         try:
             return _validate_advice(decoded)
         except ValueError as exc:
+            message = str(exc)
+            if "未產生用餐建議" in message:
+                raise RuntimeError("AI 回傳缺少建議摘要，請稍後再試") from exc
+            if "未依繁中要求" in message:
+                raise RuntimeError("AI 回傳含日文，請稍後再試") from exc
             raise RuntimeError("AI 回傳內容未符合格式，請稍後再試") from exc
 
     def summarize(
