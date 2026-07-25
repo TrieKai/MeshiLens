@@ -17,6 +17,12 @@ TABELOG_RESULT_RE = re.compile(
     r"(?P<path>[a-z0-9-]+/A\d+/A\d+/\d+)/?",
     re.IGNORECASE,
 )
+PERIPHERAL_GENRE_SLUGS = {
+    "寿司": "sushi", "鮨": "sushi", "ラーメン": "ramen", "カレー": "curry",
+    "焼肉": "yakiniku", "焼き鳥": "yakitori", "ハンバーガー": "hamburger",
+    "イタリアン": "italian", "フレンチ": "french", "中華料理": "chinese",
+    "韓国料理": "korean", "カフェ": "cafe", "居酒屋": "izakaya",
+}
 HYAKUMEITEN_URL_RE = re.compile(
     r"https?://award\.tabelog\.com/hyakumeiten/(?P<slug>[^/]+)/(?P<year>20\d{2})/?",
     re.IGNORECASE,
@@ -183,6 +189,25 @@ def tabelog_area_path(value: str) -> str:
     if not match:
         return ""
     return "/".join(match.group("path").split("/")[:3])
+
+
+def tabelog_peripheral_map_url(value: str, genre_slug: str = "") -> str:
+    """Build Tabelog's restaurant-specific nearby-restaurants URL."""
+    canonical = canonical_restaurant_url(value)
+    if not canonical:
+        return ""
+    suffix = f"{genre_slug.strip('/')}/" if genre_slug else ""
+    return f"{canonical}peripheral_map/{suffix}"
+
+
+def peripheral_genre_slug(genres: Any) -> str:
+    values = [genres] if isinstance(genres, str) else genres if isinstance(genres, list) else []
+    for value in values:
+        text = str(value or "")
+        for genre, slug in PERIPHERAL_GENRE_SLUGS.items():
+            if genre in text:
+                return slug
+    return ""
 
 
 def extract_tabelog_urls(html: str, limit: int = 6) -> list[str]:
@@ -677,14 +702,16 @@ class GurumeProvider:
         )
         if not genre:
             return []
-        area_path = tabelog_area_path(str(seed.get("url") or ""))
-        if area_path:
+        peripheral_url = tabelog_peripheral_map_url(
+            str(seed.get("url") or ""), peripheral_genre_slug(raw_genres)
+        )
+        if peripheral_url:
             from curl_cffi import requests
 
             self._throttle(self.TABELOG_HOST)
             response = requests.get(
-                f"https://tabelog.com/{area_path}/rstLst/",
-                params={"SrtT": "rt", "PG": "1", "sk": genre, "sw": genre},
+                peripheral_url,
+                params={"type": "0"},
                 headers={"Accept-Language": "ja,en;q=0.8"}, timeout=20.0,
                 allow_redirects=True, impersonate="chrome",
             )

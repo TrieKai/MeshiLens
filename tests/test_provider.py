@@ -15,6 +15,8 @@ from meshi_lens.provider import (
     restaurant_to_dict,
     stable_reservation_url,
     tabelog_area_path,
+    tabelog_peripheral_map_url,
+    peripheral_genre_slug,
     GurumeProvider,
     web_search_queries,
 )
@@ -50,18 +52,25 @@ class ProviderTests(unittest.TestCase):
         )
         provider = GurumeProvider(minimum_interval=0)
         with patch.dict("sys.modules", {"gurume": fake_gurume}):
-            results = provider.search_similar(
-                {
-                    "genres": ["寿司"],
-                    "station": "銀座駅",
-                    "address": "東京都中央区銀座",
-                }
-            )
+            results = provider.search_similar({"genres": ["寿司"], "station": "銀座駅", "address": "東京都中央区銀座"})
 
         self.assertEqual(FakeSearchRequest.received["area"], "銀座")
         self.assertEqual(FakeSearchRequest.received["keyword"], "寿司")
         self.assertEqual(FakeSearchRequest.received["sort_type"], "ranking")
         self.assertEqual(results[0]["area"], "銀座")
+
+    def test_builds_restaurant_specific_peripheral_map_url(self) -> None:
+        url = "https://tabelog.com/tokyo/A1323/A132302/13276342/"
+        self.assertEqual(
+            tabelog_peripheral_map_url(url),
+            f"{url}peripheral_map/",
+        )
+        self.assertEqual(
+            tabelog_peripheral_map_url(url, "sushi"),
+            f"{url}peripheral_map/sushi/",
+        )
+        self.assertEqual(peripheral_genre_slug(["寿司", "日本料理"]), "sushi")
+        self.assertEqual(peripheral_genre_slug(["おにぎり"]), "")
 
     def test_searches_by_local_phone_before_translated_name(self) -> None:
         self.assertEqual(

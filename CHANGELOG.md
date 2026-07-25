@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.28] — 2026-07-26
+
+### Changed
+- 相似店家改讀 Tabelog 店家專屬的附近店家頁；常見料理會直接使用其附近分類頁，其餘料理使用綜合附近頁
+
 ## [0.5.27] — 2026-07-26
 
 ### Fixed
