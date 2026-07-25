@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.26] — 2026-07-26
+
+### Fixed
+- 後端相似店家快取鍵與前端同步升版，避免部署新篩選邏輯後仍讀取舊版空結果
+
 ## [0.5.25] — 2026-07-26
 
 ### Fixed

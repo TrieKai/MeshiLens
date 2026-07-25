@@ -1,7 +1,7 @@
 import unittest
 
 from meshi_lens.cache import MemoryTTLCache
-from meshi_lens.service import MatchService
+from meshi_lens.service import MatchService, SIMILAR_CACHE_VERSION
 
 
 class FakeProvider:
@@ -98,6 +98,9 @@ class FakeAdvisor:
 
 
 class ServiceTests(unittest.TestCase):
+    def test_similar_cache_version_is_current(self) -> None:
+        self.assertEqual(SIMILAR_CACHE_VERSION, "nearby-v8")
+
     def test_michelin_batch_returns_badges_per_card_without_detail_matching(self) -> None:
         michelin = BatchMichelinProvider()
         service = MatchService(

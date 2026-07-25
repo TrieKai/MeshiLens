@@ -38,6 +38,7 @@ from .similar import rank_similar_candidates_with_diagnostics
 
 
 LOGGER = logging.getLogger("meshilens.service")
+SIMILAR_CACHE_VERSION = "nearby-v8"
 
 
 class MatchService:
@@ -314,7 +315,7 @@ class MatchService:
     def similar(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Return three Tabelog search cards similar to the selected restaurant."""
         seed = self.validate_similar_seed(payload)
-        key = "nearby-v3|" + "|".join(
+        key = f"{SIMILAR_CACHE_VERSION}|" + "|".join(
             str(seed.get(field) or "")
             for field in ("url", "genres", "station", "address", "lunch_price", "dinner_price")
         )
