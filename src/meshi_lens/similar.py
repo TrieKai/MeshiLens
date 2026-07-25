@@ -10,6 +10,7 @@ from .localization import tabelog_label_zh_hant, tabelog_station_zh_hant
 from .matching import normalize_text
 
 PREFECTURE_RE = re.compile(r"(?:東京都|北海道|(?:京都|大阪)府|.{2,3}県)")
+QUOTED_STATION_RE = re.compile(r"[「『]([^」』]+)[」』]")
 
 
 def _text(value: Any) -> str:
@@ -24,8 +25,15 @@ def _genres(value: Any) -> list[str]:
     return [_text(item) for item in value if _text(item)]
 
 
+def _station_name(value: Any) -> str:
+    """Extract the station name from Maps' line-qualified station labels."""
+    station = _text(value)
+    quoted = QUOTED_STATION_RE.search(station)
+    return quoted.group(1).strip() if quoted else station
+
+
 def _normalized_station(value: Any) -> str:
-    return normalize_text(_text(value).removesuffix("駅"))
+    return normalize_text(_station_name(value).removesuffix("駅"))
 
 
 def _address_locality(value: Any) -> str:
@@ -45,7 +53,10 @@ def _nearby_location(
     seed_station = _normalized_station(seed.get("station"))
     candidate_station = _normalized_station(candidate.get("station"))
     if seed_station and candidate_station and seed_station == candidate_station:
-        return 25.0, f"同為{tabelog_station_zh_hant(seed.get('station'))}"
+        station_label = tabelog_station_zh_hant(_station_name(seed.get("station")))
+        if not station_label.endswith("站"):
+            station_label = f"{station_label}站"
+        return 25.0, f"同為{station_label}"
 
     seed_address = normalize_text(_text(seed.get("address")))
     candidate_area = _text(candidate.get("area"))

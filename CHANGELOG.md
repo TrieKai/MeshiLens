@@ -2,6 +2,14 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.23] — 2026-07-26
+
+### Fixed
+- 相似店家比對會從 Google Maps 的路線限定車站標籤（例如 `JR山手線「池袋」駅`）抽取實際站名，正確對應 Tabelog 的 `池袋駅`，避免附近候選被全數誤略過
+
+### Changed
+- 相似店家快取版本升級，避免沿用修正前的空結果
+
 ## [0.5.22] — 2026-07-26
 
 ### Added
