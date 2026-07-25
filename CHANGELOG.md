@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.17] — 2026-07-25
+
+### Changed
+- AI 用餐建議改為提示「以繁體中文為主」，允許保留日文店名與必要專有名詞；不再因含日文或額外語言重試而拒絕可用結果
+
 ## [0.5.16] — 2026-07-25
 
 ### Fixed

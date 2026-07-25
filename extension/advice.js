@@ -59,7 +59,6 @@
       "AI 回傳格式異常，請稍後再試",
       "AI 回傳內容未符合格式，請稍後再試",
       "AI 回傳缺少建議摘要，請稍後再試",
-      "AI 回傳含日文，請稍後再試",
       "AI 服務驗證失敗，請檢查伺服器設定",
     ];
     return safeMessages.find((item) => message.includes(item)) || "AI 建議暫時無法取得，請稍後再試";

@@ -23,7 +23,6 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "qwen/qwen3.6-27b"
 MAX_FACT_VALUE = 240
 ADVICE_OUTPUT_VERSION = "zh-Hant-v3"
-JAPANESE_SCRIPT_RE = re.compile(r"[\u3040-\u30ff\uff66-\uff9d]")
 CHINESE_NUMBER_RE = re.compile(r"[零〇○一二三四五六七八九兩两十百千萬万億亿點点]+")
 CHINESE_DIGITS = {
     "零": "0",
@@ -275,17 +274,6 @@ def _validate_advice(value: Any) -> dict[str, Any]:
         "cautions": [_normalize_display_numbers(item) for item in clean_list("cautions", 2, 60)],
         "evidence": [_normalize_display_numbers(item) for item in clean_list("evidence", 4, 72)],
     }
-    if any(
-        JAPANESE_SCRIPT_RE.search(item)
-        for item in (
-            result["headline"],
-            result["summary"],
-            *result["best_for"],
-            *result["cautions"],
-            *result["evidence"],
-        )
-    ):
-        raise ValueError("AI 未依繁中要求輸出")
     return result
 
 
@@ -306,15 +294,13 @@ class GroqDiningAdvisor:
     def configured(self) -> bool:
         return bool(self.api_key)
 
-    def _request_body(
-        self, facts: Mapping[str, Any], *, retry_for_language: bool = False
-    ) -> dict[str, Any]:
+    def _request_body(self, facts: Mapping[str, Any]) -> dict[str, Any]:
         """Build a model-compatible JSON-mode request without exposing reasoning."""
         is_qwen = self.model.startswith("qwen/")
         instructions = (
             "你是 MeshiLens 的用餐建議助手。只可根據提供的 JSON 結構化資料，以繁體中文"
-            "輸出 JSON 物件：headline、summary、best_for、cautions、evidence。所有說明文字"
-            "必須是繁體中文，禁止日文平假名、片假名與日文句式；店名若為日文則以「此店」代稱。"
+            "輸出 JSON 物件：headline、summary、best_for、cautions、evidence。說明請以繁體中文"
+            "為主；店名與必要的專有名詞可保留原文。"
             "所有數字、地址番地、年份、評分、評論數與金額一律使用半形阿拉伯數字 0-9；不可"
             "使用中文數字（例如必須寫 3.68、1,405、2024、1,000～1,999）。"
             "輸入可能含日文 Tabelog 標籤，僅可將其理解後翻譯為繁中，不可原樣抄寫。"
@@ -323,11 +309,6 @@ class GroqDiningAdvisor:
             "字串陣列，最多分別 3、2、4 項。summary 最多 100 字，evidence 只能重述輸入中"
             "可驗證的事實。只輸出 JSON，不要 Markdown 或其他文字。"
         )
-        if retry_for_language:
-            instructions += (
-                "上一份回覆因含日文而被拒絕。這是唯一一次重新生成：所有欄位必須使用繁體"
-                "中文與阿拉伯數字；不得出現任何平假名或片假名。"
-            )
         return {
             "model": self.model,
             # This short structured summary needs deterministic JSON, not a reasoning trace.
@@ -348,10 +329,8 @@ class GroqDiningAdvisor:
             ],
         }
 
-    def _decoded_completion(
-        self, facts: Mapping[str, Any], *, retry_for_language: bool = False
-    ) -> Any:
-        request_body = self._request_body(facts, retry_for_language=retry_for_language)
+    def _decoded_completion(self, facts: Mapping[str, Any]) -> Any:
+        request_body = self._request_body(facts)
         request = Request(
             GROQ_API_URL,
             data=json.dumps(request_body).encode("utf-8"),
@@ -387,8 +366,6 @@ class GroqDiningAdvisor:
         message = str(exc)
         if "未產生用餐建議" in message:
             return RuntimeError("AI 回傳缺少建議摘要，請稍後再試")
-        if "未依繁中要求" in message:
-            return RuntimeError("AI 回傳含日文，請稍後再試")
         return RuntimeError("AI 回傳內容未符合格式，請稍後再試")
 
     def summarize_facts(self, facts: Mapping[str, Any]) -> dict[str, Any]:
@@ -398,15 +375,7 @@ class GroqDiningAdvisor:
         try:
             return _validate_advice(decoded)
         except ValueError as exc:
-            if "未依繁中要求" not in str(exc):
-                raise self._output_error(exc) from exc
-            # A single repair attempt prevents a sporadic Japanese reply from
-            # making the card unusable, while bounding extra latency and cost.
-            retry_decoded = self._decoded_completion(facts, retry_for_language=True)
-            try:
-                return _validate_advice(retry_decoded)
-            except ValueError as retry_exc:
-                raise self._output_error(retry_exc) from retry_exc
+            raise self._output_error(exc) from exc
 
     def summarize(
         self,

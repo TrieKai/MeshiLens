@@ -38,7 +38,6 @@ test("advice cache TTL is 24 hours", () => {
   assert.equal(ADVICE_CACHE_TTL_MS, 24 * 60 * 60 * 1000);
   assert.equal(ADVICE_CACHE_VERSION, "zh-Hant-v4");
   assert.equal(adviceErrorMessage("AI 暫時忙碌，請稍後再試"), "AI 暫時忙碌，請稍後再試");
-  assert.equal(adviceErrorMessage("AI 回傳含日文，請稍後再試"), "AI 回傳含日文，請稍後再試");
   assert.equal(adviceErrorMessage("unexpected"), "AI 建議暫時無法取得，請稍後再試");
 });
 

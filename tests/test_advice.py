@@ -1,4 +1,3 @@
-import json
 import unittest
 from unittest.mock import patch
 
@@ -108,57 +107,11 @@ class AdviceTests(unittest.TestCase):
         self.assertEqual(advice["evidence"][1], "午晚餐價格均為1000至1999日元")
         self.assertEqual(advice["evidence"][2], "曾於2001、2007、2008、2021、2022、2024年入選百名店")
 
-    def test_rejects_japanese_kana_in_advice_output(self) -> None:
-        with self.assertRaisesRegex(ValueError, "繁中"):
-            _validate_advice(
-                {
-                    "headline": "おすすめ",
-                    "summary": "予約できるお店です。",
-                }
-            )
-
-    def test_surfaces_a_specific_reason_when_ai_output_contains_japanese(self) -> None:
-        class FakeResponse:
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *_args):
-                return False
-
-            @staticmethod
-            def read() -> bytes:
-                return '{"choices":[{"message":{"content":"{\\"summary\\":\\"予約できるお店です。\\"}"}}]}'.encode()
-
-        advisor = GroqDiningAdvisor(api_key="test-key")
-        with patch("meshi_lens.advice.urlopen", return_value=FakeResponse()):
-            with self.assertRaisesRegex(RuntimeError, "含日文"):
-                advisor.summarize(self.place, self.candidate, None)
-
-    def test_retries_once_when_the_first_ai_output_contains_japanese(self) -> None:
-        class FakeResponse:
-            def __init__(self, content: str) -> None:
-                self.content = content
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *_args):
-                return False
-
-            def read(self) -> bytes:
-                return json.dumps(
-                    {"choices": [{"message": {"content": self.content}}]}, ensure_ascii=False
-                ).encode()
-
-        first = FakeResponse('{"summary":"予約できるお店です。"}')
-        second = FakeResponse('{"summary":"可查看預約資訊。"}')
-        advisor = GroqDiningAdvisor(api_key="test-key")
-        with patch("meshi_lens.advice.urlopen", side_effect=[first, second]) as urlopen:
-            advice = advisor.summarize(self.place, self.candidate, None)
-        self.assertEqual(advice["summary"], "可查看預約資訊。")
-        self.assertEqual(urlopen.call_count, 2)
-        retry_body = json.loads(urlopen.call_args_list[1].args[0].data.decode())
-        self.assertIn("上一份回覆因含日文", retry_body["messages"][0]["content"])
+    def test_does_not_reject_advice_for_containing_japanese_text(self) -> None:
+        advice = _validate_advice(
+            {"headline": "おすすめ", "summary": "予約できるお店です。"}
+        )
+        self.assertEqual(advice["headline"], "おすすめ")
 
     def test_unconfigured_advisor_does_not_make_a_network_request(self) -> None:
         advisor = GroqDiningAdvisor(api_key="")
@@ -175,7 +128,7 @@ class AdviceTests(unittest.TestCase):
         self.assertEqual(body["max_completion_tokens"], 700)
         self.assertEqual(body["messages"][0]["role"], "user")
         self.assertIn("清水屋", body["messages"][0]["content"])
-        self.assertIn("禁止日文平假名", body["messages"][0]["content"])
+        self.assertIn("以繁體中文為主", body["messages"][0]["content"])
         self.assertIn("半形阿拉伯數字", body["messages"][0]["content"])
 
     def test_gpt_oss_keeps_its_own_reasoning_effort(self) -> None:
