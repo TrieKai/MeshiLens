@@ -1,7 +1,7 @@
 import unittest
 
 from meshi_lens.cache import MemoryTTLCache
-from meshi_lens.service import MatchService, SIMILAR_CACHE_VERSION
+from meshi_lens.service import MatchService, POPULARITY_CACHE_VERSION, SIMILAR_CACHE_VERSION
 
 
 class FakeProvider:
@@ -9,6 +9,7 @@ class FakeProvider:
         self.calls = 0
         self.similar_calls = 0
         self.map_target_calls = 0
+        self.popularity_calls = 0
 
     def search(self, _place):
         self.calls += 1
@@ -42,6 +43,28 @@ class FakeProvider:
     def fetch_similar_map_target(self, _url):
         self.map_target_calls += 1
         return {"address": "東京都文京区音羽1-17-16 中銀音羽マンシオン１F", "latitude": 35.7163, "longitude": 139.7287}
+
+    def fetch_popularity_rankings(self, _url, limit=10):
+        self.popularity_calls += 1
+        self.asserted_limit = limit
+        return {
+            "area_path": "tokyo/A1323/A132302",
+            "scope": "大塚・護國寺",
+            "rankings": [
+                {
+                    "key": "most_reserved",
+                    "label": "最多預訂",
+                    "source_url": "https://tabelog.com/tw/tokyo/A1323/A132302/rstLst/?SrtT=inbound_most_reserved",
+                    "urls": ["https://tabelog.com/tokyo/A1323/A132302/13276342/"],
+                },
+                {
+                    "key": "most_viewed",
+                    "label": "瀏覽最多",
+                    "source_url": "https://tabelog.com/tw/tokyo/A1323/A132302/rstLst/?SrtT=inbound_access",
+                    "urls": ["https://tabelog.com/tokyo/A1323/A132302/13270000/", "https://tabelog.com/tokyo/A1323/A132302/13276342/"],
+                },
+            ],
+        }
 
 
 class FakeMichelinProvider:
@@ -105,6 +128,33 @@ class FakeAdvisor:
 class ServiceTests(unittest.TestCase):
     def test_similar_cache_version_is_current(self) -> None:
         self.assertEqual(SIMILAR_CACHE_VERSION, "nearby-v18")
+
+    def test_popularity_returns_exact_top_badges_and_caches_the_area_snapshot(self) -> None:
+        provider = FakeProvider()
+        service = MatchService(
+            provider=provider,
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+            popularity_cache=MemoryTTLCache(),
+        )
+        payload = {"selected": {"name": "おにぎりぼんご", "url": "https://tabelog.com/tokyo/A1323/A132302/13276342/"}}
+        first = service.popularity(payload)
+        second = service.popularity(payload)
+        self.assertEqual(POPULARITY_CACHE_VERSION, "popularity-v1")
+        self.assertFalse(first["cached"])
+        self.assertTrue(second["cached"])
+        self.assertEqual(provider.popularity_calls, 1)
+        self.assertEqual(first["scope"], "大塚・護國寺")
+        self.assertEqual(
+            [(tag["label"], tag["rank"], tag["tier"]) for tag in first["tags"]],
+            [("最多預訂", 1, "top5"), ("瀏覽最多", 2, "top5")],
+        )
+
+    def test_popularity_rejects_a_non_tabelog_seed(self) -> None:
+        service = MatchService(provider=FakeProvider(), popularity_cache=MemoryTTLCache())
+        with self.assertRaisesRegex(ValueError, "找不到已配對"):
+            service.popularity({"selected": {"name": "清水屋", "url": "https://example.com/store"}})
 
     def test_michelin_batch_returns_badges_per_card_without_detail_matching(self) -> None:
         michelin = BatchMichelinProvider()

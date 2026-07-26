@@ -50,6 +50,11 @@ PERIPHERAL_CATEGORY_RE = re.compile(
     r"(?P<slug>[a-z][a-z0-9_-]*)/?(?:[?#].*)?$",
     re.IGNORECASE,
 )
+POPULARITY_SORTS = (
+    ("most_reserved", "最多預訂", "inbound_most_reserved"),
+    ("local_reserved", "在地人預訂最多", "inbound_vacancy_net_yoyaku"),
+    ("most_viewed", "瀏覽最多", "inbound_access"),
+)
 
 
 def _model_dict(value: Any) -> dict[str, Any]:
@@ -215,6 +220,37 @@ def tabelog_peripheral_map_url(value: str, genre_slug: str = "") -> str:
         return ""
     suffix = f"{genre_slug.strip('/')}/" if genre_slug else ""
     return f"{canonical}peripheral_map/{suffix}"
+
+
+def tabelog_popularity_list_url(value: str, sort_value: str) -> str:
+    """Build a regional, public Tabelog ranking-list URL from a restaurant URL."""
+    area_path = tabelog_area_path(value)
+    if not area_path:
+        return ""
+    return f"https://tabelog.com/tw/{area_path}/rstLst/?SrtT={sort_value}"
+
+
+def parse_tabelog_popularity_page(html: str, limit: int = 10) -> dict[str, Any]:
+    """Read only the first visible restaurant URLs from a public ranking list."""
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "lxml")
+    title = soup.title.get_text(" ", strip=True) if soup.title else ""
+    scope_match = re.search(r"推薦適合在(.+?)美食餐廳", title)
+    scope = scope_match.group(1).strip() if scope_match else ""
+    urls: list[str] = []
+    seen: set[str] = set()
+    for anchor in soup.select("a.list-rst__rst-name-target[href]"):
+        url = canonical_restaurant_url(
+            urljoin("https://tabelog.com/", str(anchor.get("href") or ""))
+        )
+        if not url or url in seen:
+            continue
+        urls.append(url)
+        seen.add(url)
+        if len(urls) >= max(1, min(limit, 10)):
+            break
+    return {"scope": scope, "urls": urls}
 
 
 def parse_peripheral_restaurants(html: str, limit: int = 20) -> list[dict[str, Any]]:
@@ -858,6 +894,40 @@ class GurumeProvider:
             raise RuntimeError("Tabelog 暫時拒絕公開評論頁請求（403）")
         response.raise_for_status()
         return response.text
+
+    def fetch_popularity_rankings(
+        self, restaurant_url: str, limit: int = 10
+    ) -> dict[str, Any]:
+        """Fetch three public regional list pages, bounded to their first ten cards."""
+        from curl_cffi import requests
+
+        area_path = tabelog_area_path(restaurant_url)
+        if not area_path:
+            raise ValueError("不是合法的 Tabelog 店家 URL")
+        rankings: list[dict[str, Any]] = []
+        scope = ""
+        for key, label, sort_value in POPULARITY_SORTS:
+            url = tabelog_popularity_list_url(restaurant_url, sort_value)
+            self._throttle(self.TABELOG_HOST)
+            response = requests.get(
+                url,
+                headers={"Accept-Language": "zh-TW,ja;q=0.8"},
+                timeout=20.0,
+                allow_redirects=True,
+                impersonate="chrome",
+            )
+            response.raise_for_status()
+            parsed = parse_tabelog_popularity_page(response.text, limit=limit)
+            scope = scope or str(parsed.get("scope") or "")
+            rankings.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "source_url": url,
+                    "urls": parsed["urls"],
+                }
+            )
+        return {"area_path": area_path, "scope": scope, "rankings": rankings}
 
     def search_similar(
         self, seed: Mapping[str, Any], limit: int = 20

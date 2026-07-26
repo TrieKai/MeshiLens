@@ -9,6 +9,7 @@ const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSetting
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 const { advicePayload, adviceCacheKey, adviceErrorMessage, cachedAdvice, normalizeAdviceNumbers } = globalThis.MeshiLensAdvice;
 const { alternativeCandidates, confidenceLabel, DEFAULT_VISIBLE_RECOMMENDATIONS, mapsSearchUrl, relocationNoticeForSelected, similarDiagnosticsSummary, similarDisplayState, similarMapTargetPayload, similarPayload, visibleSimilarRecommendations } = globalThis.MeshiLensSimilar;
+const { popularityPayload, popularityTags, popularityBadgeText } = globalThis.MeshiLensPopularity;
 const {
   BUTTON_LABEL,
   CARD_TITLE,
@@ -50,6 +51,7 @@ let detailDebounceTimer = null;
 let listDebounceTimer = null;
 let listScrollTimer = null;
 let similarLookupTimer = null;
+let popularityLookupTimer = null;
 let extensionEnabled = false;
 let themeColor = DEFAULT_THEME_COLOR;
 let extensionAlive = true;
@@ -67,10 +69,12 @@ function handleInvalidatedContext() {
   clearTimeout(listDebounceTimer);
   clearTimeout(listScrollTimer);
   clearTimeout(similarLookupTimer);
+  clearTimeout(popularityLookupTimer);
   detailDebounceTimer = null;
   listDebounceTimer = null;
   listScrollTimer = null;
   similarLookupTimer = null;
+  popularityLookupTimer = null;
   pageObserver?.disconnect();
   pageObserver = null;
 }
@@ -85,6 +89,11 @@ function ensureExtensionAlive() {
 function cancelSimilarLookupTimer() {
   clearTimeout(similarLookupTimer);
   similarLookupTimer = null;
+}
+
+function cancelPopularityLookupTimer() {
+  clearTimeout(popularityLookupTimer);
+  popularityLookupTimer = null;
 }
 
 function notePossibleInvalidation(error) {
@@ -676,6 +685,77 @@ function scheduleSimilarRestaurants(card, candidate, sequence) {
   }, 900);
 }
 
+function popularityView(data) {
+  const tags = popularityTags(data);
+  if (!tags.length) return null;
+  const section = element("section", "meshilens-popularity");
+  section.setAttribute("aria-label", "Tabelog 人氣標籤");
+  const heading = element("div", "meshilens-popularity-heading");
+  heading.append(element("div", "meshilens-popularity-title", "Tabelog 人氣標籤"));
+  if (data?.scope) heading.append(element("div", "meshilens-popularity-scope", String(data.scope)));
+  section.append(heading);
+  const tagsView = element("div", "meshilens-popularity-tags");
+  for (const tag of tags) {
+    const item = tag.sourceUrl
+      ? element("a", `meshilens-popularity-tag is-${tag.tier}`, popularityBadgeText(tag))
+      : element("span", `meshilens-popularity-tag is-${tag.tier}`, popularityBadgeText(tag));
+    if (tag.sourceUrl) {
+      item.href = tag.sourceUrl;
+      item.target = "_blank";
+      item.rel = "noopener noreferrer";
+      item.title = `Tabelog 同區第 ${tag.rank} 名；開啟排行頁`;
+    }
+    tagsView.append(item);
+  }
+  section.append(tagsView);
+  return section;
+}
+
+function syncPopularity(card) {
+  const existing = card.querySelector(".meshilens-popularity");
+  const section = popularityView(card._meshilensPopularity);
+  if (!section) {
+    existing?.remove();
+    return;
+  }
+  if (existing) {
+    existing.replaceWith(section);
+    return;
+  }
+  const scoreRow = card.querySelector(".meshilens-score-row");
+  if (scoreRow) scoreRow.after(section);
+}
+
+async function loadPopularity(card, candidate, sequence) {
+  const payload = popularityPayload(candidate);
+  if (!payload) return;
+  const requestKey = candidate.url;
+  if (card._meshilensPopularityRequestKey === requestKey) return;
+  card._meshilensPopularityRequestKey = requestKey;
+  try {
+    if (!ensureExtensionAlive()) return;
+    const response = await safeRuntimeSendMessage({ type: "GET_TABELOG_POPULARITY", payload });
+    if (response?.cancelled || !response?.ok) return;
+    if (sequence === lookupSequence && card.isConnected && card._meshilensPopularityRequestKey === requestKey) {
+      card._meshilensPopularity = response.data || null;
+      syncPopularity(card);
+    }
+  } catch (error) {
+    notePossibleInvalidation(error);
+    // 人氣排行為可選資訊；失敗時保留主要店家卡片。
+  }
+}
+
+function schedulePopularity(card, candidate, sequence) {
+  if (!popularityPayload(candidate)) return;
+  cancelPopularityLookupTimer();
+  popularityLookupTimer = setTimeout(() => {
+    popularityLookupTimer = null;
+    if (sequence !== lookupSequence || !card.isConnected) return;
+    void loadPopularity(card, candidate, sequence);
+  }, 1800);
+}
+
 function timelineView(entries) {
   if (!shouldShowTimeline(entries)) return null;
   const section = element("section", "meshilens-timeline");
@@ -884,6 +964,8 @@ function renderResult(card, result) {
     syncAdvice(card);
     card._meshilensSimilar = null;
     syncSimilarRestaurants(card);
+    card._meshilensPopularity = null;
+    syncPopularity(card);
     card._meshilensReviewInsights = { status: "idle" };
     syncReviewInsights(card);
   }
@@ -916,6 +998,12 @@ function renderResult(card, result) {
       card._meshilensSimilar = null;
       card._meshilensSimilarRequestKey = "";
       cancelSimilarLookupTimer();
+      card._meshilensPopularity = null;
+      card._meshilensPopularityRequestKey = "";
+      cancelPopularityLookupTimer();
+      softRuntimeSendMessage({ type: "CANCEL_POPULARITY" }).then((ok) => {
+        if (!ok && !isExtensionContextValid()) handleInvalidatedContext();
+      });
       softRuntimeSendMessage({ type: "CANCEL_SIMILAR_RESTAURANTS" }).then((ok) => {
         if (!ok && !isExtensionContextValid()) handleInvalidatedContext();
       });
@@ -939,6 +1027,7 @@ function renderResult(card, result) {
         card._meshilensSequence,
       );
       scheduleSimilarRestaurants(card, candidate, card._meshilensSequence);
+      schedulePopularity(card, candidate, card._meshilensSequence);
       if (!card._meshilensMichelin && card._meshilensPlace) {
         refineMichelinWithTabelog(
           card,
@@ -988,6 +1077,7 @@ async function refineMichelinWithTabelog(card, place, candidate, sequence) {
 async function lookup(place) {
   if (!ensureExtensionAlive()) return;
   cancelSimilarLookupTimer();
+  cancelPopularityLookupTimer();
   try {
     await safeRuntimeSendMessage({ type: "CANCEL_LOOKUP" });
   } catch (error) {
@@ -1016,6 +1106,7 @@ async function lookup(place) {
     if (response.data.selected) {
       loadAdvice(card, place, response.data.selected, card._meshilensMichelin || null, sequence);
       scheduleSimilarRestaurants(card, response.data.selected, sequence);
+      schedulePopularity(card, response.data.selected, sequence);
     }
     await michelinRequest;
     if (response.data.selected && !card._meshilensMichelin) {

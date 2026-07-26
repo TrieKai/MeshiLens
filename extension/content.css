@@ -270,6 +270,71 @@ a.meshilens-list-badge:focus-visible {
   padding: 10px 11px;
 }
 
+.meshilens-popularity {
+  background: #fff8ef;
+  border: 1px solid #ebd8bd;
+  border-radius: 9px;
+  margin-top: 10px;
+  padding: 8px 10px;
+}
+
+.meshilens-popularity-heading {
+  align-items: baseline;
+  display: flex;
+  gap: 7px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.meshilens-popularity-title {
+  color: #8b4721;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.meshilens-popularity-scope {
+  color: var(--ml-muted);
+  font-size: 10px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meshilens-popularity-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.meshilens-popularity-tag {
+  background: #fffdf9;
+  border: 1px solid #dfbd8c;
+  border-radius: 999px;
+  color: #8b4721;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1;
+  padding: 5px 7px;
+  text-decoration: none;
+}
+
+a.meshilens-popularity-tag:hover,
+a.meshilens-popularity-tag:focus-visible {
+  background: #fff0dc;
+  border-color: #bf7640;
+  color: #71330f;
+  outline: 0;
+}
+
+.meshilens-popularity-tag.is-top5 {
+  background: #fff0dc;
+  border-color: #d38a49;
+  color: #7c3612;
+}
+
 .meshilens-similar-heading,
 .meshilens-similar-top {
   align-items: center;

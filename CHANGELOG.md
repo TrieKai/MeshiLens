@@ -2,6 +2,14 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.43] — 2026-07-26
+
+### Added
+- 詳細商家卡新增 Tabelog 人氣標籤：依該店精確 Tabelog URL 與同一精確區域的公開排行比對，顯示「最多預訂／在地人預訂最多／瀏覽最多」的 TOP 5 或 TOP 10；標籤可開啟對應排行頁。
+
+### Changed
+- 同一 Tabelog 區域的三種排行各只讀取第一頁前 10 家，快取約 24 小時；不抓原始預訂或瀏覽數、不翻頁、不批量比對 Maps 列表，且延後至主卡完成後背景載入。
+
 ## [0.5.42] — 2026-07-26
 
 ### Fixed

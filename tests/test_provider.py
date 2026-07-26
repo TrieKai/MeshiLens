@@ -16,10 +16,12 @@ from meshi_lens.provider import (
     stable_reservation_url,
     tabelog_area_path,
     tabelog_peripheral_map_url,
+    tabelog_popularity_list_url,
     peripheral_genre_slug,
     peripheral_genre_slug_from_links,
     parse_peripheral_genre_links,
     parse_peripheral_restaurants,
+    parse_tabelog_popularity_page,
     parse_tabelog_map_target_html,
     relocation_from_tabelog_html,
     GurumeProvider,
@@ -60,6 +62,29 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(cards[0]["review_count"], 124)
     def test_extracts_precise_area_path_from_tabelog_restaurant_url(self) -> None:
         self.assertEqual(tabelog_area_path("https://tabelog.com/tokyo/A1323/A132302/13276342/"), "tokyo/A1323/A132302")
+
+    def test_parses_first_ten_exact_urls_from_a_public_popularity_list(self) -> None:
+        html = '''<html><head><title>推薦適合在大塚・護國寺美食餐廳 | Tabelog</title></head><body>
+          <a class="list-rst__rst-name-target" href="https://tabelog.com/tw/tokyo/A1323/A132302/13276342/">一</a>
+          <a class="list-rst__rst-name-target" href="https://tabelog.com/tokyo/A1323/A132302/13276342/">重複</a>
+          <a class="list-rst__rst-name-target" href="/tokyo/A1323/A132302/13270000/">二</a>
+        </body></html>'''
+        self.assertEqual(
+            parse_tabelog_popularity_page(html),
+            {
+                "scope": "大塚・護國寺",
+                "urls": [
+                    "https://tabelog.com/tokyo/A1323/A132302/13276342/",
+                    "https://tabelog.com/tokyo/A1323/A132302/13270000/",
+                ],
+            },
+        )
+        self.assertEqual(
+            tabelog_popularity_list_url(
+                "https://tabelog.com/tokyo/A1323/A132302/13276342/", "inbound_access"
+            ),
+            "https://tabelog.com/tw/tokyo/A1323/A132302/rstLst/?SrtT=inbound_access",
+        )
 
     def test_similar_search_reads_one_search_page_without_detail_fetches(self) -> None:
         class FakeSearchRequest:

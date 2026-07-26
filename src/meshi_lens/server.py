@@ -59,6 +59,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/advice",
             "/similar",
             "/similar-map-target",
+            "/popularity",
             "/review-insights",
         }:
             self._send(404, {"error": "找不到路徑"})
@@ -83,6 +84,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 result = SERVICE.similar(payload)
             elif self.path == "/similar-map-target":
                 result = SERVICE.similar_map_target(payload)
+            elif self.path == "/popularity":
+                result = SERVICE.popularity(payload)
             elif self.path == "/review-insights":
                 result = SERVICE.review_insights(payload)
             else:

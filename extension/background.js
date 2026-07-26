@@ -250,6 +250,39 @@ function similarMapTargetPayload(value) {
   return { name, url };
 }
 
+function popularityPayload(value) {
+  const selected = value?.selected;
+  const name = String(selected?.name || "").trim().slice(0, 200);
+  const url = String(selected?.url || "").trim().slice(0, 300);
+  if (!name || !/^https:\/\/tabelog\.com\/[a-z-]+\/A\d+\/A\d+\/\d+\/?$/i.test(url)) return null;
+  return { selected: { name, url } };
+}
+
+function popularityCachePlace(selected) {
+  return {
+    name: selected.name,
+    address: "",
+    tabelog_url: selected.url,
+    website: "popularity-v1",
+    phone: "",
+  };
+}
+
+async function popularity(value, signal) {
+  const payload = popularityPayload(value);
+  if (!payload) throw new Error("找不到可用的 Tabelog 店家資料");
+  const cachePlace = popularityCachePlace(payload.selected);
+  const cached = await getCachedLookup("popularity", cachePlace);
+  if (cached) return cached;
+  const data = await request("/popularity", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal,
+  });
+  await setCachedLookup("popularity", cachePlace, data);
+  return data;
+}
+
 async function similarMapTarget(value) {
   const payload = similarMapTargetPayload(value);
   if (!payload) throw new Error("找不到可用的相似店家資料");
@@ -342,6 +375,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: true, cancelled: true });
     return false;
   }
+  if (message.type === "CANCEL_POPULARITY") {
+    abortLookup(lookupKey(sender, "popularity"));
+    sendResponse({ ok: true, cancelled: true });
+    return false;
+  }
 
   if (![
     "MATCH_PLACE",
@@ -350,6 +388,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     "GET_DINING_ADVICE",
     "GET_SIMILAR_RESTAURANTS",
     "GET_SIMILAR_MAP_TARGET",
+    "GET_TABELOG_POPULARITY",
     "GET_REVIEW_INSIGHTS",
     "HEALTH_CHECK",
   ].includes(message.type)) {
@@ -367,6 +406,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             ? beginLookup(sender, "review_insights")
             : message.type === "GET_SIMILAR_RESTAURANTS"
               ? beginLookup(sender, "similar")
+              : message.type === "GET_TABELOG_POPULARITY"
+                ? beginLookup(sender, "popularity")
         : null;
 
   const work = message.type === "HEALTH_CHECK"
@@ -398,6 +439,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         if (message.type === "GET_SIMILAR_MAP_TARGET") {
           return similarMapTarget(message.payload);
+        }
+        if (message.type === "GET_TABELOG_POPULARITY") {
+          return popularity(message.payload, active.controller.signal);
         }
         if (message.type === "GET_REVIEW_INSIGHTS") {
           const payload = reviewInsightsRequestPayload(message.payload);

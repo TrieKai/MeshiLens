@@ -17,6 +17,7 @@
 - 配對完成後，以受限的 Tabelog 店家專屬「附近店家」頁尋找最多三家相似且附近的店；目前已知的 Tabelog 官方料理類別直接使用其分類頁，未來新增或未收錄類別才先讀取官方分類連結、確認有對應分類時再追加讀取該分類頁，避免泛附近餐廳被誤當相似店家；不會自動讀取推薦店詳情或評論。使用者點擊推薦卡時，才低頻讀取該店的 Tabelog 地圖地址並以完整地址開啟 Google Maps，避免同名誤導。
 - 相似店家的常見 Tabelog 料理標籤會轉為繁中；對照表集中於 `src/meshi_lens/data/tabelog-genres-zh-hant.json`，未知標籤保留原文以避免猜測翻譯。合格候選最多保留 6 家，預設顯示 3 家，可直接依推薦度、Tabelog 評分、評論數排序，不會增加 Tabelog 請求。
 - 相似店家以原店的 Tabelog 附近頁作為地理範圍；候選卡片缺少地點欄位時，僅接受同一 Tabelog 精確區域，避免跨區誤薦
+- 已配對店家的詳細卡會背景顯示 Tabelog 同一精確區域的「最多預訂／在地人預訂最多／瀏覽最多」TOP 5 或 TOP 10 標籤；只以精確 Tabelog URL 比對，可點開對應排行頁，不顯示或推算原始預訂、瀏覽數
 - Tabelog 搜尋頁回覆 403 時，以低頻率公開網頁搜尋找出候選店家 URL，再由 `gurume` 讀取 Tabelog 詳細頁
 - 以電話、地址、座標及正規化店名計算配對信心
 - 在 Maps 店家區塊顯示評分、評論數、店家時間線（百名店多年紀錄 + 目前 Michelin）、價位、車站、營業資訊及 Tabelog 連結
@@ -51,7 +52,7 @@ uv run meshilens-server
 ## Vercel 後端部署
 
 專案可部署為 Vercel Python Function，提供 `GET /api/health` 和
-`POST /api/match`、`POST /api/michelin`、`POST /api/similar`、選用的 `POST /api/advice`，以及選用的
+`POST /api/match`、`POST /api/michelin`、`POST /api/similar`、`POST /api/popularity`、選用的 `POST /api/advice`，以及選用的
 `POST /api/review-insights`（公開評論實驗摘要）。目前為測試階段，API 未啟用存取驗證。
 未來接上瀏覽器擴充功能時，再將其正式網址設定到 `MESHI_ALLOWED_ORIGIN` 並啟用驗證。
 
@@ -67,7 +68,7 @@ uv run python scripts/update_michelin.py
 
 ## 持久化結果快取（選用）
 
-`/match`、`/michelin`、`/similar`、`/advice`、`/review-insights` 會快取結果（TTL 分別約 6 小時、24 小時、12 小時、24 小時、7 天；評論實驗路徑**只快取主題摘要**，不保存評論原文）。
+`/match`、`/michelin`、`/similar`、`/popularity`、`/advice`、`/review-insights` 會快取結果（TTL 分別約 6 小時、24 小時、12 小時、24 小時、24 小時、7 天；評論實驗路徑**只快取主題摘要**，不保存評論原文）。
 預設為**記憶體 L1 + 本機檔案**（目錄見 `MESHI_CACHE_DIR`，預設系統暫存）。
 在 Vercel Marketplace 連結 Upstash Redis 後，會自動設定：
 
@@ -129,7 +130,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 node --check extension/background.js
 node --check extension/content.js
 node --check extension/popup.js
-node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js tests/test_maps.js tests/test_timeline.js tests/test_lookup_cache.js tests/test_advice.js tests/test_similar.js tests/test_review_insights.js tests/test_runtime.js
+node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js tests/test_maps.js tests/test_timeline.js tests/test_lookup_cache.js tests/test_advice.js tests/test_similar.js tests/test_popularity.js tests/test_review_insights.js tests/test_runtime.js
 ```
 
 測試包含「割烹 清水屋」對 Tabelog「清水屋」的電話與地址差異案例。
@@ -140,6 +141,7 @@ node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js t
 - 擴充功能只有 Google Maps、本機服務及本機儲存權限，不讀取其他網站（含不直接抓 Tabelog 評論頁）。
 - Tabelog 搜尋頁可能依網路環境回覆 403；此時會改用公開搜尋索引尋找 Tabelog URL。若兩條路徑都失敗，擴充功能會顯示明確錯誤，不會誤認為「沒有這家店」。
 - 相似店家只在已配對店家後讀取一個附近頁；未知料理為確認 Tabelog 官方分類，最多追加讀取一個對應分類頁。每頁最多處理前 20 筆並快取；不批量掃描、不抓推薦店詳情或評論，也不在推薦搜尋失敗時擴大重試或改用外部搜尋。只有使用者明確點擊一張推薦卡時，才會讀取一次該店的地圖地址並快取。
+- 人氣標籤只在已完成精確配對後背景讀取同區三張公開排行頁，每張只解析前 10 個店家 URL，區域快取約 24 小時；不翻頁、不讀取排行背後的原始預訂／瀏覽數，也不對 Maps 搜尋列表批量查詢。
 - Tabelog 頁面格式調整可能使 `gurume` 暫時失效；已提供持久結果快取，正式發布前仍應加強併發限制與監控。
 - 請遵守 Tabelog 的使用條款與 robots 政策，不要大量或自動化濫用請求。
 - Tabelog 商標與資料屬其權利人；本專案不隸屬於 Google 或 Tabelog。

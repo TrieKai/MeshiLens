@@ -17,6 +17,7 @@ from .cache import (
     DEFAULT_ADVICE_TTL_SECONDS,
     DEFAULT_MATCH_TTL_SECONDS,
     DEFAULT_MICHELIN_TTL_SECONDS,
+    DEFAULT_POPULARITY_TTL_SECONDS,
     DEFAULT_REVIEW_INSIGHTS_TTL_SECONDS,
     DEFAULT_SIMILAR_TTL_SECONDS,
     CacheBackend,
@@ -41,6 +42,7 @@ from .similar import rank_similar_candidates_with_diagnostics
 LOGGER = logging.getLogger("meshilens.service")
 MATCH_CACHE_VERSION = "match-v2"
 SIMILAR_CACHE_VERSION = "nearby-v18"
+POPULARITY_CACHE_VERSION = "popularity-v1"
 
 
 class MatchService:
@@ -57,6 +59,7 @@ class MatchService:
         michelin_cache: CacheBackend | None = None,
         advice_cache: CacheBackend | None = None,
         similar_cache: CacheBackend | None = None,
+        popularity_cache: CacheBackend | None = None,
         review_insights_cache: CacheBackend | None = None,
     ) -> None:
         self.provider = provider or GurumeProvider()
@@ -79,6 +82,11 @@ class MatchService:
         self.similar_cache = similar_cache or build_cache(
             ttl_seconds=DEFAULT_SIMILAR_TTL_SECONDS, max_items=512, namespace="similar"
         )
+        self.popularity_cache = popularity_cache or build_cache(
+            ttl_seconds=DEFAULT_POPULARITY_TTL_SECONDS,
+            max_items=512,
+            namespace="popularity",
+        )
         self.review_insights_cache = review_insights_cache or build_cache(
             ttl_seconds=DEFAULT_REVIEW_INSIGHTS_TTL_SECONDS,
             max_items=512,
@@ -86,6 +94,8 @@ class MatchService:
         )
         self._review_insights_locks: dict[str, threading.Lock] = {}
         self._review_insights_meta_lock = threading.Lock()
+        self._popularity_locks: dict[str, threading.Lock] = {}
+        self._popularity_meta_lock = threading.Lock()
 
     def _review_insights_lock(self, key: str) -> threading.Lock:
         with self._review_insights_meta_lock:
@@ -93,6 +103,14 @@ class MatchService:
             if lock is None:
                 lock = threading.Lock()
                 self._review_insights_locks[key] = lock
+            return lock
+
+    def _popularity_lock(self, key: str) -> threading.Lock:
+        with self._popularity_meta_lock:
+            lock = self._popularity_locks.get(key)
+            if lock is None:
+                lock = threading.Lock()
+                self._popularity_locks[key] = lock
             return lock
 
     @staticmethod
@@ -381,6 +399,71 @@ class MatchService:
             "maps_url": "https://www.google.com/maps/search/?api=1&" + urlencode({"query": query}),
             "cached": cached,
         }
+
+    @staticmethod
+    def validate_popularity_seed(payload: Mapping[str, Any]) -> dict[str, str]:
+        value = payload.get("selected")
+        if not isinstance(value, Mapping):
+            raise ValueError("找不到已配對的 Tabelog 店家")
+        name = str(value.get("name") or "").strip()[:200]
+        url = canonical_restaurant_url(str(value.get("url") or "").strip()[:300])
+        if not name or not url or not tabelog_area_path(url):
+            raise ValueError("找不到已配對的 Tabelog 店家")
+        return {"name": name, "url": url}
+
+    @staticmethod
+    def _popularity_response(
+        snapshot: Mapping[str, Any], restaurant_url: str, *, cached: bool
+    ) -> dict[str, Any]:
+        target_url = canonical_restaurant_url(restaurant_url)
+        tags: list[dict[str, Any]] = []
+        for ranking in snapshot.get("rankings") or []:
+            if not isinstance(ranking, Mapping):
+                continue
+            urls = [canonical_restaurant_url(str(value)) for value in ranking.get("urls") or []]
+            try:
+                rank = urls.index(target_url) + 1
+            except ValueError:
+                continue
+            if rank > 10:
+                continue
+            tags.append(
+                {
+                    "key": str(ranking.get("key") or ""),
+                    "label": str(ranking.get("label") or "Tabelog 人氣"),
+                    "rank": rank,
+                    "tier": "top5" if rank <= 5 else "top10",
+                    "source_url": str(ranking.get("source_url") or ""),
+                }
+            )
+        return {
+            "source": "Tabelog 日本語版",
+            "scope": str(snapshot.get("scope") or ""),
+            "tags": tags,
+            "cached": cached,
+        }
+
+    def popularity(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        """Return exact TOP 5/TOP 10 badges from a cached regional snapshot."""
+        seed = self.validate_popularity_seed(payload)
+        area_path = tabelog_area_path(seed["url"])
+        key = f"{POPULARITY_CACHE_VERSION}|{area_path}"
+        cached = self.popularity_cache.get(key)
+        if cached:
+            return self._popularity_response(cached, seed["url"], cached=True)
+
+        with self._popularity_lock(key):
+            cached = self.popularity_cache.get(key)
+            if cached:
+                return self._popularity_response(cached, seed["url"], cached=True)
+            try:
+                fetch_rankings = getattr(self.provider, "fetch_popularity_rankings")
+                snapshot = dict(fetch_rankings(seed["url"], limit=10))
+            except Exception as exc:
+                LOGGER.info("popularity outcome=failure reason=%s", type(exc).__name__)
+                raise RuntimeError("Tabelog 人氣排行暫時無法取得") from exc
+            self.popularity_cache.set(key, snapshot)
+            return self._popularity_response(snapshot, seed["url"], cached=False)
 
     def review_insights(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Opt-in public-review theme summary. Never caches review bodies."""
