@@ -90,6 +90,10 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(peripheral_genre_slug(["寿司", "日本料理"]), "sushi")
         self.assertEqual(peripheral_genre_slug(["うなぎ", "海鮮"]), "unagi")
         self.assertEqual(peripheral_genre_slug(["韓国料理"]), "korea")
+        self.assertEqual(peripheral_genre_slug(["そば（蕎麦）"]), "soba")
+        self.assertEqual(peripheral_genre_slug(["天ぷら"]), "tempura")
+        self.assertEqual(peripheral_genre_slug(["ビュッフェ・バイキング"]), "viking")
+        self.assertEqual(peripheral_genre_slug(["パンケーキ"]), "cake")
         self.assertEqual(peripheral_genre_slug(["おにぎり"]), "")
 
     def test_discovers_an_official_nearby_category_slug(self) -> None:
@@ -124,12 +128,12 @@ class ProviderTests(unittest.TestCase):
                 cls.urls.append(url)
                 if url.endswith("/peripheral_map/"):
                     return FakeResponse(
-                        '<a href="/osaka/A2701/A270304/27003671/peripheral_map/soba/">そば（蕎麦）</a>'
+                        '<a href="/osaka/A2701/A270304/27003671/peripheral_map/sousaku/">創作料理</a>'
                     )
-                if url.endswith("/peripheral_map/soba/"):
+                if url.endswith("/peripheral_map/sousaku/"):
                     return FakeResponse(
-                        '<div><h5><a href="https://tabelog.com/osaka/A2701/A270304/27000001/">近所の蕎麦</a></h5>'
-                        '関目高殿 / そば（蕎麦） 3.55 42人</div>'
+                        '<div><h5><a href="https://tabelog.com/osaka/A2701/A270304/27000001/">近所の創作料理</a></h5>'
+                        '関目高殿 / 創作料理 3.55 42人</div>'
                     )
                 raise AssertionError(url)
 
@@ -142,14 +146,48 @@ class ProviderTests(unittest.TestCase):
         with patch.dict(
             "sys.modules", {"gurume": fake_gurume, "curl_cffi": fake_curl_cffi}
         ):
-            results = provider.search_similar({"url": restaurant_url, "genres": ["そば"]})
+            results = provider.search_similar({"url": restaurant_url, "genres": ["創作料理"]})
 
         self.assertEqual(
             FakeRequests.urls,
-            [f"{restaurant_url}peripheral_map/", f"{restaurant_url}peripheral_map/soba/"],
+            [f"{restaurant_url}peripheral_map/", f"{restaurant_url}peripheral_map/sousaku/"],
         )
-        self.assertEqual(results[0]["name"], "近所の蕎麦")
-        self.assertEqual(results[0]["genres"], ["そば（蕎麦）"])
+        self.assertEqual(results[0]["name"], "近所の創作料理")
+        self.assertEqual(results[0]["genres"], ["創作料理"])
+
+    def test_known_official_genre_reads_its_category_once(self) -> None:
+        restaurant_url = "https://tabelog.com/osaka/A2701/A270304/27003671/"
+
+        class FakeResponse:
+            text = (
+                '<div><h5><a href="https://tabelog.com/osaka/A2701/A270304/27000002/">近所の天婦羅</a></h5>'
+                '関目高殿 / 天ぷら 3.55 42人</div>'
+            )
+
+            def raise_for_status(self) -> None:
+                return None
+
+        class FakeRequests:
+            urls: list[str] = []
+
+            @classmethod
+            def get(cls, url: str, **_kwargs: object) -> FakeResponse:
+                cls.urls.append(url)
+                return FakeResponse()
+
+        fake_gurume = SimpleNamespace(
+            RestaurantSearchRequest=object,
+            SortType=SimpleNamespace(RANKING="ranking"),
+        )
+        provider = GurumeProvider(minimum_interval=0)
+        with patch.dict(
+            "sys.modules",
+            {"gurume": fake_gurume, "curl_cffi": SimpleNamespace(requests=FakeRequests)},
+        ):
+            results = provider.search_similar({"url": restaurant_url, "genres": ["天ぷら"]})
+
+        self.assertEqual(FakeRequests.urls, [f"{restaurant_url}peripheral_map/tempura/"])
+        self.assertEqual(results[0]["name"], "近所の天婦羅")
 
     def test_searches_by_local_phone_before_translated_name(self) -> None:
         self.assertEqual(

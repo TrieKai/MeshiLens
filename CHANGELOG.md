@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.40] — 2026-07-26
+
+### Changed
+- 將目前已確認的 Tabelog 官方附近料理分類（和食、蕎麥麵、天婦羅、鍋物、洋食、各國料理、麵食、甜點等）完整內建為 slug 對照，讓這些店家直接讀取正確分類頁；保留動態發現作為未來未收錄分類的安全備援，並更新相似店家快取。
+
 ## [0.5.39] — 2026-07-26
 
 ### Fixed

@@ -18,10 +18,22 @@ TABELOG_RESULT_RE = re.compile(
     re.IGNORECASE,
 )
 PERIPHERAL_GENRE_SLUGS = {
-    "寿司": "sushi", "鮨": "sushi", "ラーメン": "ramen", "カレー": "curry",
-    "焼肉": "yakiniku", "焼き鳥": "yakitori", "ハンバーガー": "hamburger",
-    "イタリアン": "italian", "フレンチ": "french", "中華料理": "chinese",
-    "韓国料理": "korea", "カフェ": "cafe", "居酒屋": "izakaya", "うなぎ": "unagi",
+    # Tabelog's current official peripheral-map cuisine links.  Keeping these
+    # direct avoids an otherwise necessary discovery request for common cases.
+    "和食": "washoku", "日本料理": "japanese", "寿司": "sushi", "鮨": "sushi",
+    "海鮮・魚介": "seafood", "海鮮": "seafood", "そば（蕎麦）": "soba", "そば": "soba",
+    "うなぎ": "unagi", "焼き鳥": "yakitori", "お好み焼き": "okonomiyaki",
+    "もんじゃ焼き": "monjya", "洋食": "yoshoku", "フレンチ": "french",
+    "イタリアン": "italian", "スペイン料理": "spain", "ステーキ": "steak",
+    "中華料理": "chinese", "韓国料理": "korea", "タイ料理": "thai",
+    "ラーメン": "ramen", "カレー": "curry", "もつ鍋": "motsu", "鍋": "nabe",
+    "居酒屋": "izakaya", "パン": "pan", "スイーツ": "sweets", "バー・お酒": "bar",
+    "天ぷら": "tempura", "焼肉": "yakiniku", "料理旅館": "ryokan", "ビストロ": "bistro",
+    "ハンバーグ": "hamburgersteak", "ハンバーガー": "hamburger", "とんかつ": "tonkatsu",
+    "串揚げ": "kushiage", "うどん": "udon", "しゃぶしゃぶ": "syabusyabu",
+    "沖縄料理": "okinawafood", "パスタ": "pasta", "ピザ": "pizza", "餃子": "gyouza",
+    "ホルモン": "horumon", "カフェ": "cafe", "喫茶店": "kissaten", "ケーキ": "cake",
+    "タピオカ": "tapioca", "食堂": "teishoku", "ビュッフェ・バイキング": "viking",
 }
 HYAKUMEITEN_URL_RE = re.compile(
     r"https?://award\.tabelog\.com/hyakumeiten/(?P<slug>[^/]+)/(?P<year>20\d{2})/?",
@@ -241,9 +253,14 @@ def peripheral_genre_slug(genres: Any) -> str:
     values = [genres] if isinstance(genres, str) else genres if isinstance(genres, list) else []
     for value in values:
         text = str(value or "")
+        best: tuple[int, str] | None = None
         for genre, slug in PERIPHERAL_GENRE_SLUGS.items():
             if genre in text:
-                return slug
+                score = len(genre)
+                if best is None or score > best[0]:
+                    best = (score, slug)
+        if best:
+            return best[1]
     return ""
 
 
