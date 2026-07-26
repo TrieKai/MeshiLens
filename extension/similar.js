@@ -54,8 +54,6 @@
       scope ? `搜尋範圍：${scope}` : "",
       `Tabelog 回傳 ${returned} 家`,
     ].filter(Boolean);
-    const unverifiedLocation = count("unverified_location_count");
-    if (unverifiedLocation) parts.push(`${unverifiedLocation} 家因地點無法確認而略過`);
     const belowQuality = count("below_quality_count");
     if (belowQuality) parts.push(`${belowQuality} 家未達相似度門檻`);
     return `${parts.join("；")}。`;

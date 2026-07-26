@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.34] — 2026-07-26
+
+### Fixed
+- 相似店家來自 Tabelog 附近頁時，不再顯示舊流程遺留的「地點無法確認」訊息；空結果只呈現相似度篩選的原因
+
 ## [0.5.33] — 2026-07-26
 
 ### Fixed

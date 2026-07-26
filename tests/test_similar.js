@@ -88,7 +88,7 @@ test("keeps an explicit empty state and safe diagnostics when no nearby recommen
   );
   assert.equal(
     similarDiagnosticsSummary(diagnostics),
-    "搜尋範圍：銀座駅；Tabelog 回傳 5 家；4 家因地點無法確認而略過；1 家未達相似度門檻。",
+    "搜尋範圍：銀座駅；Tabelog 回傳 5 家；1 家未達相似度門檻。",
   );
   assert.equal(similarDiagnosticsSummary(null), "");
 });
