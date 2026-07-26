@@ -263,7 +263,7 @@ function popularityCachePlace(selected) {
     name: selected.name,
     address: "",
     tabelog_url: selected.url,
-    website: "popularity-v1",
+    website: "popularity-v2",
     phone: "",
   };
 }

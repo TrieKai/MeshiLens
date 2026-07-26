@@ -42,7 +42,7 @@ from .similar import rank_similar_candidates_with_diagnostics
 LOGGER = logging.getLogger("meshilens.service")
 MATCH_CACHE_VERSION = "match-v2"
 SIMILAR_CACHE_VERSION = "nearby-v18"
-POPULARITY_CACHE_VERSION = "popularity-v1"
+POPULARITY_CACHE_VERSION = "popularity-v2"
 
 
 class MatchService:
@@ -425,14 +425,14 @@ class MatchService:
                 rank = urls.index(target_url) + 1
             except ValueError:
                 continue
-            if rank > 10:
+            if rank > 20:
                 continue
             tags.append(
                 {
                     "key": str(ranking.get("key") or ""),
                     "label": str(ranking.get("label") or "Tabelog 人氣"),
                     "rank": rank,
-                    "tier": "top5" if rank <= 5 else "top10",
+                    "tier": "top5" if rank <= 5 else "top10" if rank <= 10 else "top20",
                     "source_url": str(ranking.get("source_url") or ""),
                 }
             )
@@ -444,7 +444,7 @@ class MatchService:
         }
 
     def popularity(self, payload: Mapping[str, Any]) -> dict[str, Any]:
-        """Return exact TOP 5/TOP 10 badges from a cached regional snapshot."""
+        """Return exact TOP 5/TOP 10/TOP 20 badges from a cached regional snapshot."""
         seed = self.validate_popularity_seed(payload)
         area_path = tabelog_area_path(seed["url"])
         key = f"{POPULARITY_CACHE_VERSION}|{area_path}"
@@ -458,7 +458,7 @@ class MatchService:
                 return self._popularity_response(cached, seed["url"], cached=True)
             try:
                 fetch_rankings = getattr(self.provider, "fetch_popularity_rankings")
-                snapshot = dict(fetch_rankings(seed["url"], limit=10))
+                snapshot = dict(fetch_rankings(seed["url"], limit=20))
             except Exception as exc:
                 LOGGER.info("popularity outcome=failure reason=%s", type(exc).__name__)
                 raise RuntimeError("Tabelog 人氣排行暫時無法取得") from exc

@@ -63,7 +63,7 @@ class ProviderTests(unittest.TestCase):
     def test_extracts_precise_area_path_from_tabelog_restaurant_url(self) -> None:
         self.assertEqual(tabelog_area_path("https://tabelog.com/tokyo/A1323/A132302/13276342/"), "tokyo/A1323/A132302")
 
-    def test_parses_first_ten_exact_urls_from_a_public_popularity_list(self) -> None:
+    def test_parses_exact_urls_from_a_public_popularity_list(self) -> None:
         html = '''<html><head><title>推薦適合在大塚・護國寺美食餐廳 | Tabelog</title></head><body>
           <a class="list-rst__rst-name-target" href="https://tabelog.com/tw/tokyo/A1323/A132302/13276342/">一</a>
           <a class="list-rst__rst-name-target" href="https://tabelog.com/tokyo/A1323/A132302/13276342/">重複</a>
@@ -85,6 +85,15 @@ class ProviderTests(unittest.TestCase):
             ),
             "https://tabelog.com/tw/tokyo/A1323/A132302/rstLst/?SrtT=inbound_access",
         )
+
+    def test_popularity_parser_is_bounded_to_the_first_twenty_restaurants(self) -> None:
+        cards = "".join(
+            f'<a class="list-rst__rst-name-target" href="/tokyo/A1323/A132302/1327{index:04d}/">店</a>'
+            for index in range(21)
+        )
+        parsed = parse_tabelog_popularity_page(f"<html><body>{cards}</body></html>")
+        self.assertEqual(len(parsed["urls"]), 20)
+        self.assertTrue(parsed["urls"][-1].endswith("/13270019/"))
 
     def test_similar_search_reads_one_search_page_without_detail_fetches(self) -> None:
         class FakeSearchRequest:

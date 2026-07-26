@@ -536,7 +536,7 @@ wheels = [
 
 [[package]]
 name = "meshilens"
-version = "0.5.43"
+version = "0.5.44"
 source = { editable = "." }
 dependencies = [
     { name = "gurume" },

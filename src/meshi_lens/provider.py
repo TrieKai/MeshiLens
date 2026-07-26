@@ -230,8 +230,8 @@ def tabelog_popularity_list_url(value: str, sort_value: str) -> str:
     return f"https://tabelog.com/tw/{area_path}/rstLst/?SrtT={sort_value}"
 
 
-def parse_tabelog_popularity_page(html: str, limit: int = 10) -> dict[str, Any]:
-    """Read only the first visible restaurant URLs from a public ranking list."""
+def parse_tabelog_popularity_page(html: str, limit: int = 20) -> dict[str, Any]:
+    """Read only the first twenty visible restaurant URLs from a public ranking list."""
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(html, "lxml")
@@ -248,7 +248,7 @@ def parse_tabelog_popularity_page(html: str, limit: int = 10) -> dict[str, Any]:
             continue
         urls.append(url)
         seen.add(url)
-        if len(urls) >= max(1, min(limit, 10)):
+        if len(urls) >= max(1, min(limit, 20)):
             break
     return {"scope": scope, "urls": urls}
 
@@ -896,9 +896,9 @@ class GurumeProvider:
         return response.text
 
     def fetch_popularity_rankings(
-        self, restaurant_url: str, limit: int = 10
+        self, restaurant_url: str, limit: int = 20
     ) -> dict[str, Any]:
-        """Fetch three public regional list pages, bounded to their first ten cards."""
+        """Fetch three public regional list pages, bounded to their first twenty cards."""
         from curl_cffi import requests
 
         area_path = tabelog_area_path(restaurant_url)

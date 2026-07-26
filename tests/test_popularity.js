@@ -15,14 +15,19 @@ test("popularity payload only accepts canonical Tabelog restaurant URLs", () => 
   assert.equal(popularity.popularityPayload({ name: "店", url: "https://example.com/store" }), null);
 });
 
-test("popularity tags keep only valid TOP 10 badges", () => {
+test("popularity tags keep only valid TOP 20 badges", () => {
   const tags = popularity.popularityTags({ tags: [
     { label: "最多預訂", rank: 3, tier: "top5", source_url: "https://tabelog.com/tw/tokyo/" },
-    { label: "瀏覽最多", rank: 11 },
+    { label: "瀏覽最多", rank: 15, tier: "top20" },
+    { label: "在地人預訂最多", rank: 21 },
   ] });
   assert.equal(
     JSON.stringify(tags),
-    JSON.stringify([{ label: "最多預訂", rank: 3, tier: "top5", sourceUrl: "https://tabelog.com/tw/tokyo/" }]),
+    JSON.stringify([
+      { label: "最多預訂", rank: 3, tier: "top5", sourceUrl: "https://tabelog.com/tw/tokyo/" },
+      { label: "瀏覽最多", rank: 15, tier: "top20", sourceUrl: "" },
+    ]),
   );
   assert.equal(popularity.popularityBadgeText(tags[0]), "最多預訂 TOP 5");
+  assert.equal(popularity.popularityBadgeText(tags[1]), "瀏覽最多 TOP 20");
 });

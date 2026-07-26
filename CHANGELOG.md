@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.44] — 2026-07-26
+
+### Changed
+- Tabelog 人氣排行範圍由前 10 名擴為前 20 名；第 11–20 名顯示 TOP 20 標籤。仍只讀取每種排序的第一張公開排行頁，不增加請求量；同步更新區域與瀏覽器快取版本。
+
 ## [0.5.43] — 2026-07-26
 
 ### Added

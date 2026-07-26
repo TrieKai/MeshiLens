@@ -1,5 +1,5 @@
 (() => {
-  const POPULARITY_CACHE_VERSION = "popularity-v1";
+  const POPULARITY_CACHE_VERSION = "popularity-v2";
 
   function popularityPayload(candidate) {
     if (!candidate || typeof candidate !== "object") return null;
@@ -15,14 +15,15 @@
       .map((tag) => ({
         label: String(tag?.label || "").trim().slice(0, 30),
         rank: Number.parseInt(tag?.rank, 10),
-        tier: tag?.tier === "top5" ? "top5" : "top10",
+        tier: ["top5", "top10", "top20"].includes(tag?.tier) ? tag.tier : "top20",
         sourceUrl: String(tag?.source_url || "").trim().slice(0, 500),
       }))
-      .filter((tag) => tag.label && Number.isInteger(tag.rank) && tag.rank >= 1 && tag.rank <= 10);
+      .filter((tag) => tag.label && Number.isInteger(tag.rank) && tag.rank >= 1 && tag.rank <= 20);
   }
 
   function popularityBadgeText(tag) {
-    return `${tag.label} TOP ${tag.tier === "top5" ? "5" : "10"}`;
+    const cutoff = tag.tier === "top5" ? "5" : tag.tier === "top10" ? "10" : "20";
+    return `${tag.label} TOP ${cutoff}`;
   }
 
   globalThis.MeshiLensPopularity = {

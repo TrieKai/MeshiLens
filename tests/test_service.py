@@ -44,7 +44,7 @@ class FakeProvider:
         self.map_target_calls += 1
         return {"address": "東京都文京区音羽1-17-16 中銀音羽マンシオン１F", "latitude": 35.7163, "longitude": 139.7287}
 
-    def fetch_popularity_rankings(self, _url, limit=10):
+    def fetch_popularity_rankings(self, _url, limit=20):
         self.popularity_calls += 1
         self.asserted_limit = limit
         return {
@@ -62,6 +62,15 @@ class FakeProvider:
                     "label": "瀏覽最多",
                     "source_url": "https://tabelog.com/tw/tokyo/A1323/A132302/rstLst/?SrtT=inbound_access",
                     "urls": ["https://tabelog.com/tokyo/A1323/A132302/13270000/", "https://tabelog.com/tokyo/A1323/A132302/13276342/"],
+                },
+                {
+                    "key": "local_reserved",
+                    "label": "在地人預訂最多",
+                    "source_url": "https://tabelog.com/tw/tokyo/A1323/A132302/rstLst/?SrtT=inbound_vacancy_net_yoyaku",
+                    "urls": [
+                        *(f"https://tabelog.com/tokyo/A1323/A132302/13270{index:03d}/" for index in range(1, 15)),
+                        "https://tabelog.com/tokyo/A1323/A132302/13276342/",
+                    ],
                 },
             ],
         }
@@ -141,14 +150,14 @@ class ServiceTests(unittest.TestCase):
         payload = {"selected": {"name": "おにぎりぼんご", "url": "https://tabelog.com/tokyo/A1323/A132302/13276342/"}}
         first = service.popularity(payload)
         second = service.popularity(payload)
-        self.assertEqual(POPULARITY_CACHE_VERSION, "popularity-v1")
+        self.assertEqual(POPULARITY_CACHE_VERSION, "popularity-v2")
         self.assertFalse(first["cached"])
         self.assertTrue(second["cached"])
         self.assertEqual(provider.popularity_calls, 1)
         self.assertEqual(first["scope"], "大塚・護國寺")
         self.assertEqual(
             [(tag["label"], tag["rank"], tag["tier"]) for tag in first["tags"]],
-            [("最多預訂", 1, "top5"), ("瀏覽最多", 2, "top5")],
+            [("最多預訂", 1, "top5"), ("瀏覽最多", 2, "top5"), ("在地人預訂最多", 15, "top20")],
         )
 
     def test_popularity_rejects_a_non_tabelog_seed(self) -> None:
