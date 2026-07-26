@@ -304,6 +304,33 @@ a.meshilens-list-badge:focus-visible {
   margin-top: 8px;
 }
 
+.meshilens-similar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-top: 8px;
+}
+
+.meshilens-similar-control {
+  align-items: center;
+  color: var(--ml-muted);
+  display: inline-flex;
+  font-size: 10px;
+  gap: 4px;
+}
+
+.meshilens-similar-select {
+  appearance: auto;
+  background: #fffdf9;
+  border: 1px solid #e5d3bb;
+  border-radius: 5px;
+  color: var(--ml-ink);
+  font: inherit;
+  max-width: 122px;
+  min-width: 0;
+  padding: 3px 4px;
+}
+
 .meshilens-similar-item {
   background: #fffdf9;
   border: 1px solid #eee1cf;
@@ -347,6 +374,24 @@ a.meshilens-list-badge:focus-visible {
 .meshilens-similar-meta {
   margin-top: 3px;
   overflow-wrap: anywhere;
+}
+
+.meshilens-similar-expand {
+  background: transparent;
+  border: 0;
+  color: #9a4e20;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 750;
+  margin-top: 8px;
+  padding: 0;
+}
+
+.meshilens-similar-expand:hover,
+.meshilens-similar-expand:focus-visible {
+  color: #71330f;
+  outline: 0;
+  text-decoration: underline;
 }
 
 .meshilens-review-insights {

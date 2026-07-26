@@ -39,7 +39,7 @@ from .similar import rank_similar_candidates_with_diagnostics
 
 
 LOGGER = logging.getLogger("meshilens.service")
-SIMILAR_CACHE_VERSION = "nearby-v13"
+SIMILAR_CACHE_VERSION = "nearby-v14"
 
 
 class MatchService:
@@ -330,7 +330,7 @@ class MatchService:
             LOGGER.info("similar outcome=failure reason=%s", type(exc).__name__)
             raise RuntimeError("Tabelog 相似店家暫時無法取得") from exc
         recommendations, ranking_diagnostics = rank_similar_candidates_with_diagnostics(
-            seed, candidates, limit=3, search_area_path=tabelog_area_path(seed["url"])
+            seed, candidates, limit=6, search_area_path=tabelog_area_path(seed["url"])
         )
         search_scope = str(seed.get("station") or seed.get("address") or "").strip()
         result = {

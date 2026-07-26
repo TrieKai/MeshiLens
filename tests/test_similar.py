@@ -169,6 +169,26 @@ class SimilarRankingTests(unittest.TestCase):
         )
         self.assertEqual(ranked, [])
 
+    def test_can_keep_six_qualified_candidates_for_client_side_sorting(self) -> None:
+        seed = {
+            "url": "https://tabelog.com/tokyo/A1323/A132302/1300001/",
+            "genres": ["ラーメン"],
+            "station": "大塚駅",
+        }
+        candidates = [
+            {
+                "name": f"大塚拉麵{i}",
+                "url": f"https://tabelog.com/tokyo/A1323/A132302/130000{i + 2}/",
+                "genres": ["ラーメン"],
+                "station": "大塚駅",
+                "rating": 3.2 + i / 10,
+                "review_count": 10 + i,
+            }
+            for i in range(6)
+        ]
+        ranked = rank_similar_candidates(seed, candidates, limit=6)
+        self.assertEqual(len(ranked), 6)
+
     def test_filters_candidates_without_a_similarity_signal(self) -> None:
         ranked = rank_similar_candidates(
             {"url": "https://tabelog.com/tokyo/A1301/A130101/1300001/", "genres": ["寿司"]},
@@ -226,3 +246,4 @@ class SimilarRankingTests(unittest.TestCase):
             ],
         )
         self.assertEqual(ranked[0]["reasons"][:2], ["同為美式料理", "同為銀座站"])
+        self.assertEqual(ranked[0]["genre_labels"], ["美式料理"])

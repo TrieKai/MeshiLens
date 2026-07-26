@@ -8,7 +8,7 @@ const { classifyJapanPlace } = globalThis.MeshiLensJapan;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 const { advicePayload, adviceCacheKey, adviceErrorMessage, cachedAdvice, normalizeAdviceNumbers } = globalThis.MeshiLensAdvice;
-const { alternativeCandidates, confidenceLabel, mapsSearchUrl, similarDiagnosticsSummary, similarDisplayState, similarMapTargetPayload, similarPayload } = globalThis.MeshiLensSimilar;
+const { alternativeCandidates, confidenceLabel, DEFAULT_VISIBLE_RECOMMENDATIONS, mapsSearchUrl, similarDiagnosticsSummary, similarDisplayState, similarGenreOptions, similarMapTargetPayload, similarPayload, visibleSimilarRecommendations } = globalThis.MeshiLensSimilar;
 const {
   BUTTON_LABEL,
   CARD_TITLE,
@@ -316,7 +316,7 @@ function syncAdvice(card) {
   else card.append(section);
 }
 
-function similarRestaurantsView(state) {
+function similarRestaurantsView(state, onUpdate = () => {}) {
   const section = element("section", "meshilens-similar");
   section.setAttribute("aria-label", "相似店家");
   const heading = element("div", "meshilens-similar-heading");
@@ -345,8 +345,59 @@ function similarRestaurantsView(state) {
   }
   const recommendations = Array.isArray(state?.recommendations) ? state.recommendations : [];
   if (!recommendations.length) return null;
+  const genreOptions = similarGenreOptions(recommendations);
+  const allVisible = visibleSimilarRecommendations(recommendations, {
+    sort: state.sort,
+    genre: state.genre,
+    expanded: true,
+  });
+  const visibleRecommendations = visibleSimilarRecommendations(recommendations, state);
+  if (recommendations.length > 1) {
+    const controls = element("div", "meshilens-similar-controls");
+    const sortLabel = element("label", "meshilens-similar-control", "排序");
+    const sort = document.createElement("select");
+    sort.className = "meshilens-similar-select";
+    [
+      ["recommended", "推薦度"],
+      ["rating", "Tabelog 評分"],
+      ["reviews", "評論數"],
+    ].forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      option.selected = value === state.sort;
+      sort.append(option);
+    });
+    sort.addEventListener("change", () => {
+      state.sort = sort.value;
+      state.expanded = false;
+      onUpdate();
+    });
+    sortLabel.append(sort);
+    controls.append(sortLabel);
+    if (genreOptions.length > 1) {
+      const genreLabel = element("label", "meshilens-similar-control", "料理");
+      const genre = document.createElement("select");
+      genre.className = "meshilens-similar-select";
+      [["", "全部類型"], ...genreOptions.map(({ value, label }) => [value, label])].forEach(([value, label]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        option.selected = value === state.genre;
+        genre.append(option);
+      });
+      genre.addEventListener("change", () => {
+        state.genre = genre.value;
+        state.expanded = false;
+        onUpdate();
+      });
+      genreLabel.append(genre);
+      controls.append(genreLabel);
+    }
+    section.append(controls);
+  }
   const list = element("div", "meshilens-similar-list");
-  for (const recommendation of recommendations.slice(0, 3)) {
+  for (const recommendation of visibleRecommendations) {
     const item = element("a", "meshilens-similar-item");
     const fallbackMapsUrl = mapsSearchUrl(recommendation.name, recommendation.address || recommendation.area);
     item.href = fallbackMapsUrl;
@@ -373,18 +424,32 @@ function similarRestaurantsView(state) {
     item.append(top);
     const meta = [
       ...(Array.isArray(recommendation.reasons) ? recommendation.reasons : []),
+      ...(Array.isArray(recommendation.genre_labels) ? recommendation.genre_labels : []),
       recommendation.review_count != null ? `${recommendation.review_count} 則評論` : "",
     ].filter(Boolean);
     if (meta.length) item.append(element("div", "meshilens-similar-meta", meta.join(" · ")));
     list.append(item);
   }
   section.append(list);
+  if (allVisible.length > DEFAULT_VISIBLE_RECOMMENDATIONS) {
+    const expand = element(
+      "button",
+      "meshilens-similar-expand",
+      state.expanded ? "收合推薦" : `顯示其餘 ${allVisible.length - DEFAULT_VISIBLE_RECOMMENDATIONS} 家`,
+    );
+    expand.type = "button";
+    expand.addEventListener("click", () => {
+      state.expanded = !state.expanded;
+      onUpdate();
+    });
+    section.append(expand);
+  }
   return section;
 }
 
 function syncSimilarRestaurants(card) {
   const existing = card.querySelector(".meshilens-similar");
-  const section = similarRestaurantsView(card._meshilensSimilar);
+  const section = similarRestaurantsView(card._meshilensSimilar, () => syncSimilarRestaurants(card));
   if (!section) {
     existing?.remove();
     return;

@@ -208,13 +208,15 @@ def rank_similar_candidates_with_diagnostics(
         if score < minimum_score:
             diagnostics["below_quality_count"] += 1
             continue
+        genres = _genres(raw.get("genres"))[:4]
         item = {
             "name": name,
             "rating": raw.get("rating"),
             "review_count": raw.get("review_count"),
             "url": url,
             "address": _text(raw.get("address")),
-            "genres": _genres(raw.get("genres"))[:4],
+            "genres": genres,
+            "genre_labels": [tabelog_label_zh_hant(value) for value in genres],
             "station": _text(raw.get("station")),
             "area": _text(raw.get("area")),
             "lunch_price": _text(raw.get("lunch_price")),
@@ -232,7 +234,7 @@ def rank_similar_candidates_with_diagnostics(
             item["name"],
         )
     )
-    recommendations = ranked[: max(1, min(limit, 5))]
+    recommendations = ranked[: max(1, min(limit, 6))]
     diagnostics["recommendation_count"] = len(recommendations)
     return recommendations, diagnostics
 

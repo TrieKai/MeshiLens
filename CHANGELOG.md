@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.35] — 2026-07-26
+
+### Added
+- 相似店家保留最多 6 家合格候選，預設顯示 3 家；可依推薦度、Tabelog 評分、評論數排序，並可依料理類型篩選，不增加 Tabelog 請求
+
 ## [0.5.34] — 2026-07-26
 
 ### Fixed
