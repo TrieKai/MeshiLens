@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.38] — 2026-07-26
+
+### Fixed
+- 修正韓國料理 Tabelog 附近分類 slug（`korea`），避免錯誤分類網址靜默退回泛附近店家；同步更新相似店家快取
+
 ## [0.5.37] — 2026-07-26
 
 ### Fixed

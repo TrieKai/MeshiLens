@@ -87,6 +87,7 @@ class ProviderTests(unittest.TestCase):
         )
         self.assertEqual(peripheral_genre_slug(["寿司", "日本料理"]), "sushi")
         self.assertEqual(peripheral_genre_slug(["うなぎ", "海鮮"]), "unagi")
+        self.assertEqual(peripheral_genre_slug(["韓国料理"]), "korea")
         self.assertEqual(peripheral_genre_slug(["おにぎり"]), "")
 
     def test_searches_by_local_phone_before_translated_name(self) -> None:
