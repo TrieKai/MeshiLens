@@ -21,7 +21,7 @@ PERIPHERAL_GENRE_SLUGS = {
     "寿司": "sushi", "鮨": "sushi", "ラーメン": "ramen", "カレー": "curry",
     "焼肉": "yakiniku", "焼き鳥": "yakitori", "ハンバーガー": "hamburger",
     "イタリアン": "italian", "フレンチ": "french", "中華料理": "chinese",
-    "韓国料理": "korean", "カフェ": "cafe", "居酒屋": "izakaya",
+    "韓国料理": "korean", "カフェ": "cafe", "居酒屋": "izakaya", "うなぎ": "unagi",
 }
 HYAKUMEITEN_URL_RE = re.compile(
     r"https?://award\.tabelog\.com/hyakumeiten/(?P<slug>[^/]+)/(?P<year>20\d{2})/?",

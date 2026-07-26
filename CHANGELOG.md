@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.37] — 2026-07-26
+
+### Fixed
+- 新增鰻魚（`うなぎ`）的 Tabelog 附近分類頁，避免誤讀泛附近店家而將全部候選判定為不相似；同步更新相似店家快取
+
 ## [0.5.36] — 2026-07-26
 
 ### Changed
