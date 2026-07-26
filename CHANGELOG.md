@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.41] — 2026-07-26
+
+### Changed
+- 首次 Tabelog 配對會重用 autocomplete 階段已讀取的正式店家頁來解析店家資料；只有該頁未能提供店名加電話或地址時，才退回讀取地圖頁補查。一般高信心配對少一次 Tabelog 請求與節流等待，資料不足時維持原本的保守驗證。
+
 ## [0.5.40] — 2026-07-26
 
 ### Changed

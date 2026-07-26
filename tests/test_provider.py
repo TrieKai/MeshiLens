@@ -189,6 +189,41 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(FakeRequests.urls, [f"{restaurant_url}peripheral_map/tempura/"])
         self.assertEqual(results[0]["name"], "近所の天婦羅")
 
+    def test_reuses_autocomplete_detail_page_before_requesting_a_map_page(self) -> None:
+        url = "https://tabelog.com/tokyo/A1301/A130101/13000001/"
+
+        class FakeDetailRequest:
+            def __init__(self, **_kwargs: object) -> None:
+                pass
+
+            def _parse_restaurant(self, _html: str, _url: str) -> dict[str, object]:
+                return {
+                    "name": "早い店",
+                    "url": url,
+                    "address": "東京都中央区銀座1-1-1",
+                    "phone": "03-1234-5678",
+                    "rating": 3.5,
+                }
+
+        class FakeRequests:
+            calls: list[str] = []
+
+            @classmethod
+            def get(cls, request_url: str, **_kwargs: object) -> object:
+                cls.calls.append(request_url)
+                raise AssertionError("正式店家頁已預載，不應再讀取地圖頁")
+
+        provider = GurumeProvider(minimum_interval=0)
+        with patch.dict("sys.modules", {"curl_cffi": SimpleNamespace(requests=FakeRequests)}):
+            results = provider._fetch_details(
+                [url], FakeDetailRequest,
+                preloaded_html={url: "<html><body>預載店家頁</body></html>"},
+            )
+
+        self.assertEqual(FakeRequests.calls, [])
+        self.assertEqual(results[0]["name"], "早い店")
+        self.assertEqual(results[0]["address"], "東京都中央区銀座1-1-1")
+
     def test_searches_by_local_phone_before_translated_name(self) -> None:
         self.assertEqual(
             web_search_queries(

@@ -637,8 +637,8 @@ class GurumeProvider:
 
     def _discover_with_suggestions(
         self, place: Mapping[str, Any], limit: int
-    ) -> list[str]:
-        """Resolve strong Tabelog autocomplete matches to canonical detail URLs."""
+    ) -> dict[str, str]:
+        """Resolve strong autocomplete matches, retaining already-fetched detail HTML."""
         from bs4 import BeautifulSoup
         from curl_cffi import requests
         from gurume.suggest import get_keyword_suggestions
@@ -676,7 +676,7 @@ class GurumeProvider:
             if restaurant_ids:
                 break
 
-        urls: list[str] = []
+        pages: dict[str, str] = {}
         for restaurant_id in restaurant_ids[:limit]:
             try:
                 self._throttle(self.TABELOG_HOST)
@@ -694,11 +694,43 @@ class GurumeProvider:
                 url = canonical_restaurant_url(
                     str(canonical.get("href") or "") if canonical else ""
                 )
-                if url and url not in urls:
-                    urls.append(url)
+                if url and url not in pages:
+                    pages[url] = response.text
             except Exception:
                 continue
-        return urls
+        return pages
+
+    @staticmethod
+    def _candidate_from_html(
+        html: str, url: str, request_type: Any
+    ) -> dict[str, Any] | None:
+        """Parse a full Tabelog restaurant page without a second network request."""
+        parser = request_type(
+            restaurant_url=url,
+            fetch_reviews=False,
+            fetch_menu=False,
+            fetch_courses=False,
+        )
+        parse_restaurant = getattr(parser, "_parse_restaurant", None)
+        if not callable(parse_restaurant):
+            return None
+        candidate = restaurant_to_dict(parse_restaurant(html, url))
+        if not candidate.get("name") or not (
+            candidate.get("phone") or candidate.get("address")
+        ):
+            return None
+        _apply_tabelog_page(
+            candidate,
+            parse_tabelog_page(html, str(candidate.get("reservation_url") or "")),
+        )
+        candidate.setdefault("is_hyakumeiten", False)
+        candidate.setdefault("hyakumeiten", [])
+        candidate.setdefault(
+            "reservation_status", "online" if candidate.get("reservation_url") else "unknown"
+        )
+        candidate.setdefault("reservation_details", "")
+        candidate.setdefault("payment", {})
+        return candidate
 
     def _fetch_details(
         self,
@@ -706,11 +738,21 @@ class GurumeProvider:
         request_type: Any,
         *,
         include_coordinates: bool = True,
+        preloaded_html: Mapping[str, str] | None = None,
     ) -> list[dict[str, Any]]:
         from curl_cffi import requests
 
         candidates: list[dict[str, Any]] = []
         for url in urls:
+            cached_html = str((preloaded_html or {}).get(url) or "")
+            if cached_html:
+                try:
+                    candidate = self._candidate_from_html(cached_html, url, request_type)
+                    if candidate:
+                        candidates.append(candidate)
+                        continue
+                except Exception:
+                    pass
             if include_coordinates:
                 try:
                     self._throttle(self.TABELOG_HOST)
@@ -722,22 +764,10 @@ class GurumeProvider:
                         impersonate="chrome",
                     )
                     map_response.raise_for_status()
-                    parser = request_type(
-                        restaurant_url=url,
-                        fetch_reviews=False,
-                        fetch_menu=False,
-                        fetch_courses=False,
+                    candidate = self._candidate_from_html(
+                        map_response.text, url, request_type
                     )
-                    parse_restaurant = getattr(parser, "_parse_restaurant", None)
-                    if callable(parse_restaurant):
-                        candidate = restaurant_to_dict(
-                            parse_restaurant(map_response.text, url)
-                        )
-                        page = parse_tabelog_page(
-                            map_response.text,
-                            str(candidate.get("reservation_url") or ""),
-                        )
-                        _apply_tabelog_page(candidate, page)
+                    if candidate:
                         candidates.append(candidate)
                         continue
                 except Exception:
@@ -954,10 +984,11 @@ class GurumeProvider:
             return direct_candidates
 
         suggestion_candidates: list[dict[str, Any]] = []
-        suggestion_urls = self._discover_with_suggestions(place, min(limit, 3))
-        if suggestion_urls:
+        suggestion_pages = self._discover_with_suggestions(place, min(limit, 3))
+        if suggestion_pages:
             suggestion_candidates = self._fetch_details(
-                suggestion_urls, RestaurantDetailRequest
+                list(suggestion_pages), RestaurantDetailRequest,
+                preloaded_html=suggestion_pages,
             )
             suggestion_has_reviews = any(
                 candidate.get("rating") is not None
