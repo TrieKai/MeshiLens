@@ -21,12 +21,29 @@ from meshi_lens.provider import (
     parse_peripheral_genre_links,
     parse_peripheral_restaurants,
     parse_tabelog_map_target_html,
+    relocation_from_tabelog_html,
     GurumeProvider,
     web_search_queries,
 )
 
 
 class ProviderTests(unittest.TestCase):
+    def test_parses_tabelog_relocation_notice_and_target(self) -> None:
+        relocation = relocation_from_tabelog_html('''
+          <div class="rst-status-alert">移転前の店舗情報です。新しい店舗は
+            <a href="https://tabelog.com/tokyo/A1323/A132302/13276342/">おにぎりぼんご</a>
+            をご参照ください。
+          </div>
+        ''')
+        self.assertEqual(
+            relocation,
+            {
+                "is_relocated": True,
+                "relocated_to_name": "おにぎりぼんご",
+                "relocated_to_url": "https://tabelog.com/tokyo/A1323/A132302/13276342/",
+            },
+        )
+
     def test_parses_map_only_frame_for_explicit_maps_click(self) -> None:
         target = parse_tabelog_map_target_html('''
           <script>var point = new google.maps.LatLng(35.71633803787633, 139.72868848360375)</script>

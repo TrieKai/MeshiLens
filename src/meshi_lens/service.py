@@ -39,6 +39,7 @@ from .similar import rank_similar_candidates_with_diagnostics
 
 
 LOGGER = logging.getLogger("meshilens.service")
+MATCH_CACHE_VERSION = "match-v2"
 SIMILAR_CACHE_VERSION = "nearby-v18"
 
 
@@ -130,7 +131,7 @@ class MatchService:
 
     @staticmethod
     def _cache_key(place: Mapping[str, Any]) -> str:
-        return "|".join(
+        return MATCH_CACHE_VERSION + "|" + "|".join(
             str(place.get(key) or "")
             for key in (
                 "name",

@@ -532,6 +532,26 @@ def payment_from_tabelog_html(html: str) -> dict[str, Any]:
     return payment_from_tabelog_info(_tabelog_info_map(html))
 
 
+def relocation_from_tabelog_soup(soup: Any) -> dict[str, Any]:
+    """Read Tabelog's explicit "moved" notice without inferring from distance."""
+    notice = soup.select_one(".rst-status-alert")
+    text = notice.get_text(" ", strip=True) if notice else ""
+    if "移転前の店舗情報" not in text:
+        return {"is_relocated": False, "relocated_to_name": "", "relocated_to_url": ""}
+    target = notice.find("a", href=True) if notice else None
+    return {
+        "is_relocated": True,
+        "relocated_to_name": target.get_text(" ", strip=True) if target else "",
+        "relocated_to_url": canonical_restaurant_url(
+            str(target.get("href") or "") if target else ""
+        ) or "",
+    }
+
+
+def relocation_from_tabelog_html(html: str) -> dict[str, Any]:
+    return relocation_from_tabelog_soup(_parse_tabelog_soup(html))
+
+
 def parse_tabelog_page(html: str, reservation_url: str = "") -> dict[str, Any]:
     """Parse a Tabelog restaurant HTML document once for coordinates and extras."""
     soup = _parse_tabelog_soup(html)
@@ -540,12 +560,14 @@ def parse_tabelog_page(html: str, reservation_url: str = "") -> dict[str, Any]:
     selections = hyakumeiten_from_tabelog_soup(soup)
     reservation = reservation_from_tabelog_info(info, reservation_url)
     payment = payment_from_tabelog_info(info)
+    relocation = relocation_from_tabelog_soup(soup)
     return {
         "latitude": latitude,
         "longitude": longitude,
         "hyakumeiten": selections,
         "reservation": reservation,
         "payment": payment,
+        "relocation": relocation,
     }
 
 
@@ -563,6 +585,10 @@ def _apply_tabelog_page(candidate: dict[str, Any], page: Mapping[str, Any]) -> N
     if reservation.get("url"):
         candidate["reservation_url"] = reservation["url"]
     candidate["payment"] = dict(page.get("payment") or {})
+    relocation = page.get("relocation") or {}
+    candidate["is_relocated"] = bool(relocation.get("is_relocated"))
+    candidate["relocated_to_name"] = str(relocation.get("relocated_to_name") or "")
+    candidate["relocated_to_url"] = str(relocation.get("relocated_to_url") or "")
 
 
 def _add_tabelog_extras(candidate: dict[str, Any], html: str) -> None:

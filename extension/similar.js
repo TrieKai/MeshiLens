@@ -21,6 +21,18 @@
     );
   }
 
+  function relocationNoticeForSelected(candidates, selected) {
+    const selectedUrl = canonicalTabelogUrl(selected?.url);
+    if (!selectedUrl || !Array.isArray(candidates)) return null;
+    const relocated = candidates.find(
+      (candidate) => candidate?.is_relocated
+        && canonicalTabelogUrl(candidate?.relocated_to_url) === selectedUrl,
+    );
+    return relocated
+      ? { name: String(relocated.name || ""), url: String(relocated.url || "") }
+      : null;
+  }
+
   function confidenceLabel(confidence) {
     if (confidence === "high") return "高信心";
     if (confidence === "medium") return "待確認";
@@ -124,6 +136,7 @@
     DEFAULT_VISIBLE_RECOMMENDATIONS,
     SIMILAR_CACHE_VERSION,
     alternativeCandidates,
+    relocationNoticeForSelected,
     confidenceLabel,
     mapsSearchUrl,
     similarMapTargetPayload,

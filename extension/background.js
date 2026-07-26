@@ -289,14 +289,14 @@ function michelinBatchPayload(cards) {
 }
 
 async function matchPlace(place, signal) {
-  const cached = await getCachedLookup("match", place);
+  const cached = await getCachedLookup("match-v2", place);
   if (cached) return cached;
   const data = await request("/match", {
     method: "POST",
     body: JSON.stringify(placePayload(place)),
     signal,
   });
-  await setCachedLookup("match", place, data);
+  await setCachedLookup("match-v2", place, data);
   return data;
 }
 

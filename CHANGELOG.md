@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.42] — 2026-07-26
+
+### Fixed
+- 解析 Tabelog 明確標示的「移轉前」店家與其新店連結；移轉前資料會排在現店之後、候選列出「已搬遷」標記，現店則顯示已略過舊資料。同步更新前後端配對快取，避免沿用修正前的選定結果。
+
 ## [0.5.41] — 2026-07-26
 
 ### Changed

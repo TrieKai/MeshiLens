@@ -8,7 +8,7 @@ const { classifyJapanPlace } = globalThis.MeshiLensJapan;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 const { advicePayload, adviceCacheKey, adviceErrorMessage, cachedAdvice, normalizeAdviceNumbers } = globalThis.MeshiLensAdvice;
-const { alternativeCandidates, confidenceLabel, DEFAULT_VISIBLE_RECOMMENDATIONS, mapsSearchUrl, similarDiagnosticsSummary, similarDisplayState, similarMapTargetPayload, similarPayload, visibleSimilarRecommendations } = globalThis.MeshiLensSimilar;
+const { alternativeCandidates, confidenceLabel, DEFAULT_VISIBLE_RECOMMENDATIONS, mapsSearchUrl, relocationNoticeForSelected, similarDiagnosticsSummary, similarDisplayState, similarMapTargetPayload, similarPayload, visibleSimilarRecommendations } = globalThis.MeshiLensSimilar;
 const {
   BUTTON_LABEL,
   CARD_TITLE,
@@ -766,6 +766,22 @@ function selectedView(candidate, result) {
   );
   row.append(meta);
   container.append(row);
+  if (candidate.is_relocated) {
+    const warning = element("div", "meshilens-relocation-warning", "此為 Tabelog 標示的移轉前資料。");
+    if (candidate.relocated_to_url) {
+      const target = element("a", "meshilens-relocation-link", `查看新店${candidate.relocated_to_name ? `：${candidate.relocated_to_name}` : ""} ↗`);
+      target.href = candidate.relocated_to_url;
+      target.target = "_blank";
+      target.rel = "noopener noreferrer";
+      warning.append(document.createTextNode(" "), target);
+    }
+    container.append(warning);
+  } else {
+    const relocation = relocationNoticeForSelected(result.candidates, candidate);
+    if (relocation) {
+      container.append(element("div", "meshilens-relocation-notice", `已略過 Tabelog 移轉前資料${relocation.name ? `：${relocation.name}` : ""}`));
+    }
+  }
   const timeline = timelineView(
     buildTimelineEntries(result.michelin, candidate.hyakumeiten || []),
   );
@@ -887,6 +903,9 @@ function renderResult(card, result) {
     if (candidate.is_hyakumeiten) {
       const count = candidate.hyakumeiten?.length || 1;
       top.append(element("span", "meshilens-candidate-award", count > 1 ? `百名店 ×${count}` : "百名店"));
+    }
+    if (candidate.is_relocated) {
+      top.append(element("span", "meshilens-candidate-relocated", "已搬遷"));
     }
     top.append(element("span", "meshilens-candidate-score", confidenceLabel(candidate.confidence)));
     button.append(top);

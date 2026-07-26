@@ -205,9 +205,12 @@ def rank_candidates(
                 round(match.distance_meters) if match.distance_meters is not None else None
             ),
         )
+        if enriched.get("is_relocated"):
+            enriched["match_reasons"].append("Tabelog 標示為移轉前資料")
         ranked.append(enriched)
     ranked.sort(
         key=lambda item: (
+            not bool(item.get("is_relocated")),
             item["score"],
             int(item.get("rating") is not None),
             int(item.get("review_count") or 0),

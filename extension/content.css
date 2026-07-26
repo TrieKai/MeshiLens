@@ -141,6 +141,23 @@ a.meshilens-list-badge:focus-visible {
   padding: 8px 0;
 }
 
+.meshilens-relocation-warning,
+.meshilens-relocation-notice {
+  background: #fff8e9;
+  border: 1px solid #e7cf98;
+  border-radius: 9px;
+  color: #76520c;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 10px;
+  padding: 8px 10px;
+}
+
+.meshilens-relocation-link {
+  color: #8c4a12;
+  font-weight: 700;
+}
+
 .meshilens-michelin {
   background: #fff7f7;
   border: 1px solid #ead4d6;
@@ -757,6 +774,16 @@ a.meshilens-timeline-label:focus-visible {
   background: #fff4cc;
   border-radius: 999px;
   color: #76520c;
+  font-size: 10px;
+  font-weight: 750;
+  margin-left: auto;
+  padding: 2px 6px;
+}
+
+.meshilens-candidate-relocated {
+  background: #fff1e6;
+  border-radius: 999px;
+  color: #9a4c16;
   font-size: 10px;
   font-weight: 750;
   margin-left: auto;

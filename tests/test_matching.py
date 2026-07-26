@@ -107,6 +107,23 @@ class MatchingTests(unittest.TestCase):
         ranked = rank_candidates(self.place, [self.candidate, first])
         self.assertEqual(len(ranked), 1)
 
+    def test_prior_location_is_ranked_after_the_current_tabelog_listing(self) -> None:
+        old = {
+            **self.candidate,
+            "url": "https://tabelog.com/ibaraki/A0804/A080401/8000478/",
+            "address": "茨城県潮来市別所1-1-1",
+            "phone": "0299-00-0000",
+            "latitude": 35.9609,
+            "longitude": 140.5058,
+            "is_relocated": True,
+            "relocated_to_url": self.candidate["url"],
+            "rating": 4.0,
+            "review_count": 10_000,
+        }
+        ranked = rank_candidates(self.place, [old, self.candidate])
+        self.assertEqual(ranked[0]["url"], self.candidate["url"])
+        self.assertIn("Tabelog 標示為移轉前資料", ranked[1]["match_reasons"])
+
 
 if __name__ == "__main__":
     unittest.main()

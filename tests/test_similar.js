@@ -11,6 +11,7 @@ const {
   confidenceLabel,
   mapsSearchUrl,
   similarMapTargetPayload,
+  relocationNoticeForSelected,
   similarDiagnosticsSummary,
   similarDisplayState,
   similarPayload,
@@ -96,6 +97,17 @@ test("sorts already-loaded similar restaurants without another request", () => {
 test("does not request similar restaurants without Tabelog URL or cuisine", () => {
   assert.equal(similarPayload({ name: "鮨 みなと", genres: ["寿司"] }), null);
   assert.equal(similarPayload({ name: "鮨 みなと", url: "https://tabelog.com/example/" }), null);
+});
+
+test("notices when the selected listing supersedes a Tabelog relocation record", () => {
+  const current = { url: "https://tabelog.com/tokyo/A1323/A132302/13276342/" };
+  assert.deepEqual(
+    relocationNoticeForSelected(
+      [{ name: "おにぎり ぼんご", is_relocated: true, relocated_to_url: current.url, url: "https://tabelog.com/tokyo/A1323/A132302/13003791/" }],
+      current,
+    ),
+    { name: "おにぎり ぼんご", url: "https://tabelog.com/tokyo/A1323/A132302/13003791/" },
+  );
 });
 
 test("keeps an explicit empty state and safe diagnostics when no nearby recommendation is verified", () => {
