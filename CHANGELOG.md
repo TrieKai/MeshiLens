@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.36] — 2026-07-26
+
+### Changed
+- 移除相似店家的料理類型篩選，保留推薦度、Tabelog 評分、評論數排序與展開更多推薦
+
 ## [0.5.35] — 2026-07-26
 
 ### Added

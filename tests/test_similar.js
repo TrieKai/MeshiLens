@@ -11,7 +11,6 @@ const {
   confidenceLabel,
   mapsSearchUrl,
   similarMapTargetPayload,
-  similarGenreOptions,
   similarDiagnosticsSummary,
   similarDisplayState,
   similarPayload,
@@ -78,23 +77,19 @@ test("builds a bounded similar-restaurant request from selected Tabelog facts", 
   );
 });
 
-test("sorts and filters already-loaded similar restaurants without another request", () => {
+test("sorts already-loaded similar restaurants without another request", () => {
   const recommendations = [
     { name: "評論最多拉麵", similarity_score: 92, rating: 3.2, review_count: 500, genres: ["ラーメン"], genre_labels: ["拉麵"] },
     { name: "高分壽司", similarity_score: 71, rating: 3.9, review_count: 12, genres: ["寿司"], genre_labels: ["壽司"] },
     { name: "中分拉麵", similarity_score: 80, rating: 3.6, review_count: 100, genres: ["ラーメン"], genre_labels: ["拉麵"] },
   ];
-  assert.deepEqual(similarGenreOptions(recommendations), [
-    { value: "ラーメン", label: "拉麵" },
-    { value: "寿司", label: "壽司" },
-  ]);
   assert.deepEqual(
     sortedSimilarRecommendations(recommendations, "rating").map((item) => item.name),
     ["高分壽司", "中分拉麵", "評論最多拉麵"],
   );
   assert.deepEqual(
-    visibleSimilarRecommendations(recommendations, { genre: "ラーメン", sort: "reviews", expanded: true }).map((item) => item.name),
-    ["評論最多拉麵", "中分拉麵"],
+    visibleSimilarRecommendations(recommendations, { sort: "reviews", expanded: true }).map((item) => item.name),
+    ["評論最多拉麵", "中分拉麵", "高分壽司"],
   );
 });
 
@@ -109,7 +104,7 @@ test("keeps an explicit empty state and safe diagnostics when no nearby recommen
   assert.deepEqual(similarDisplayState(null), { status: "empty", diagnostics: null });
   assert.deepEqual(
     similarDisplayState([{ name: "附近店家" }]),
-    { status: "ready", recommendations: [{ name: "附近店家" }], diagnostics: null, sort: "recommended", genre: "", expanded: false },
+    { status: "ready", recommendations: [{ name: "附近店家" }], diagnostics: null, sort: "recommended", expanded: false },
   );
   assert.equal(
     similarDiagnosticsSummary(diagnostics),

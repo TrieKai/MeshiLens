@@ -41,23 +41,8 @@
 
   function similarDisplayState(recommendations, diagnostics = null) {
     return Array.isArray(recommendations) && recommendations.length
-      ? { status: "ready", recommendations, diagnostics, sort: "recommended", genre: "", expanded: false }
+      ? { status: "ready", recommendations, diagnostics, sort: "recommended", expanded: false }
       : { status: "empty", diagnostics };
-  }
-
-  function similarGenreOptions(recommendations) {
-    const options = new Map();
-    for (const recommendation of Array.isArray(recommendations) ? recommendations : []) {
-      const genres = Array.isArray(recommendation?.genres) ? recommendation.genres : [];
-      const labels = Array.isArray(recommendation?.genre_labels) ? recommendation.genre_labels : [];
-      genres.forEach((genre, index) => {
-        const value = String(genre || "").trim();
-        if (value && !options.has(value)) options.set(value, String(labels[index] || value).trim());
-      });
-    }
-    return [...options.entries()]
-      .map(([value, label]) => ({ value, label }))
-      .sort((left, right) => left.label.localeCompare(right.label, "zh-Hant"));
   }
 
   function numberForSort(value) {
@@ -88,11 +73,7 @@
   }
 
   function visibleSimilarRecommendations(recommendations, options = {}) {
-    const genre = String(options.genre || "").trim();
-    const filtered = (Array.isArray(recommendations) ? recommendations : []).filter((recommendation) =>
-      !genre || (Array.isArray(recommendation?.genres) && recommendation.genres.includes(genre)),
-    );
-    const sorted = sortedSimilarRecommendations(filtered, options.sort);
+    const sorted = sortedSimilarRecommendations(recommendations, options.sort);
     return options.expanded ? sorted : sorted.slice(0, DEFAULT_VISIBLE_RECOMMENDATIONS);
   }
 
@@ -146,7 +127,6 @@
     confidenceLabel,
     mapsSearchUrl,
     similarMapTargetPayload,
-    similarGenreOptions,
     similarDiagnosticsSummary,
     similarDisplayState,
     similarPayload,

@@ -8,7 +8,7 @@ const { classifyJapanPlace } = globalThis.MeshiLensJapan;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 const { advicePayload, adviceCacheKey, adviceErrorMessage, cachedAdvice, normalizeAdviceNumbers } = globalThis.MeshiLensAdvice;
-const { alternativeCandidates, confidenceLabel, DEFAULT_VISIBLE_RECOMMENDATIONS, mapsSearchUrl, similarDiagnosticsSummary, similarDisplayState, similarGenreOptions, similarMapTargetPayload, similarPayload, visibleSimilarRecommendations } = globalThis.MeshiLensSimilar;
+const { alternativeCandidates, confidenceLabel, DEFAULT_VISIBLE_RECOMMENDATIONS, mapsSearchUrl, similarDiagnosticsSummary, similarDisplayState, similarMapTargetPayload, similarPayload, visibleSimilarRecommendations } = globalThis.MeshiLensSimilar;
 const {
   BUTTON_LABEL,
   CARD_TITLE,
@@ -345,10 +345,8 @@ function similarRestaurantsView(state, onUpdate = () => {}) {
   }
   const recommendations = Array.isArray(state?.recommendations) ? state.recommendations : [];
   if (!recommendations.length) return null;
-  const genreOptions = similarGenreOptions(recommendations);
   const allVisible = visibleSimilarRecommendations(recommendations, {
     sort: state.sort,
-    genre: state.genre,
     expanded: true,
   });
   const visibleRecommendations = visibleSimilarRecommendations(recommendations, state);
@@ -375,25 +373,6 @@ function similarRestaurantsView(state, onUpdate = () => {}) {
     });
     sortLabel.append(sort);
     controls.append(sortLabel);
-    if (genreOptions.length > 1) {
-      const genreLabel = element("label", "meshilens-similar-control", "料理");
-      const genre = document.createElement("select");
-      genre.className = "meshilens-similar-select";
-      [["", "全部類型"], ...genreOptions.map(({ value, label }) => [value, label])].forEach(([value, label]) => {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = label;
-        option.selected = value === state.genre;
-        genre.append(option);
-      });
-      genre.addEventListener("change", () => {
-        state.genre = genre.value;
-        state.expanded = false;
-        onUpdate();
-      });
-      genreLabel.append(genre);
-      controls.append(genreLabel);
-    }
     section.append(controls);
   }
   const list = element("div", "meshilens-similar-list");
