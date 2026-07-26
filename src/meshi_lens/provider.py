@@ -6,10 +6,10 @@ import re
 import threading
 import time
 from typing import Any, Mapping
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 from .localization import tabelog_label_zh_hant
-from .matching import haversine_meters, normalize_name, normalize_phone, similarity
+from .matching import haversine_meters, normalize_name, normalize_phone, normalize_text, similarity
 
 
 TABELOG_RESULT_RE = re.compile(
@@ -32,6 +32,11 @@ HYAKUMEITEN_LABEL_RE = re.compile(
 )
 PAYMENT_MARKER_RE = re.compile(
     r"(?P<kind>カード|クレジットカード|電子マネー|QRコード決済)\s*(?P<status>不可|可)"
+)
+PERIPHERAL_CATEGORY_RE = re.compile(
+    r"/(?:en/|tw/|cn/|kr/)?[a-z0-9-]+/A\d+/A\d+/\d+/peripheral_map/"
+    r"(?P<slug>[a-z][a-z0-9_-]*)/?(?:[?#].*)?$",
+    re.IGNORECASE,
 )
 
 
@@ -240,6 +245,51 @@ def peripheral_genre_slug(genres: Any) -> str:
             if genre in text:
                 return slug
     return ""
+
+
+def parse_peripheral_genre_links(html: str) -> list[dict[str, str]]:
+    """Return the official cuisine filters offered by a nearby-restaurants page."""
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "lxml")
+    links: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for anchor in soup.find_all("a", href=True):
+        label = anchor.get_text(" ", strip=True)
+        href = urljoin("https://tabelog.com", str(anchor.get("href") or ""))
+        match = PERIPHERAL_CATEGORY_RE.search(href)
+        if not label or not match:
+            continue
+        slug = match.group("slug").lower()
+        if slug in seen:
+            continue
+        links.append({"label": label, "slug": slug})
+        seen.add(slug)
+    return links
+
+
+def peripheral_genre_slug_from_links(genres: Any, links: list[Mapping[str, Any]]) -> str:
+    """Match Tabelog's own category labels to the selected restaurant genres."""
+    values = [genres] if isinstance(genres, str) else genres if isinstance(genres, list) else []
+    best: tuple[int, str] | None = None
+    for value in values:
+        genre = normalize_text(str(value or ""))
+        if not genre:
+            continue
+        for link in links:
+            label = normalize_text(str(link.get("label") or ""))
+            slug = str(link.get("slug") or "").strip().lower()
+            if not label or not slug:
+                continue
+            if genre == label:
+                score = 10_000 + len(genre)
+            elif genre in label or label in genre:
+                score = min(len(genre), len(label))
+            else:
+                continue
+            if best is None or score > best[0]:
+                best = (score, slug)
+    return best[1] if best else ""
 
 
 def extract_tabelog_urls(html: str, limit: int = 6) -> list[str]:
@@ -739,11 +789,13 @@ class GurumeProvider:
     def search_similar(
         self, seed: Mapping[str, Any], limit: int = 20
     ) -> list[dict[str, Any]]:
-        """Read one Tabelog search page for similar restaurants.
+        """Read a bounded Tabelog nearby-restaurants category for recommendations.
 
         Unlike identity matching, this deliberately has no web-search fallback
-        and never fetches candidate detail pages.  One search page, bounded to
-        its first result set, is the entire network budget for a recommendation.
+        and never fetches candidate detail pages.  Known cuisines use one
+        official category page; an unknown cuisine first reads the generic
+        nearby page solely to discover its official category link, then may
+        read that one category page.  Results remain bounded to the first set.
         """
         try:
             from gurume import RestaurantSearchRequest, SortType
@@ -765,21 +817,38 @@ class GurumeProvider:
         )
         if not genre:
             return []
-        peripheral_url = tabelog_peripheral_map_url(
-            str(seed.get("url") or ""), peripheral_genre_slug(raw_genres)
-        )
-        if peripheral_url:
+        generic_peripheral_url = tabelog_peripheral_map_url(str(seed.get("url") or ""))
+        known_slug = peripheral_genre_slug(raw_genres)
+        if generic_peripheral_url:
             from curl_cffi import requests
 
-            self._throttle(self.TABELOG_HOST)
-            response = requests.get(
-                peripheral_url,
-                params={"type": "0"},
-                headers={"Accept-Language": "ja,en;q=0.8"}, timeout=20.0,
-                allow_redirects=True, impersonate="chrome",
+            def fetch_peripheral(url: str) -> str:
+                self._throttle(self.TABELOG_HOST)
+                response = requests.get(
+                    url,
+                    params={"type": "0"},
+                    headers={"Accept-Language": "ja,en;q=0.8"}, timeout=20.0,
+                    allow_redirects=True, impersonate="chrome",
+                )
+                response.raise_for_status()
+                return response.text
+
+            if known_slug:
+                category_url = tabelog_peripheral_map_url(
+                    str(seed.get("url") or ""), known_slug
+                )
+                return parse_peripheral_restaurants(fetch_peripheral(category_url), limit)
+
+            generic_html = fetch_peripheral(generic_peripheral_url)
+            discovered_slug = peripheral_genre_slug_from_links(
+                raw_genres, parse_peripheral_genre_links(generic_html)
             )
-            response.raise_for_status()
-            return parse_peripheral_restaurants(response.text, limit)
+            if discovered_slug:
+                category_url = tabelog_peripheral_map_url(
+                    str(seed.get("url") or ""), discovered_slug
+                )
+                return parse_peripheral_restaurants(fetch_peripheral(category_url), limit)
+            return parse_peripheral_restaurants(generic_html, limit)
         station = str(seed.get("station") or "").strip().removesuffix("駅")
         area = station or area_from_address(str(seed.get("address") or ""))
         if not area:

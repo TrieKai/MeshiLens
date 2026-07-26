@@ -17,6 +17,8 @@ from meshi_lens.provider import (
     tabelog_area_path,
     tabelog_peripheral_map_url,
     peripheral_genre_slug,
+    peripheral_genre_slug_from_links,
+    parse_peripheral_genre_links,
     parse_peripheral_restaurants,
     parse_tabelog_map_target_html,
     GurumeProvider,
@@ -89,6 +91,65 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(peripheral_genre_slug(["うなぎ", "海鮮"]), "unagi")
         self.assertEqual(peripheral_genre_slug(["韓国料理"]), "korea")
         self.assertEqual(peripheral_genre_slug(["おにぎり"]), "")
+
+    def test_discovers_an_official_nearby_category_slug(self) -> None:
+        links = parse_peripheral_genre_links('''
+          <a href="/osaka/A2701/A270304/27003671/peripheral_map/soba/">そば（蕎麦）</a>
+          <a href="/osaka/A2701/A270304/27003671/peripheral_map/seafood/">海鮮・魚介</a>
+          <a href="/osaka/A2701/A270304/27003671/peripheral_map/2/?type=0">2</a>
+        ''')
+        self.assertEqual(
+            links,
+            [{"label": "そば（蕎麦）", "slug": "soba"}, {"label": "海鮮・魚介", "slug": "seafood"}],
+        )
+        self.assertEqual(peripheral_genre_slug_from_links(["そば"], links), "soba")
+        self.assertEqual(peripheral_genre_slug_from_links(["海鮮"], links), "seafood")
+        self.assertEqual(peripheral_genre_slug_from_links(["おにぎり"], links), "")
+
+    def test_unknown_genre_discovers_category_before_parsing_candidates(self) -> None:
+        restaurant_url = "https://tabelog.com/osaka/A2701/A270304/27003671/"
+
+        class FakeResponse:
+            def __init__(self, text: str) -> None:
+                self.text = text
+
+            def raise_for_status(self) -> None:
+                return None
+
+        class FakeRequests:
+            urls: list[str] = []
+
+            @classmethod
+            def get(cls, url: str, **_kwargs: object) -> FakeResponse:
+                cls.urls.append(url)
+                if url.endswith("/peripheral_map/"):
+                    return FakeResponse(
+                        '<a href="/osaka/A2701/A270304/27003671/peripheral_map/soba/">そば（蕎麦）</a>'
+                    )
+                if url.endswith("/peripheral_map/soba/"):
+                    return FakeResponse(
+                        '<div><h5><a href="https://tabelog.com/osaka/A2701/A270304/27000001/">近所の蕎麦</a></h5>'
+                        '関目高殿 / そば（蕎麦） 3.55 42人</div>'
+                    )
+                raise AssertionError(url)
+
+        fake_gurume = SimpleNamespace(
+            RestaurantSearchRequest=object,
+            SortType=SimpleNamespace(RANKING="ranking"),
+        )
+        fake_curl_cffi = SimpleNamespace(requests=FakeRequests)
+        provider = GurumeProvider(minimum_interval=0)
+        with patch.dict(
+            "sys.modules", {"gurume": fake_gurume, "curl_cffi": fake_curl_cffi}
+        ):
+            results = provider.search_similar({"url": restaurant_url, "genres": ["そば"]})
+
+        self.assertEqual(
+            FakeRequests.urls,
+            [f"{restaurant_url}peripheral_map/", f"{restaurant_url}peripheral_map/soba/"],
+        )
+        self.assertEqual(results[0]["name"], "近所の蕎麦")
+        self.assertEqual(results[0]["genres"], ["そば（蕎麦）"])
 
     def test_searches_by_local_phone_before_translated_name(self) -> None:
         self.assertEqual(

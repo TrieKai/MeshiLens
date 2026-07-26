@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.39] — 2026-07-26
+
+### Fixed
+- 未收錄於靜態對照的料理類別，會從 Tabelog 官方附近頁動態發現分類 slug；確認有相符分類時改讀該分類頁，不再直接以泛附近候選判定相似。未知類別最多增加一個低頻頁面請求，且不讀取推薦店詳情或評論。
+
 ## [0.5.38] — 2026-07-26
 
 ### Fixed
