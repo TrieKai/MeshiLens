@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="MeshiLens 讓你在 Google Maps 日本餐廳頁面直接查看 Tabelog 與 Michelin Guide 資訊。"
+    />
+    <title>MeshiLens｜在 Google Maps 看懂日本餐廳</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳到主要內容</a>
+
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="MeshiLens 首頁">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>MeshiLens</span>
+      </a>
+      <nav aria-label="主要導覽">
+        <a href="#how">使用方式</a>
+        <a href="#features">能看到什麼</a>
+        <a href="#privacy">隱私與限制</a>
+      </nav>
+      <a class="nav-cta" href="#install">開始使用</a>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow">JAPAN DINING, CLEARER</p>
+          <h1>在 Google Maps<br />看懂日本餐廳。</h1>
+          <p class="hero-text">
+            MeshiLens 將 Tabelog 日本語版評分與 Michelin Guide 日本入選資訊，
+            自然放進你正在看的 Google Maps 店家頁。
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#install">查看安裝方式 <span aria-hidden="true">↓</span></a>
+            <a class="button button-quiet" href="#how">3 步開始使用</a>
+          </div>
+          <p class="hero-note">適用於 Chrome／Edge 的日本餐廳 Google Maps 頁面</p>
+        </div>
+
+        <div class="maps-frame" aria-label="MeshiLens 在 Google Maps 店家頁顯示資訊卡的示意畫面">
+          <div class="map-toolbar"><span class="map-dot"></span><span></span><span></span></div>
+          <aside class="maps-detail-panel">
+            <div class="google-search"><span aria-hidden="true">⌕</span><span>搜尋 Google 地圖</span><b aria-hidden="true">☰</b></div>
+            <div class="place-summary"><button class="back-button" aria-label="返回">‹</button><div class="place-cover"><span>鮨</span></div><h2>示範壽司餐廳</h2><p>壽司 · 東京</p><div class="place-actions"><span>☆<small>儲存</small></span><span>↗<small>分享</small></span><span>⋯<small>更多</small></span></div></div>
+            <article class="extension-card">
+              <div class="extension-header"><span>MeshiLens</span><small>Tabelog 日本語版</small></div>
+              <section class="extension-michelin"><div><strong>MICHELIN GUIDE</strong><small>目前收錄</small></div><div class="michelin-awards"><b>一星餐廳</b></div><p>壽司 · ¥¥¥¥ · 東京都</p></section>
+              <div class="extension-score-row"><strong>3.86</strong><div><span>★★★★★</span><small>1,248 則評論</small></div></div>
+              <section class="extension-timeline"><strong>店家時間線</strong><ol><li><span>2024</span><div><b>東京壽司百名店</b><small>目前紀錄</small></div></li><li class="is-current"><span>現在</span><div><b>Michelin Guide 一星</b><small>目前收錄</small></div></li></ol></section>
+              <a class="extension-reservation" href="#install">可網路預約 ↗</a>
+              <details class="extension-details"><summary>更多 Tabelog 資訊</summary><div><span>料理類型</span><b>壽司</b></div><div><span>最近車站</span><b>銀座站</b></div><div><span>晚餐價位</span><b>￥20,000〜￥29,999</b></div></details>
+              <p class="extension-reasons">高信心配對 · 店名與座標相符</p>
+              <footer class="extension-footer"><a href="#features">在 Tabelog 開啟 ↗</a><span>剛剛更新</span></footer>
+            </article>
+          </aside>
+          <div class="map-canvas"><div class="map-label label-one">銀座</div><div class="map-label label-two">築地</div><div class="map-streets street-one"></div><div class="map-streets street-two"></div><div class="map-streets street-three"></div><span class="place-pin pin-one">●</span><span class="place-pin pin-two">●</span><button class="zoom-controls" aria-label="縮放地圖">+<i></i>−</button></div>
+          <p class="mock-caption">依實際配對結果顯示</p>
+        </div>
+      </section>
+
+      <section class="trust-strip" aria-label="資料來源">
+        <p>把你原本就會查的資訊，留在同一個地圖頁。</p>
+        <div><span>Tabelog 日本語版</span><i></i><span>Michelin Guide 日本</span><i></i><span>Google Maps</span></div>
+      </section>
+
+      <section class="how section" id="how">
+        <div class="section-intro"><p class="eyebrow">HOW IT WORKS</p><h2>不必切換分頁，<br />三步就能開始。</h2></div>
+        <ol class="steps">
+          <li><span class="step-number">01</span><div><h3>啟動本機服務</h3><p>在電腦上啟動 MeshiLens 配對服務，讓擴充功能能安全取得比對結果。</p></div></li>
+          <li><span class="step-number">02</span><div><h3>載入瀏覽器擴充功能</h3><p>在 Chrome 或 Edge 的擴充功能管理頁開啟開發人員模式，載入專案的 <code>extension</code> 資料夾。</p></div></li>
+          <li><span class="step-number">03</span><div><h3>照常使用 Google Maps</h3><p>開啟日本餐廳的店家頁；符合餐飲條件的店家會自動顯示 MeshiLens 資訊卡。</p></div></li>
+        </ol>
+      </section>
+
+      <section class="features section" id="features">
+        <div class="section-intro"><p class="eyebrow">ONE PLACE, MORE CONTEXT</p><h2>用餐前，多一層<br />真正有用的線索。</h2></div>
+        <div class="feature-grid">
+          <article class="feature feature-score"><span class="feature-icon">◎</span><h3>Tabelog 評分與人氣</h3><p>快速查看日本語版評分、評論數、價位、百名店紀錄與訂位狀態。</p><div class="mini-score"><span>TABLELOG</span><strong>3.86</strong><em>★</em></div></article>
+          <article class="feature feature-guide"><span class="feature-icon">✦</span><h3>Michelin Guide 入選</h3><p>辨識三星、二星、一星、必比登與指南入選，不必另開 Michelin 網站。</p><div class="guide-stamp"><span>MICHELIN</span><strong>★ ★ ★</strong><small>Selected restaurant</small></div></article>
+          <article class="feature feature-match"><span class="feature-icon">⌁</span><h3>多訊號店家配對</h3><p>用店名、電話、地址、座標及官網交叉判斷，並清楚標示需核對的候選結果。</p><div class="match-lines"><span></span><span></span><span></span></div></article>
+          <article class="feature feature-advice"><span class="feature-icon">◌</span><h3>結構化用餐建議</h3><p>以餐廳類型、價位、獎項、訂位與付款等已有欄位，整理出繁中用餐提示。</p><div class="advice-bubble">適合想安排一頓正式壽司晚餐的時候。</div></article>
+        </div>
+      </section>
+
+      <section class="privacy section" id="privacy">
+        <div class="privacy-card">
+          <p class="eyebrow">PRIVACY BY DESIGN</p>
+          <h2>資訊要有，<br />打擾要少。</h2>
+          <p>MeshiLens 只針對你正在看的餐廳低頻查詢，並把 Michelin 資料留在伺服器端快照中。它不讀取 Google Maps 的評論內容。</p>
+          <a class="text-link" href="#install">閱讀使用與資料限制 <span aria-hidden="true">↓</span></a>
+        </div>
+        <ul class="privacy-points">
+          <li><span>01</span><p><strong>不批量瀏覽</strong>只處理目前開啟的店家，不掃描地圖列表。</p></li>
+          <li><span>02</span><p><strong>不讀取 Maps 評論</strong>店家比對只使用名稱、地址、電話、座標與官網等識別資訊。</p></li>
+          <li><span>03</span><p><strong>評論摘要需主動點擊</strong>實驗功能僅讀取一頁公開 Tabelog 評論，完成摘要後立即捨棄原文。</p></li>
+        </ul>
+      </section>
+
+      <section class="install section" id="install">
+        <div><p class="eyebrow">GET STARTED</p><h2>準備好讓地圖<br />更懂日本餐廳了嗎？</h2></div>
+        <div class="install-card"><h3>本機安裝</h3><p>MeshiLens 目前以本機服務搭配未封裝擴充功能使用。</p><ol><li>安裝 Python 3.12+ 與 uv</li><li>在專案資料夾執行 <code>uv sync</code> 與 <code>uv run meshilens-server</code></li><li>到 <code>chrome://extensions</code> 載入 <code>extension</code> 資料夾</li></ol><a class="button button-primary" href="../README.md">查看完整安裝說明 <span aria-hidden="true">→</span></a></div>
+      </section>
+    </main>
+
+    <footer><a class="brand" href="#top"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>MeshiLens</span></a><p>為探索日本餐廳而做。非 Google、Tabelog 或 Michelin 的官方產品。</p><a href="../README.md">GitHub／專案說明</a></footer>
+  </body>
+</html>
