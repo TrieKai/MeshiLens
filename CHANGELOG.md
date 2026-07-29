@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.46] — 2026-07-29
+
+### Fixed
+- 修正 Vercel catch-all rewrite 遺失 `/api/*` 子路徑，導致正式 API 的 `/match`、`/michelin` 等請求一律回覆「找不到路徑」；rewrite 現在以查詢參數保留路徑，Python handler 同時相容直接與改寫後的 URL。
+
 ## [0.5.45] — 2026-07-29
 
 ### Changed

@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import sys
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIRECTORY = PROJECT_ROOT / "src"
@@ -20,6 +21,15 @@ from meshi_lens.service import MatchService  # noqa: E402
 
 LOGGER = logging.getLogger("meshilens")
 SERVICE = MatchService()
+
+
+def request_path(value: str) -> str:
+    """Recover the public API path before Vercel's catch-all rewrite."""
+    parsed = urlsplit(value)
+    rewritten_path = (parse_qs(parsed.query).get("path") or [""])[0].strip("/")
+    if rewritten_path:
+        return f"/{rewritten_path}"
+    return parsed.path.removeprefix("/api") or "/"
 
 
 class handler(BaseHTTPRequestHandler):
@@ -46,7 +56,7 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _path(self) -> str:
-        return self.path.split("?", 1)[0].removeprefix("/api") or "/"
+        return request_path(self.path)
 
     def do_OPTIONS(self) -> None:  # noqa: N802
         origin = self._cors_origin()

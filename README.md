@@ -55,7 +55,7 @@ uv run meshilens-server
 
 ## Vercel 後端部署
 
-專案可部署為 Vercel Python Function，提供 `GET /api/health` 和
+專案可部署為 Vercel Python Function；catch-all rewrite 會將 `/api/*` 子路徑明確轉交給單一 Python handler。服務提供 `GET /api/health` 和
 `POST /api/match`、`POST /api/michelin`、`POST /api/similar`、`POST /api/popularity`、選用的 `POST /api/advice`，以及選用的
 `POST /api/review-insights`（公開評論實驗摘要）。目前為測試階段，API 未啟用存取驗證。
 未來接上瀏覽器擴充功能時，再將其正式網址設定到 `MESHI_ALLOWED_ORIGIN` 並啟用驗證。
