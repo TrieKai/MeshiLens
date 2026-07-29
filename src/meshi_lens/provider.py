@@ -698,9 +698,17 @@ class GurumeProvider:
         return []
 
     def _discover_with_suggestions(
-        self, place: Mapping[str, Any], limit: int
+        self,
+        place: Mapping[str, Any],
+        limit: int,
+        request_type: Any | None = None,
     ) -> dict[str, str]:
-        """Resolve strong autocomplete matches, retaining already-fetched detail HTML."""
+        """Resolve strong autocomplete matches, retaining already-fetched detail HTML.
+
+        When a fetched page already proves the identity through an exact phone
+        match, or a very close exact-coordinate/name match with review data,
+        stop immediately instead of reading the remaining autocomplete hits.
+        """
         from bs4 import BeautifulSoup
         from curl_cffi import requests
         from gurume.suggest import get_keyword_suggestions
@@ -758,6 +766,17 @@ class GurumeProvider:
                 )
                 if url and url not in pages:
                     pages[url] = response.text
+                    if request_type is not None:
+                        try:
+                            candidate = self._candidate_from_html(
+                                response.text, url, request_type
+                            )
+                        except Exception:
+                            candidate = None
+                        if candidate and self._has_decisive_identity_match(
+                            place, candidate
+                        ):
+                            break
             except Exception:
                 continue
         return pages
@@ -1041,6 +1060,50 @@ class GurumeProvider:
         )
 
     @staticmethod
+    def _has_decisive_identity_match(
+        place: Mapping[str, Any], candidate: Mapping[str, Any]
+    ) -> bool:
+        """Return whether one autocomplete page is sufficient to stop discovery."""
+        if candidate.get("is_relocated"):
+            return False
+        candidate_name = normalize_name(str(candidate.get("name") or ""))
+        name_score = max(
+            (
+                similarity(normalize_name(str(place.get(key) or "")), candidate_name)
+                for key in ("name", "alternate_name")
+            ),
+            default=0.0,
+        )
+        place_phone = normalize_phone(str(place.get("phone") or ""))
+        candidate_phone = normalize_phone(str(candidate.get("phone") or ""))
+        if (
+            name_score >= 0.88
+            and place_phone
+            and candidate_phone
+            and place_phone == candidate_phone
+        ):
+            return True
+
+        if place.get("coordinates_source") != "place":
+            return False
+        distance = haversine_meters(
+            place.get("latitude"),
+            place.get("longitude"),
+            candidate.get("latitude"),
+            candidate.get("longitude"),
+        )
+        has_reviews = (
+            candidate.get("rating") is not None
+            or int(candidate.get("review_count") or 0) > 0
+        )
+        return bool(
+            name_score >= 0.96
+            and distance is not None
+            and distance <= 150
+            and has_reviews
+        )
+
+    @staticmethod
     def _has_strong_identity_match(
         place: Mapping[str, Any], candidates: list[Mapping[str, Any]]
     ) -> bool:
@@ -1080,7 +1143,9 @@ class GurumeProvider:
             return direct_candidates
 
         suggestion_candidates: list[dict[str, Any]] = []
-        suggestion_pages = self._discover_with_suggestions(place, min(limit, 3))
+        suggestion_pages = self._discover_with_suggestions(
+            place, min(limit, 3), RestaurantDetailRequest
+        )
         if suggestion_pages:
             suggestion_candidates = self._fetch_details(
                 list(suggestion_pages), RestaurantDetailRequest,

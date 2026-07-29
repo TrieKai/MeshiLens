@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.45] — 2026-07-29
+
+### Changed
+- Tabelog autocomplete 候選改為逐筆確認；任一正式店家頁若已有相似店名與相同電話，或具備高度相似店名、150 公尺內精確店家座標與評分／評論數，就立即停止讀取其餘候選。一般明確配對可再省下最多兩次低頻候選頁請求與對應節流等待，搬遷或弱識別資料仍保留原本的保守備援。
+
 ## [0.5.44] — 2026-07-26
 
 ### Changed

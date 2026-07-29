@@ -275,6 +275,109 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(results[0]["name"], "早い店")
         self.assertEqual(results[0]["address"], "東京都中央区銀座1-1-1")
 
+    def test_stops_autocomplete_details_after_exact_phone_match(self) -> None:
+        class FakeDetailRequest:
+            def __init__(self, **_kwargs: object) -> None:
+                pass
+
+            def _parse_restaurant(self, _html: str, url: str) -> dict[str, object]:
+                return {
+                    "name": "清水屋",
+                    "url": url,
+                    "address": "茨城県潮来市永山2651",
+                    "phone": "0299-64-2011",
+                    "rating": 3.54,
+                }
+
+        class FakeResponse:
+            def __init__(self, restaurant_id: str) -> None:
+                self.text = (
+                    '<html><head><link rel="canonical" '
+                    f'href="https://tabelog.com/ibaraki/A0804/A080401/{restaurant_id}/">'
+                    "</head></html>"
+                )
+
+            def raise_for_status(self) -> None:
+                return None
+
+        requested_ids: list[str] = []
+
+        def fake_get(_url: str, **kwargs: object) -> FakeResponse:
+            restaurant_id = str(dict(kwargs["params"])["rcd"])
+            requested_ids.append(restaurant_id)
+            return FakeResponse(restaurant_id)
+
+        suggestions = [
+            SimpleNamespace(
+                datatype="Restaurant",
+                name="清水屋",
+                id_in_datatype=restaurant_id,
+            )
+            for restaurant_id in ("8000477", "8000478", "8000479")
+        ]
+        provider = GurumeProvider(minimum_interval=0)
+        with (
+            patch("gurume.suggest.get_keyword_suggestions", return_value=suggestions),
+            patch("curl_cffi.requests.get", side_effect=fake_get),
+        ):
+            pages = provider._discover_with_suggestions(
+                {
+                    "name": "清水屋",
+                    "phone": "0299-64-2011",
+                },
+                limit=3,
+                request_type=FakeDetailRequest,
+            )
+
+        self.assertEqual(requested_ids, ["8000477"])
+        self.assertEqual(
+            list(pages),
+            ["https://tabelog.com/ibaraki/A0804/A080401/8000477/"],
+        )
+
+    def test_only_treats_exact_place_coordinates_as_decisive(self) -> None:
+        provider = GurumeProvider(minimum_interval=0)
+        candidate = {
+            "name": "清水屋",
+            "latitude": 35.0001,
+            "longitude": 139.0001,
+            "rating": 3.54,
+        }
+        place = {
+            "name": "清水屋",
+            "latitude": 35.0,
+            "longitude": 139.0,
+            "coordinates_source": "viewport",
+        }
+        self.assertFalse(provider._has_decisive_identity_match(place, candidate))
+        self.assertTrue(
+            provider._has_decisive_identity_match(
+                {**place, "coordinates_source": "place"},
+                candidate,
+            )
+        )
+
+    def test_does_not_stop_on_relocated_or_different_name_phone_match(self) -> None:
+        provider = GurumeProvider(minimum_interval=0)
+        place = {"name": "清水屋", "phone": "0299-64-2011"}
+        candidate = {
+            "name": "清水屋",
+            "phone": "0299-64-2011",
+            "rating": 3.54,
+        }
+        self.assertFalse(
+            provider._has_decisive_identity_match(
+                place,
+                {**candidate, "is_relocated": True},
+            )
+        )
+        self.assertFalse(
+            provider._has_decisive_identity_match(
+                place,
+                {**candidate, "name": "完全不同的店"},
+            )
+        )
+
     def test_searches_by_local_phone_before_translated_name(self) -> None:
         self.assertEqual(
             web_search_queries(
