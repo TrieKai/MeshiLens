@@ -14,6 +14,21 @@ QUOTED_STATION_RE = re.compile(r"[「『]([^」』]+)[」』]")
 LINE_QUALIFIED_STATION_RE = re.compile(
     r"^(?:(?:JR|東京メトロ|都営(?:地下鉄)?|東急|京王|京急|小田急|西武|東武|相鉄|京成)[^「『]*線)(.+?駅?)$"
 )
+BROAD_GENRES = frozenset(
+    {
+        "カフェ",
+        "喫茶店",
+        "バー",
+        "バル",
+        "バー・お酒",
+        "ダイニングバー",
+        "居酒屋",
+        "食堂",
+        "レストラン",
+    }
+)
+SPECIFIC_GENRE_SCORE = 45.0
+BROAD_GENRE_SCORE_WITH_SPECIFIC_SEED = 5.0
 
 
 def _text(value: Any) -> str:
@@ -112,20 +127,51 @@ def _price_similarity(seed: Mapping[str, Any], candidate: Mapping[str, Any]) -> 
     return 0.0, ""
 
 
-def _same_genre(seed: Mapping[str, Any], candidate: Mapping[str, Any]) -> str:
-    for left in _genres(seed.get("genres")):
+def _genres_match(left: str, right: str) -> bool:
+    normalized_left = normalize_text(left)
+    normalized_right = normalize_text(right)
+    if not normalized_left or not normalized_right:
+        return False
+    if normalized_left == normalized_right:
+        return True
+    return len(normalized_left) >= 2 and (
+        normalized_left in normalized_right or normalized_right in normalized_left
+    )
+
+
+def _is_broad_genre(value: str) -> bool:
+    normalized = normalize_text(value)
+    return any(normalized == normalize_text(item) for item in BROAD_GENRES)
+
+
+def _genre_similarity(
+    seed: Mapping[str, Any], candidate: Mapping[str, Any]
+) -> tuple[float, str]:
+    seed_genres = _genres(seed.get("genres"))
+    candidate_genres = _genres(candidate.get("genres"))
+    matches: list[str] = []
+    for left in seed_genres:
         normalized_left = normalize_text(left)
         if not normalized_left:
             continue
-        for right in _genres(candidate.get("genres")):
-            normalized_right = normalize_text(right)
-            if normalized_left == normalized_right:
-                return left
-            if len(normalized_left) >= 2 and (
-                normalized_left in normalized_right or normalized_right in normalized_left
-            ):
-                return left
-    return ""
+        if any(_genres_match(left, right) for right in candidate_genres):
+            matches.append(left)
+
+    specific_match = next(
+        (genre for genre in matches if not _is_broad_genre(genre)), ""
+    )
+    if specific_match:
+        return SPECIFIC_GENRE_SCORE, specific_match
+    if not matches:
+        return 0.0, ""
+
+    broad_match = matches[0]
+    seed_has_specific_genre = any(
+        not _is_broad_genre(genre) for genre in seed_genres
+    )
+    if seed_has_specific_genre:
+        return BROAD_GENRE_SCORE_WITH_SPECIFIC_SEED, broad_match
+    return SPECIFIC_GENRE_SCORE, broad_match
 
 
 def _rating_score(candidate: Mapping[str, Any]) -> float:
@@ -180,9 +226,9 @@ def rank_similar_candidates_with_diagnostics(
 
         score = 0.0
         reasons: list[str] = []
-        genre = _same_genre(seed, raw)
+        genre_score, genre = _genre_similarity(seed, raw)
         if genre:
-            score += 45
+            score += genre_score
             reasons.append(f"同為{tabelog_label_zh_hant(genre)}")
 
         location_score, location_reason = _nearby_location(

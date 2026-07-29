@@ -1,7 +1,7 @@
 (() => {
   const MAX_RECOMMENDATIONS = 6;
   const DEFAULT_VISIBLE_RECOMMENDATIONS = 3;
-  const SIMILAR_CACHE_VERSION = "nearby-v18";
+  const SIMILAR_CACHE_VERSION = "nearby-v19";
 
   function canonicalTabelogUrl(value) {
     return String(value || "")

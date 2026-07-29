@@ -136,7 +136,7 @@ class FakeAdvisor:
 
 class ServiceTests(unittest.TestCase):
     def test_similar_cache_version_is_current(self) -> None:
-        self.assertEqual(SIMILAR_CACHE_VERSION, "nearby-v18")
+        self.assertEqual(SIMILAR_CACHE_VERSION, "nearby-v19")
 
     def test_popularity_returns_exact_top_badges_and_caches_the_area_snapshot(self) -> None:
         provider = FakeProvider()

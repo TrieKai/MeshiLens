@@ -2,6 +2,11 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.47] — 2026-07-30
+
+### Fixed
+- 相似店家改以完整 Tabelog 類別組合判分：原店另有麵包、甜點等具體類別時，單獨共有「咖啡廳」只視為弱相似訊號；符合具體類別的候選優先，只有咖啡廳分類的原店則維持原本權重。可排除低品質網咖與餐酒館，同時保留品質足夠的一般咖啡廳，不增加 Tabelog 請求；同步更新相似店家快取。
+
 ## [0.5.46] — 2026-07-29
 
 ### Fixed

@@ -247,3 +247,71 @@ class SimilarRankingTests(unittest.TestCase):
         )
         self.assertEqual(ranked[0]["reasons"][:2], ["同為美式料理", "同為銀座站"])
         self.assertEqual(ranked[0]["genre_labels"], ["美式料理"])
+
+    def test_specific_genre_outranks_a_shared_broad_cafe_genre(self) -> None:
+        seed = {
+            "url": "https://tabelog.com/aichi/A2301/A230101/23077220/",
+            "genres": ["カフェ", "パン", "ソフトクリーム"],
+            "station": "近鉄名古屋駅",
+        }
+        ranked = rank_similar_candidates(
+            seed,
+            [
+                {
+                    "name": "麵包咖啡廳",
+                    "url": "https://tabelog.com/aichi/A2301/A230101/23000001/",
+                    "genres": ["カフェ", "パン"],
+                    "rating": 3.2,
+                    "review_count": 20,
+                },
+                {
+                    "name": "優質咖啡廳",
+                    "url": "https://tabelog.com/aichi/A2301/A230101/23000002/",
+                    "genres": ["カフェ"],
+                    "rating": 3.8,
+                    "review_count": 200,
+                },
+                {
+                    "name": "亜熱帯 名駅錦通店",
+                    "url": "https://tabelog.com/aichi/A2301/A230101/23052967/",
+                    "genres": ["カフェ"],
+                    "rating": 3.01,
+                    "review_count": 8,
+                },
+                {
+                    "name": "カフェ バー バスク",
+                    "url": "https://tabelog.com/aichi/A2301/A230101/23072653/",
+                    "genres": ["カフェ", "バル", "イタリアン"],
+                    "rating": 3.02,
+                    "review_count": 3,
+                },
+            ],
+            search_area_path="aichi/A2301/A230101",
+        )
+
+        self.assertEqual(
+            [item["name"] for item in ranked],
+            ["麵包咖啡廳", "優質咖啡廳"],
+        )
+        self.assertEqual(ranked[0]["reasons"][:2], ["同為麵包", "同一 Tabelog 區域"])
+
+    def test_broad_cafe_genre_keeps_full_weight_for_a_cafe_only_seed(self) -> None:
+        ranked = rank_similar_candidates(
+            {
+                "url": "https://tabelog.com/aichi/A2301/A230101/23000001/",
+                "genres": ["カフェ"],
+            },
+            [
+                {
+                    "name": "附近咖啡廳",
+                    "url": "https://tabelog.com/aichi/A2301/A230101/23000002/",
+                    "genres": ["カフェ"],
+                    "rating": 3.01,
+                    "review_count": 8,
+                }
+            ],
+            search_area_path="aichi/A2301/A230101",
+        )
+
+        self.assertEqual([item["name"] for item in ranked], ["附近咖啡廳"])
+        self.assertEqual(ranked[0]["reasons"][:2], ["同為咖啡廳", "同一 Tabelog 區域"])
