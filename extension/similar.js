@@ -1,7 +1,7 @@
 (() => {
   const MAX_RECOMMENDATIONS = 6;
   const DEFAULT_VISIBLE_RECOMMENDATIONS = 3;
-  const SIMILAR_CACHE_VERSION = "nearby-v19";
+  const SIMILAR_CACHE_VERSION = "nearby-v20";
 
   function canonicalTabelogUrl(value) {
     return String(value || "")
@@ -101,7 +101,17 @@
     ].filter(Boolean);
     const belowQuality = count("below_quality_count");
     if (belowQuality) parts.push(`${belowQuality} 家未達相似度門檻`);
+    const aiCandidates = count("ai_candidate_count");
+    if (diagnostics.ranking_source === "ai" && aiCandidates) {
+      parts.push(`AI 已分析 ${aiCandidates} 家`);
+    }
     return `${parts.join("；")}。`;
+  }
+
+  function similarSourceLabel(diagnostics) {
+    return diagnostics?.ranking_source === "ai"
+      ? "Tabelog 候選 · AI 排序 · 地圖開啟"
+      : "Tabelog 推薦 · 地圖開啟";
   }
 
   function similarPayload(candidate) {
@@ -143,6 +153,7 @@
     similarDiagnosticsSummary,
     similarDisplayState,
     similarPayload,
+    similarSourceLabel,
     sortedSimilarRecommendations,
     visibleSimilarRecommendations,
   };

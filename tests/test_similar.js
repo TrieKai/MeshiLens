@@ -15,6 +15,7 @@ const {
   similarDiagnosticsSummary,
   similarDisplayState,
   similarPayload,
+  similarSourceLabel,
   sortedSimilarRecommendations,
   visibleSimilarRecommendations,
 } = globalThis.MeshiLensSimilar;
@@ -54,7 +55,7 @@ test("uses confidence labels and Google Maps place searches for UI links", () =>
 test("builds a bounded similar-restaurant request from selected Tabelog facts", () => {
   assert.equal(MAX_RECOMMENDATIONS, 6);
   assert.equal(DEFAULT_VISIBLE_RECOMMENDATIONS, 3);
-  assert.equal(SIMILAR_CACHE_VERSION, "nearby-v19");
+  assert.equal(SIMILAR_CACHE_VERSION, "nearby-v20");
   assert.deepEqual(
     similarPayload({
       name: "鮨 みなと",
@@ -123,4 +124,23 @@ test("keeps an explicit empty state and safe diagnostics when no nearby recommen
     "搜尋範圍：銀座駅；Tabelog 回傳 5 家；1 家未達相似度門檻。",
   );
   assert.equal(similarDiagnosticsSummary(null), "");
+});
+
+test("labels and summarizes AI-ranked Tabelog candidates transparently", () => {
+  const diagnostics = {
+    search_scope: "名古屋駅",
+    returned_count: 18,
+    below_quality_count: 12,
+    ranking_source: "ai",
+    ai_candidate_count: 18,
+  };
+  assert.equal(
+    similarSourceLabel(diagnostics),
+    "Tabelog 候選 · AI 排序 · 地圖開啟",
+  );
+  assert.equal(similarSourceLabel(null), "Tabelog 推薦 · 地圖開啟");
+  assert.equal(
+    similarDiagnosticsSummary(diagnostics),
+    "搜尋範圍：名古屋駅；Tabelog 回傳 18 家；12 家未達相似度門檻；AI 已分析 18 家。",
+  );
 });

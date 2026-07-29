@@ -37,11 +37,16 @@ from .review_insights import (
     sanitize_review_insights_request,
 )
 from .similar import rank_similar_candidates_with_diagnostics
+from .similar_ai import (
+    MAX_SIMILAR_AI_CANDIDATES,
+    GroqSimilarRanker,
+    apply_similar_ai_ranking,
+)
 
 
 LOGGER = logging.getLogger("meshilens.service")
 MATCH_CACHE_VERSION = "match-v2"
-SIMILAR_CACHE_VERSION = "nearby-v19"
+SIMILAR_CACHE_VERSION = "nearby-v20"
 POPULARITY_CACHE_VERSION = "popularity-v2"
 
 
@@ -55,6 +60,7 @@ class MatchService:
         advisor: GroqDiningAdvisor | None = None,
         review_advisor: GroqReviewInsightsAdvisor | None = None,
         *,
+        similar_ranker: GroqSimilarRanker | None = None,
         cache: CacheBackend | None = None,
         michelin_cache: CacheBackend | None = None,
         advice_cache: CacheBackend | None = None,
@@ -66,6 +72,7 @@ class MatchService:
         self.michelin_provider = michelin_provider or MichelinProvider()
         self.advisor = advisor or GroqDiningAdvisor()
         self.review_advisor = review_advisor or GroqReviewInsightsAdvisor()
+        self.similar_ranker = similar_ranker or GroqSimilarRanker()
         self.cache = cache or build_cache(
             ttl_seconds=DEFAULT_MATCH_TTL_SECONDS, max_items=256, namespace="match"
         )
@@ -344,13 +351,42 @@ class MatchService:
             return {**cached, "cached": True}
         try:
             search_similar = getattr(self.provider, "search_similar")
-            candidates = search_similar(seed, limit=20)
+            candidates = search_similar(seed, limit=MAX_SIMILAR_AI_CANDIDATES)
         except Exception as exc:
             LOGGER.info("similar outcome=failure reason=%s", type(exc).__name__)
             raise RuntimeError("Tabelog 相似店家暫時無法取得") from exc
+        area_path = tabelog_area_path(seed["url"])
         recommendations, ranking_diagnostics = rank_similar_candidates_with_diagnostics(
-            seed, candidates, limit=6, search_area_path=tabelog_area_path(seed["url"])
+            seed, candidates, limit=6, search_area_path=area_path
         )
+        ranking_diagnostics = {**ranking_diagnostics, "ranking_source": "rules"}
+        eligible, eligibility_diagnostics = rank_similar_candidates_with_diagnostics(
+            seed,
+            candidates,
+            limit=MAX_SIMILAR_AI_CANDIDATES,
+            search_area_path=area_path,
+            minimum_score=0,
+        )
+        if self.similar_ranker.configured and eligible:
+            try:
+                ai_ranking = self.similar_ranker.rank(seed, eligible)
+                recommendations = apply_similar_ai_ranking(eligible, ai_ranking)
+                rejected_count = max(0, len(eligible) - len(recommendations))
+                ranking_diagnostics = {
+                    **eligibility_diagnostics,
+                    "below_quality_count": (
+                        eligibility_diagnostics["below_quality_count"] + rejected_count
+                    ),
+                    "recommendation_count": len(recommendations),
+                    "ranking_source": "ai",
+                    "ai_candidate_count": len(eligible),
+                    "ai_model": str(getattr(self.similar_ranker, "model", "")),
+                }
+            except Exception as exc:
+                LOGGER.info(
+                    "similar_ai outcome=fallback reason=%s", type(exc).__name__
+                )
+                ranking_diagnostics["ai_fallback"] = True
         search_scope = str(seed.get("station") or seed.get("address") or "").strip()
         result = {
             "source": "Tabelog 日本語版",

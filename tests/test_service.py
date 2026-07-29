@@ -8,6 +8,7 @@ class FakeProvider:
     def __init__(self) -> None:
         self.calls = 0
         self.similar_calls = 0
+        self.similar_limit = None
         self.map_target_calls = 0
         self.popularity_calls = 0
 
@@ -26,6 +27,7 @@ class FakeProvider:
 
     def search_similar(self, _seed, limit=20):
         self.similar_calls += 1
+        self.similar_limit = limit
         return [
             {
                 "name": "近江町割烹",
@@ -134,9 +136,48 @@ class FakeAdvisor:
         return self.summarize_facts(advice_facts(place, candidate, michelin))
 
 
+class FakeSimilarRanker:
+    model = "test-similar-model"
+
+    def __init__(
+        self,
+        *,
+        configured=True,
+        selected_name="",
+        ranking=None,
+        error=None,
+    ) -> None:
+        self.configured = configured
+        self.selected_name = selected_name
+        self.ranking = ranking
+        self.error = error
+        self.calls = 0
+        self.candidates = []
+
+    def rank(self, _seed, candidates):
+        self.calls += 1
+        self.candidates = candidates
+        if self.error:
+            raise self.error
+        if self.ranking is not None:
+            return self.ranking
+        index = next(
+            index
+            for index, candidate in enumerate(candidates)
+            if candidate["name"] == self.selected_name
+        )
+        return [
+            {
+                "id": f"c{index}",
+                "score": 93,
+                "reason": "具體料理類別與用餐目的相近",
+            }
+        ]
+
+
 class ServiceTests(unittest.TestCase):
     def test_similar_cache_version_is_current(self) -> None:
-        self.assertEqual(SIMILAR_CACHE_VERSION, "nearby-v19")
+        self.assertEqual(SIMILAR_CACHE_VERSION, "nearby-v20")
 
     def test_popularity_returns_exact_top_badges_and_caches_the_area_snapshot(self) -> None:
         provider = FakeProvider()
@@ -485,6 +526,7 @@ class ServiceTests(unittest.TestCase):
         service = MatchService(
             provider=provider,
             michelin_provider=FakeMichelinProvider(),
+            similar_ranker=FakeSimilarRanker(configured=False),
             cache=MemoryTTLCache(),
             michelin_cache=MemoryTTLCache(),
             advice_cache=MemoryTTLCache(),
@@ -505,6 +547,7 @@ class ServiceTests(unittest.TestCase):
         self.assertFalse(first["cached"])
         self.assertTrue(second["cached"])
         self.assertEqual(provider.similar_calls, 1)
+        self.assertEqual(provider.similar_limit, 30)
         self.assertEqual(first["recommendations"][0]["name"], "近江町割烹")
         self.assertEqual(first["recommendations"][0]["address"], "石川県金沢市下近江町")
         self.assertIn("同為日本料理", first["recommendations"][0]["reasons"])
@@ -514,6 +557,85 @@ class ServiceTests(unittest.TestCase):
             first["recommendations"][0]["reasons"][:2],
             ["同為日本料理", "同為金沢站"],
         )
+
+    def test_similar_uses_one_ai_call_to_rank_the_safe_candidate_pool(self) -> None:
+        class MultiCandidateProvider(FakeProvider):
+            def search_similar(self, _seed, limit=20):
+                self.similar_calls += 1
+                self.similar_limit = limit
+                return [
+                    {
+                        "name": "亜熱帯 名駅錦通店",
+                        "url": "https://tabelog.com/aichi/A2301/A230101/23052967/",
+                        "genres": ["カフェ"],
+                        "rating": 3.01,
+                        "review_count": 8,
+                    },
+                    {
+                        "name": "麵包咖啡廳",
+                        "url": "https://tabelog.com/aichi/A2301/A230101/23000001/",
+                        "genres": ["カフェ", "パン"],
+                        "rating": 3.5,
+                        "review_count": 80,
+                    },
+                ][:limit]
+
+        provider = MultiCandidateProvider()
+        ranker = FakeSimilarRanker(selected_name="麵包咖啡廳")
+        service = MatchService(
+            provider=provider,
+            similar_ranker=ranker,
+            similar_cache=MemoryTTLCache(),
+        )
+        payload = {
+            "selected": {
+                "name": "つばめパン",
+                "url": "https://tabelog.com/aichi/A2301/A230101/23077220/",
+                "genres": ["カフェ", "パン", "ソフトクリーム"],
+                "station": "名古屋駅",
+            }
+        }
+
+        first = service.similar(payload)
+        second = service.similar(payload)
+
+        self.assertEqual([item["name"] for item in first["recommendations"]], ["麵包咖啡廳"])
+        self.assertEqual(first["recommendations"][0]["similarity_score"], 93)
+        self.assertEqual(first["diagnostics"]["ranking_source"], "ai")
+        self.assertEqual(first["diagnostics"]["ai_candidate_count"], 2)
+        self.assertEqual(first["diagnostics"]["ai_model"], "test-similar-model")
+        self.assertEqual(provider.similar_limit, 30)
+        self.assertEqual(ranker.calls, 1)
+        self.assertTrue(second["cached"])
+
+    def test_similar_falls_back_to_rules_when_ai_fails_or_returns_unknown_id(self) -> None:
+        payload = {
+            "selected": {
+                "name": "割烹 清水屋",
+                "url": "https://tabelog.com/ishikawa/A1701/A170101/1700001/",
+                "genres": ["日本料理"],
+                "station": "金沢駅",
+            }
+        }
+        rankers = [
+            FakeSimilarRanker(error=RuntimeError("timeout")),
+            FakeSimilarRanker(
+                ranking=[{"id": "c99", "score": 99, "reason": "偽造候選"}]
+            ),
+        ]
+
+        for ranker in rankers:
+            with self.subTest(ranker=ranker.ranking):
+                service = MatchService(
+                    provider=FakeProvider(),
+                    similar_ranker=ranker,
+                    similar_cache=MemoryTTLCache(),
+                )
+                result = service.similar(payload)
+
+                self.assertEqual(result["recommendations"][0]["name"], "近江町割烹")
+                self.assertEqual(result["diagnostics"]["ranking_source"], "rules")
+                self.assertTrue(result["diagnostics"]["ai_fallback"])
 
     def test_similar_map_target_uses_full_tabelog_address_after_explicit_click(self) -> None:
         provider = FakeProvider()

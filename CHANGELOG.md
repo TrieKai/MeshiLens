@@ -2,6 +2,12 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.5.48] — 2026-07-30
+
+### Changed
+- 相似店家候選擴為最多 3 個相關 Tabelog 附近分類頁，合併同一店家的完整類別並去重後最多保留 30 家；仍不讀取候選詳情頁或評論。
+- 已設定 Groq 時，將結構化候選一次交由 AI 依完整類別、店名語意、價位、評分與評論數篩選排序，最多回傳 6 個既有候選 ID；伺服器會拒絕未知或重複 ID，AI 失敗時退回規則排序。同步更新相似店家快取與 UI 來源標示。
+
 ## [0.5.47] — 2026-07-30
 
 ### Fixed

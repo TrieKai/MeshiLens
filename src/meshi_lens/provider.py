@@ -286,7 +286,14 @@ def parse_peripheral_restaurants(html: str, limit: int = 20) -> list[dict[str, A
 
 
 def peripheral_genre_slug(genres: Any) -> str:
+    slugs = peripheral_genre_slugs(genres, limit=1)
+    return slugs[0] if slugs else ""
+
+
+def peripheral_genre_slugs(genres: Any, limit: int = 3) -> list[str]:
+    """Return up to three distinct official nearby-category slugs in source order."""
     values = [genres] if isinstance(genres, str) else genres if isinstance(genres, list) else []
+    slugs: list[str] = []
     for value in values:
         text = str(value or "")
         best: tuple[int, str] | None = None
@@ -295,9 +302,11 @@ def peripheral_genre_slug(genres: Any) -> str:
                 score = len(genre)
                 if best is None or score > best[0]:
                     best = (score, slug)
-        if best:
-            return best[1]
-    return ""
+        if best and best[1] not in slugs:
+            slugs.append(best[1])
+            if len(slugs) >= max(1, min(limit, 3)):
+                break
+    return slugs
 
 
 def parse_peripheral_genre_links(html: str) -> list[dict[str, str]]:
@@ -949,15 +958,15 @@ class GurumeProvider:
         return {"area_path": area_path, "scope": scope, "rankings": rankings}
 
     def search_similar(
-        self, seed: Mapping[str, Any], limit: int = 20
+        self, seed: Mapping[str, Any], limit: int = 30
     ) -> list[dict[str, Any]]:
-        """Read a bounded Tabelog nearby-restaurants category for recommendations.
+        """Read a bounded set of Tabelog nearby-category pages for recommendations.
 
         Unlike identity matching, this deliberately has no web-search fallback
-        and never fetches candidate detail pages.  Known cuisines use one
-        official category page; an unknown cuisine first reads the generic
-        nearby page solely to discover its official category link, then may
-        read that one category page.  Results remain bounded to the first set.
+        and never fetches candidate detail pages.  Up to three known cuisine
+        categories are merged and deduplicated into at most thirty candidates.
+        An unknown cuisine first reads the generic nearby page solely to
+        discover one official category link.
         """
         try:
             from gurume import RestaurantSearchRequest, SortType
@@ -980,7 +989,8 @@ class GurumeProvider:
         if not genre:
             return []
         generic_peripheral_url = tabelog_peripheral_map_url(str(seed.get("url") or ""))
-        known_slug = peripheral_genre_slug(raw_genres)
+        known_slugs = peripheral_genre_slugs(raw_genres)
+        bounded_limit = max(1, min(limit, 30))
         if generic_peripheral_url:
             from curl_cffi import requests
 
@@ -995,11 +1005,66 @@ class GurumeProvider:
                 response.raise_for_status()
                 return response.text
 
-            if known_slug:
-                category_url = tabelog_peripheral_map_url(
-                    str(seed.get("url") or ""), known_slug
-                )
-                return parse_peripheral_restaurants(fetch_peripheral(category_url), limit)
+            if known_slugs:
+                found: list[dict[str, Any]] = []
+                seen_urls: dict[str, int] = {}
+                last_error: Exception | None = None
+                for slug in known_slugs:
+                    category_url = tabelog_peripheral_map_url(
+                        str(seed.get("url") or ""), slug
+                    )
+                    try:
+                        category_candidates = parse_peripheral_restaurants(
+                            fetch_peripheral(category_url), min(bounded_limit, 20)
+                        )
+                    except Exception as exc:
+                        last_error = exc
+                        continue
+                    for candidate in category_candidates:
+                        url = str(candidate.get("url") or "").rstrip("/")
+                        if not url:
+                            continue
+                        if url in seen_urls:
+                            existing = found[seen_urls[url]]
+                            existing_genres = existing.get("genres")
+                            candidate_genres = candidate.get("genres")
+                            merged_genres: list[str] = []
+                            for value in (
+                                existing_genres
+                                if isinstance(existing_genres, list)
+                                else []
+                            ) + (
+                                candidate_genres
+                                if isinstance(candidate_genres, list)
+                                else []
+                            ):
+                                text = str(value or "").strip()
+                                if text and text not in merged_genres:
+                                    merged_genres.append(text)
+                            existing["genres"] = merged_genres[:4]
+                            for field in (
+                                "rating",
+                                "review_count",
+                                "address",
+                                "station",
+                                "area",
+                                "lunch_price",
+                                "dinner_price",
+                            ):
+                                if existing.get(field) in (None, "") and candidate.get(
+                                    field
+                                ) not in (None, ""):
+                                    existing[field] = candidate[field]
+                            continue
+                        found.append(candidate)
+                        seen_urls[url] = len(found) - 1
+                        if len(found) >= bounded_limit:
+                            return found
+                if found:
+                    return found
+                if last_error:
+                    raise last_error
+                return []
 
             generic_html = fetch_peripheral(generic_peripheral_url)
             discovered_slug = peripheral_genre_slug_from_links(
@@ -1009,8 +1074,10 @@ class GurumeProvider:
                 category_url = tabelog_peripheral_map_url(
                     str(seed.get("url") or ""), discovered_slug
                 )
-                return parse_peripheral_restaurants(fetch_peripheral(category_url), limit)
-            return parse_peripheral_restaurants(generic_html, limit)
+                return parse_peripheral_restaurants(
+                    fetch_peripheral(category_url), bounded_limit
+                )
+            return parse_peripheral_restaurants(generic_html, bounded_limit)
         station = str(seed.get("station") or "").strip().removesuffix("駅")
         area = station or area_from_address(str(seed.get("address") or ""))
         if not area:
@@ -1022,7 +1089,7 @@ class GurumeProvider:
             keyword=genre,
             sort_type=SortType.RANKING,
         ).search_sync()
-        return [restaurant_to_dict(item) for item in list(results)[: max(1, min(limit, 20))]]
+        return [restaurant_to_dict(item) for item in list(results)[: min(bounded_limit, 20)]]
 
     def fetch_similar_map_target(self, restaurant_url: str) -> dict[str, Any]:
         """Read one map-only frame after an explicit recommendation click."""

@@ -8,7 +8,7 @@ const { classifyJapanPlace } = globalThis.MeshiLensJapan;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 const { advicePayload, adviceCacheKey, adviceErrorMessage, cachedAdvice, normalizeAdviceNumbers } = globalThis.MeshiLensAdvice;
-const { alternativeCandidates, confidenceLabel, DEFAULT_VISIBLE_RECOMMENDATIONS, mapsSearchUrl, relocationNoticeForSelected, similarDiagnosticsSummary, similarDisplayState, similarMapTargetPayload, similarPayload, visibleSimilarRecommendations } = globalThis.MeshiLensSimilar;
+const { alternativeCandidates, confidenceLabel, DEFAULT_VISIBLE_RECOMMENDATIONS, mapsSearchUrl, relocationNoticeForSelected, similarDiagnosticsSummary, similarDisplayState, similarMapTargetPayload, similarPayload, similarSourceLabel, visibleSimilarRecommendations } = globalThis.MeshiLensSimilar;
 const { popularityPayload, popularityTags, popularityBadgeText } = globalThis.MeshiLensPopularity;
 const {
   BUTTON_LABEL,
@@ -330,7 +330,13 @@ function similarRestaurantsView(state, onUpdate = () => {}) {
   section.setAttribute("aria-label", "相似店家");
   const heading = element("div", "meshilens-similar-heading");
   heading.append(element("span", "meshilens-similar-title", "相似店家"));
-  heading.append(element("span", "meshilens-similar-source", "Tabelog 推薦 · 地圖開啟"));
+  heading.append(
+    element(
+      "span",
+      "meshilens-similar-source",
+      similarSourceLabel(state?.diagnostics),
+    ),
+  );
   section.append(heading);
 
   if (state?.status === "loading") {

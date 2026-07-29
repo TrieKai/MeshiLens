@@ -198,11 +198,13 @@ def rank_similar_candidates_with_diagnostics(
     *,
     limit: int = 3,
     search_area_path: str = "",
+    minimum_score: float = 35.0,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Rank search cards and return aggregate, non-identifying filter diagnostics.
 
     Search results are intentionally used as-is.  This function never asks for a
-    candidate's detail page, preserving the one-search-request budget per seed.
+    candidate's detail page.  A zero threshold exposes the safe, nearby candidate
+    pool for bounded AI reranking while retaining all location checks.
     """
     ranked: list[dict[str, Any]] = []
     diagnostics = {
@@ -250,7 +252,6 @@ def rank_similar_candidates_with_diagnostics(
 
         # A keyword search can include loosely related restaurants.  Location
         # is already mandatory; retain a small quality threshold as well.
-        minimum_score = 35
         if score < minimum_score:
             diagnostics["below_quality_count"] += 1
             continue
@@ -280,7 +281,7 @@ def rank_similar_candidates_with_diagnostics(
             item["name"],
         )
     )
-    recommendations = ranked[: max(1, min(limit, 6))]
+    recommendations = ranked[: max(1, min(limit, 30))]
     diagnostics["recommendation_count"] = len(recommendations)
     return recommendations, diagnostics
 
