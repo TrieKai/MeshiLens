@@ -176,6 +176,23 @@ class FakeSimilarRanker:
 
 
 class ServiceTests(unittest.TestCase):
+    def test_rejects_non_finite_and_out_of_range_coordinates(self) -> None:
+        for field, value in (
+            ("latitude", "nan"),
+            ("latitude", 91),
+            ("longitude", "inf"),
+            ("longitude", 181),
+        ):
+            with self.subTest(field=field, value=value):
+                with self.assertRaisesRegex(ValueError, field):
+                    MatchService.validate_place({"name": "清水屋", field: value})
+
+    def test_rejects_invalid_tabelog_hint_coordinates(self) -> None:
+        with self.assertRaisesRegex(ValueError, "tabelog.latitude"):
+            MatchService.validate_tabelog_hint(
+                {"tabelog": {"name": "清水屋", "latitude": "nan"}}
+            )
+
     def test_similar_cache_version_is_current(self) -> None:
         self.assertEqual(SIMILAR_CACHE_VERSION, "nearby-v20")
 

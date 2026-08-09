@@ -73,6 +73,30 @@ class CacheTests(unittest.TestCase):
         self.assertEqual(layered.get("k"), {"value": 1})
         self.assertEqual(l1.get("k"), {"value": 1})
 
+    def test_layered_cache_preserves_the_original_expiry(self) -> None:
+        with mock.patch("meshi_lens.cache.time.time", return_value=0.0):
+            l1 = MemoryTTLCache(ttl_seconds=10, max_items=8)
+            l2 = MemoryTTLCache(ttl_seconds=10, max_items=8)
+            layered = LayeredTTLCache(l1, l2)
+            l2.set("k", {"value": 1})
+        with mock.patch("meshi_lens.cache.time.time", return_value=9.0):
+            self.assertEqual(layered.get("k"), {"value": 1})
+        with mock.patch("meshi_lens.cache.time.time", return_value=11.0):
+            self.assertIsNone(l1.get("k"))
+            self.assertIsNone(layered.get("k"))
+
+    def test_layered_cache_only_reads_each_record_backend_once_on_a_miss(self) -> None:
+        cache = MemoryTTLCache(ttl_seconds=10, max_items=8)
+        with mock.patch.object(cache, "get_record", wraps=cache.get_record) as get_record:
+            self.assertIsNone(LayeredTTLCache(cache).get("missing"))
+        get_record.assert_called_once_with("missing")
+
+    def test_upstash_errors_fail_soft(self) -> None:
+        cache = UpstashRestCache("https://example.upstash.io", "token")
+        with mock.patch.object(cache, "_command", side_effect=RuntimeError("offline")):
+            self.assertIsNone(cache.get("key"))
+            cache.set("key", {"value": 1})
+
     def test_build_cache_uses_file_backend_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             with mock.patch.dict(

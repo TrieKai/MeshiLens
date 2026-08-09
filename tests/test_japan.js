@@ -3,7 +3,7 @@ const test = require("node:test");
 
 require("../extension/japan.js");
 
-const { classifyJapanPlace } = globalThis.MeshiLensJapan;
+const { classifyJapanPlace, shouldLookupJapanListCard } = globalThis.MeshiLensJapan;
 
 test("classifies explicit Japanese signals as japan", () => {
   assert.equal(classifyJapanPlace({ phone: "+81 3-1234-5678" }), "japan");
@@ -32,4 +32,25 @@ test("coordinates inside Japan do not prove a place is Japanese", () => {
     "unknown",
   );
   assert.equal(classifyJapanPlace({ name: "訊號不足" }), "unknown");
+});
+
+test("list badges pass unknown cards to strict matching but reject overseas pins", () => {
+  assert.equal(
+    shouldLookupJapanListCard({
+      name: "銀座 鮨あらい",
+      latitude: 35.6701,
+      longitude: 139.7632,
+      exact_coordinates: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldLookupJapanListCard({
+      name: "Overseas restaurant",
+      latitude: 40.7128,
+      longitude: -74.006,
+      exact_coordinates: true,
+    }),
+    false,
+  );
 });

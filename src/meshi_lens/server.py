@@ -3,8 +3,17 @@ from __future__ import annotations
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
+import os
 from typing import Any
 
+from .http_api import (
+    MAX_REQUEST_BYTES,
+    POST_PATHS,
+    UnsupportedMediaType,
+    dispatch_request,
+    parse_json_object,
+    request_origin_allowed,
+)
 from .service import MatchService
 
 
@@ -16,10 +25,13 @@ class RequestHandler(BaseHTTPRequestHandler):
     server_version = "MeshiLens/0.1"
 
     def _allowed_origin(self) -> str | None:
-        origin = self.headers.get("Origin", "")
-        if origin.startswith("chrome-extension://") or origin.startswith("moz-extension://"):
-            return origin
-        return None
+        origin = self.headers.get("Origin", "").rstrip("/")
+        configured = os.environ.get("MESHI_ALLOWED_ORIGIN", "").rstrip("/")
+        return (
+            origin
+            if request_origin_allowed(origin, configured, require_origin=True)
+            else None
+        )
 
     def _send(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -52,16 +64,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send(404, {"error": "找不到路徑"})
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path not in {
-            "/match",
-            "/michelin",
-            "/michelin/batch",
-            "/advice",
-            "/similar",
-            "/similar-map-target",
-            "/popularity",
-            "/review-insights",
-        }:
+        if self.path not in POST_PATHS:
             self._send(404, {"error": "找不到路徑"})
             return
         if not self._allowed_origin():
@@ -69,33 +72,24 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length <= 0 or length > 16_384:
+            if length <= 0 or length > MAX_REQUEST_BYTES:
                 raise ValueError("請求大小不正確")
-            payload = json.loads(self.rfile.read(length))
-            if not isinstance(payload, dict):
-                raise ValueError("請求內容必須是物件")
-            if self.path == "/michelin/batch":
-                result = SERVICE.match_michelin_batch(payload)
-            elif self.path == "/michelin":
-                result = SERVICE.match_michelin(payload)
-            elif self.path == "/advice":
-                result = SERVICE.advice(payload)
-            elif self.path == "/similar":
-                result = SERVICE.similar(payload)
-            elif self.path == "/similar-map-target":
-                result = SERVICE.similar_map_target(payload)
-            elif self.path == "/popularity":
-                result = SERVICE.popularity(payload)
-            elif self.path == "/review-insights":
-                result = SERVICE.review_insights(payload)
-            else:
-                result = SERVICE.match(payload, include_michelin=False)
+            payload = parse_json_object(
+                self.rfile.read(length),
+                self.headers.get("Content-Type", ""),
+            )
+            result = dispatch_request(SERVICE, self.path, payload)
             self._send(200, result)
+        except UnsupportedMediaType as exc:
+            self._send(415, {"error": str(exc)})
         except (ValueError, json.JSONDecodeError) as exc:
             self._send(400, {"error": str(exc)})
-        except Exception as exc:
+        except RuntimeError as exc:
             LOGGER.exception("MeshiLens request failed")
             self._send(502, {"error": str(exc) or "MeshiLens 服務暫時無法取得"})
+        except Exception:
+            LOGGER.exception("MeshiLens request failed")
+            self._send(502, {"error": "MeshiLens 服務暫時無法取得"})
 
     def log_message(self, format: str, *args: Any) -> None:
         LOGGER.info("%s - %s", self.address_string(), format % args)

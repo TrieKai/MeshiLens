@@ -4,7 +4,7 @@ const ADDRESS_PREFIX = /^(地址|住所|address)\s*[:：]?\s*/i;
 const PHONE_PREFIX = /^(電話|電話番号|phone)\s*[:：]?\s*/i;
 const { foodSignalsFromLabels, isFoodCategory, isFoodPlace } = globalThis.MeshiLensCategory;
 const { coordinatesFromMapsUrl } = globalThis.MeshiLensMaps;
-const { classifyJapanPlace } = globalThis.MeshiLensJapan;
+const { classifyJapanPlace, shouldLookupJapanListCard } = globalThis.MeshiLensJapan;
 const { DEFAULT_THEME_COLOR, normalizeThemeColor } = globalThis.MeshiLensSettings;
 const { buildTimelineEntries, shouldShowTimeline } = globalThis.MeshiLensTimeline;
 const { advicePayload, adviceCacheKey, adviceErrorMessage, cachedAdvice, normalizeAdviceNumbers } = globalThis.MeshiLensAdvice;
@@ -1288,7 +1288,10 @@ async function loadListBadges() {
   pruneDetachedListBadges();
   const cards = visibleListCards();
   for (const card of cards) syncListBadge(card);
-  const japanCards = cards.filter((card) => classifyJapanPlace(card) === "japan");
+  // List cards usually expose only an exact pin and a name.  Allow unknown
+  // country cards through while retaining the explicit overseas guard; the
+  // server's snapshot-only matcher still requires an unambiguous name/pin hit.
+  const japanCards = cards.filter(shouldLookupJapanListCard);
   const missing = listCardsNeedingLookup(japanCards, listBadgeCache);
   if (!missing.length) return;
   if (listBatchCoversKeys(listInFlightKeys, missing)) return;

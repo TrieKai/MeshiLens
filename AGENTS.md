@@ -23,7 +23,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 node --check extension/background.js
 node --check extension/content.js
 node --check extension/popup.js
-node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js tests/test_maps.js tests/test_timeline.js tests/test_lookup_cache.js tests/test_advice.js tests/test_review_insights.js tests/test_runtime.js
+node --test tests/test_*.js
 ```
 
 更新 Michelin 快照：`uv run python scripts/update_michelin.py`
@@ -33,7 +33,7 @@ node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js t
 - UI 文案與 README 使用**繁體中文**；程式識別子用英文。
 - 變更擴充功能 UI 時同步 `extension/content.css`（或 popup 樣式），並維持現有暖色卡片風格（赤紅 accent、避免紫系／暗黑預設）。
 - 前端可測邏輯放进 `extension/*.js` 模組（掛 `globalThis.MeshiLens*`），以 `node --test` 覆蓋；勿只寫在 `content.js` 難以測試的閉包裡。
-- 改版本時同步：`extension/manifest.json`、`pyproject.toml`、`src/meshi_lens/__init__.py`、`CHANGELOG.md`，以及依賴版本字串的測試。
+- 任何影響功能行為、安全、向下相容性或依賴的實作變更，即使尚未發佈升版，也要同步記錄到 `CHANGELOG.md` 的 `Unreleased`。改版本時再同步：`extension/manifest.json`、`pyproject.toml`、`src/meshi_lens/__init__.py`、`CHANGELOG.md`，以及依賴版本字串的測試。
 - 不要為了「雙標籤／評論語言」去刮 Google Maps 星等或評論內容；配對靠店名、電話、地址、座標、官網。
 - 遵守 README「隱私與限制」：低頻請求、不寫 exploit、不大量爬 Tabelog／Michelin。
 - 未經要求不要 commit、push 或開 PR。

@@ -51,14 +51,14 @@ uv run meshilens-server
 2. 開啟「開發人員模式」。
 3. 選擇「載入未封裝項目」，指定本專案的 `extension` 資料夾。
 4. 開啟 Google Maps 的日本餐廳頁；評分卡會自動出現在店家資訊區塊。
-5. 點工具列上的 MeshiLens 圖示，可檢查本機服務狀態。
+5. 點工具列上的 MeshiLens 圖示，確認 API 選擇「本機」（`http://127.0.0.1:18765`）並檢查服務狀態。
 
 ## Vercel 後端部署
 
 專案可部署為 Vercel Python Function；catch-all rewrite 會將 `/api/*` 子路徑明確轉交給單一 Python handler。服務提供 `GET /api/health` 和
 `POST /api/match`、`POST /api/michelin`、`POST /api/similar`、`POST /api/popularity`、選用的 `POST /api/advice`，以及選用的
-`POST /api/review-insights`（公開評論實驗摘要）。目前為測試階段，API 未啟用存取驗證。
-未來接上瀏覽器擴充功能時，再將其正式網址設定到 `MESHI_ALLOWED_ORIGIN` 並啟用驗證。
+`POST /api/review-insights`（公開評論實驗摘要）。服務會驗證 JSON 內容類型、請求大小與瀏覽器來源；正式部署時應將
+`MESHI_ALLOWED_ORIGIN` 設為擴充功能的完整來源，例如 `chrome-extension://<extension-id>`。這些是基本瀏覽器邊界檢查，不等同使用者身分驗證或分散式限流；若要公開服務，仍應在入口層加上這些保護。
 
 ## 更新 Michelin 日本快照
 
@@ -68,7 +68,7 @@ uv run meshilens-server
 uv run python scripts/update_michelin.py
 ```
 
-更新器預設只低頻讀取伺服器端渲染的餐廳清單，並檢查官方宣告筆數與解析筆數完全一致。跨語言配對所需的電話與官方網站由後端只在必要時補查附近詳情頁並快取；若要離線預抓全部詳情，可加上 `--include-details`。
+更新器預設只低頻讀取伺服器端渲染的餐廳清單，並檢查官方宣告筆數與解析筆數完全一致。預設清單更新會保留舊快照中已補齊的電話、官網與詳情狀態，避免例行更新反而丟失資料。跨語言配對所需的電話與官方網站由後端只在必要時補查附近詳情頁並快取；若要離線預抓缺少的詳情，可加上 `--include-details`，若要強制重新讀取已有詳情則使用 `--refresh-details`。
 
 ## 持久化結果快取（選用）
 
@@ -138,15 +138,16 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 node --check extension/background.js
 node --check extension/content.js
 node --check extension/popup.js
-node --test tests/test_settings.js tests/test_toggle.js tests/test_category.js tests/test_maps.js tests/test_timeline.js tests/test_lookup_cache.js tests/test_advice.js tests/test_similar.js tests/test_popularity.js tests/test_review_insights.js tests/test_runtime.js
+node --test tests/test_*.js
 ```
 
 測試包含「割烹 清水屋」對 Tabelog「清水屋」的電話與地址差異案例。
 
 ## 隱私與限制
 
-- 本機服務只監聽 `127.0.0.1`，`/match` 只接受瀏覽器擴充功能來源。
-- 擴充功能只有 Google Maps、本機服務及本機儲存權限，不讀取其他網站（含不直接抓 Tabelog 評論頁）。
+- 本機服務只監聽 `127.0.0.1`，只接受 Chrome／Edge 擴充功能來源；雲端服務可用 `MESHI_ALLOWED_ORIGIN` 限制單一擴充功能來源。
+- 擴充功能只將 Google Maps 店家識別資訊傳給使用者選擇的 MeshiLens API，並使用本機儲存；不會直接抓 Tabelog 或 Michelin 頁面。
+- 為了在 Google Maps 搜尋清單顯示 Michelin 快照徽章，擴充功能只會讀取目前畫面可見店家卡的名稱、地址與連結並批次查詢快照；不對清單店家發出 Tabelog 搜尋，也不讀取 Maps 評論。
 - Tabelog 搜尋頁可能依網路環境回覆 403；此時會改用公開搜尋索引尋找 Tabelog URL。若兩條路徑都失敗，擴充功能會顯示明確錯誤，不會誤認為「沒有這家店」。
 - 相似店家只在已配對店家後讀取最多 3 個對應料理分類的附近頁；未知料理為確認 Tabelog 官方分類，最多讀取泛附近頁與一個對應分類頁。每頁最多處理前 20 筆、合併後最多 30 家並快取；不翻頁、不抓推薦店詳情或評論，也不在推薦搜尋失敗時擴大重試或改用外部搜尋。只有使用者明確點擊一張推薦卡時，才會讀取一次該店的地圖地址並快取。
 - 人氣標籤只在已完成精確配對後背景讀取同區三張公開排行頁，每張只解析前 20 個店家 URL，區域快取約 24 小時；不翻頁、不讀取排行背後的原始預訂／瀏覽數，也不對 Maps 搜尋列表批量查詢。
@@ -166,6 +167,7 @@ src/meshi_lens/provider.py gurume 介接與節流
 src/meshi_lens/michelin.py Michelin SSR 解析、本地快照與店家配對
 src/meshi_lens/matching.py 店家正規化、距離與配對評分
 src/meshi_lens/server.py   只監聽本機的 JSON HTTP 服務
+src/meshi_lens/http_api.py 本機／雲端共用的請求驗證與路由
 scripts/update_michelin.py 低頻更新日本全地區 Michelin 快照
 tests/                     不連網單元測試
 AGENTS.md                  AI／協作代理人專案指引

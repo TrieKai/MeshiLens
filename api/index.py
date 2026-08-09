@@ -16,6 +16,14 @@ SRC_DIRECTORY = PROJECT_ROOT / "src"
 if str(SRC_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SRC_DIRECTORY))
 
+from meshi_lens.http_api import (  # noqa: E402
+    MAX_REQUEST_BYTES,
+    POST_PATHS,
+    UnsupportedMediaType,
+    dispatch_request,
+    parse_json_object,
+    request_origin_allowed,
+)
 from meshi_lens.service import MatchService  # noqa: E402
 
 
@@ -37,10 +45,18 @@ class handler(BaseHTTPRequestHandler):
 
     server_version = "MeshiLens/0.1"
 
-    def _cors_origin(self) -> str | None:
+    def _request_origin_allowed(self) -> bool:
         allowed_origin = os.environ.get("MESHI_ALLOWED_ORIGIN", "").rstrip("/")
         origin = self.headers.get("Origin", "").rstrip("/")
-        return origin if allowed_origin and origin == allowed_origin else None
+        return request_origin_allowed(
+            origin,
+            allowed_origin,
+            require_origin=False,
+        )
+
+    def _cors_origin(self) -> str | None:
+        origin = self.headers.get("Origin", "").rstrip("/")
+        return origin if origin and self._request_origin_allowed() else None
 
     def _send(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -78,47 +94,33 @@ class handler(BaseHTTPRequestHandler):
         self._send(404, {"error": "找不到路徑"})
 
     def do_POST(self) -> None:  # noqa: N802
-        if self._path() not in {
-            "/match",
-            "/michelin",
-            "/michelin/batch",
-            "/advice",
-            "/similar",
-            "/similar-map-target",
-            "/popularity",
-            "/review-insights",
-        }:
+        path = self._path()
+        if path not in POST_PATHS:
             self._send(404, {"error": "找不到路徑"})
+            return
+        if not self._request_origin_allowed():
+            self._send(403, {"error": "不允許的來源"})
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length <= 0 or length > 16_384:
+            if length <= 0 or length > MAX_REQUEST_BYTES:
                 raise ValueError("請求大小不正確")
-            payload = json.loads(self.rfile.read(length))
-            if not isinstance(payload, dict):
-                raise ValueError("請求內容必須是物件")
-            if self._path() == "/michelin/batch":
-                result = SERVICE.match_michelin_batch(payload)
-            elif self._path() == "/michelin":
-                result = SERVICE.match_michelin(payload)
-            elif self._path() == "/advice":
-                result = SERVICE.advice(payload)
-            elif self._path() == "/similar":
-                result = SERVICE.similar(payload)
-            elif self._path() == "/similar-map-target":
-                result = SERVICE.similar_map_target(payload)
-            elif self._path() == "/popularity":
-                result = SERVICE.popularity(payload)
-            elif self._path() == "/review-insights":
-                result = SERVICE.review_insights(payload)
-            else:
-                result = SERVICE.match(payload, include_michelin=False)
+            payload = parse_json_object(
+                self.rfile.read(length),
+                self.headers.get("Content-Type", ""),
+            )
+            result = dispatch_request(SERVICE, path, payload)
             self._send(200, result)
+        except UnsupportedMediaType as exc:
+            self._send(415, {"error": str(exc)})
         except (ValueError, json.JSONDecodeError) as exc:
             self._send(400, {"error": str(exc)})
-        except Exception as exc:
+        except RuntimeError as exc:
             LOGGER.exception("MeshiLens request failed")
             self._send(502, {"error": str(exc) or "MeshiLens 服務暫時無法取得"})
+        except Exception:
+            LOGGER.exception("MeshiLens request failed")
+            self._send(502, {"error": "MeshiLens 服務暫時無法取得"})
 
     def log_message(self, format: str, *args: Any) -> None:
         LOGGER.info("%s - %s", self.address_string(), format % args)

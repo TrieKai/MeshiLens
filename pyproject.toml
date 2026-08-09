@@ -5,7 +5,10 @@ description = "Show Tabelog ratings and Michelin Guide Japan distinctions in Goo
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "beautifulsoup4>=4.12,<5",
+  "curl-cffi>=0.7,<1",
   "gurume>=0.0.12,<0.1",
+  "lxml>=5,<7",
 ]
 
 [project.optional-dependencies]

@@ -12,6 +12,7 @@ from collections import OrderedDict
 from hashlib import sha256
 import json
 import logging
+import math
 import os
 from pathlib import Path
 import tempfile
@@ -38,33 +39,52 @@ class CacheBackend(Protocol):
     def set(self, key: str, value: dict[str, Any]) -> None: ...
 
 
+CacheRecord = tuple[float, dict[str, Any]]
+
+
+def _value_from_record(record: CacheRecord | None) -> dict[str, Any] | None:
+    if record is None:
+        return None
+    expires_at, value = record
+    return value if expires_at > time.time() else None
+
+
 class MemoryTTLCache:
     """Process-local LRU TTL cache (L1)."""
 
     def __init__(self, ttl_seconds: int = DEFAULT_MATCH_TTL_SECONDS, max_items: int = 256) -> None:
         self.ttl_seconds = ttl_seconds
         self.max_items = max_items
-        self._items: OrderedDict[str, tuple[float, dict[str, Any]]] = OrderedDict()
+        self._items: OrderedDict[str, CacheRecord] = OrderedDict()
         self._lock = threading.Lock()
 
-    def get(self, key: str) -> dict[str, Any] | None:
+    def get_record(self, key: str) -> CacheRecord | None:
         with self._lock:
             entry = self._items.get(key)
             if not entry:
                 return None
-            created_at, value = entry
-            if time.time() - created_at > self.ttl_seconds:
+            expires_at, value = entry
+            if expires_at <= time.time():
                 del self._items[key]
                 return None
             self._items.move_to_end(key)
-            return value
+            return expires_at, value
 
-    def set(self, key: str, value: dict[str, Any]) -> None:
+    def get(self, key: str) -> dict[str, Any] | None:
+        return _value_from_record(self.get_record(key))
+
+    def set_record(self, key: str, record: CacheRecord) -> None:
+        expires_at, value = record
+        if expires_at <= time.time():
+            return
         with self._lock:
-            self._items[key] = (time.time(), value)
+            self._items[key] = (expires_at, value)
             self._items.move_to_end(key)
             while len(self._items) > self.max_items:
                 self._items.popitem(last=False)
+
+    def set(self, key: str, value: dict[str, Any]) -> None:
+        self.set_record(key, (time.time() + self.ttl_seconds, value))
 
 
 class FileTTLCache:
@@ -88,36 +108,61 @@ class FileTTLCache:
         digest = sha256(key.encode("utf-8")).hexdigest()
         return self.directory / f"{digest}.json"
 
-    def get(self, key: str) -> dict[str, Any] | None:
+    def get_record(self, key: str) -> CacheRecord | None:
         path = self._path_for(key)
         try:
             with self._lock:
                 if not path.is_file():
                     return None
                 payload = json.loads(path.read_text(encoding="utf-8"))
-            created_at = float(payload.get("created_at") or 0)
-            value = payload.get("value")
-            if not isinstance(value, dict):
-                return None
-            if time.time() - created_at > self.ttl_seconds:
-                path.unlink(missing_ok=True)
-                return None
-            return value
+                expires_at = float(payload.get("expires_at") or 0)
+                if not expires_at:
+                    created_at = float(payload.get("created_at") or 0)
+                    expires_at = created_at + self.ttl_seconds
+                value = payload.get("value")
+                if not isinstance(value, dict):
+                    return None
+                if expires_at <= time.time():
+                    path.unlink(missing_ok=True)
+                    return None
+                return expires_at, value
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
             return None
 
-    def set(self, key: str, value: dict[str, Any]) -> None:
+    def get(self, key: str) -> dict[str, Any] | None:
+        return _value_from_record(self.get_record(key))
+
+    def set_record(self, key: str, record: CacheRecord) -> None:
+        expires_at, value = record
+        if expires_at <= time.time():
+            return
         path = self._path_for(key)
         payload = json.dumps(
-            {"created_at": time.time(), "value": value},
+            {"expires_at": expires_at, "value": value},
             ensure_ascii=False,
         )
+        temporary: Path | None = None
         try:
             with self._lock:
-                path.write_text(payload, encoding="utf-8")
+                with tempfile.NamedTemporaryFile(
+                    "w",
+                    encoding="utf-8",
+                    dir=self.directory,
+                    delete=False,
+                ) as handle:
+                    handle.write(payload)
+                    temporary = Path(handle.name)
+                temporary.replace(path)
+                temporary = None
                 self._evict_if_needed()
         except OSError as exc:
             LOGGER.debug("file cache write failed: %s", exc)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+
+    def set(self, key: str, value: dict[str, Any]) -> None:
+        self.set_record(key, (time.time() + self.ttl_seconds, value))
 
     def _evict_if_needed(self) -> None:
         files = sorted(self.directory.glob("*.json"), key=lambda item: item.stat().st_mtime)
@@ -165,28 +210,63 @@ class UpstashRestCache:
             raise RuntimeError(str(payload["error"]))
         return payload.get("result") if isinstance(payload, dict) else payload
 
-    def get(self, key: str) -> dict[str, Any] | None:
+    def get_record(self, key: str) -> CacheRecord | None:
         try:
             raw = self._command("GET", self._redis_key(key))
             if not raw:
                 return None
             value = json.loads(raw) if isinstance(raw, str) else raw
-            return value if isinstance(value, dict) else None
-        except (OSError, TypeError, ValueError, json.JSONDecodeError, urlerror.URLError) as exc:
+            if not isinstance(value, dict) or value.get("_meshilens_cache_v") != 1:
+                return None
+            expires_at = float(value.get("expires_at") or 0)
+            payload = value.get("value")
+            if expires_at <= time.time() or not isinstance(payload, dict):
+                return None
+            return expires_at, payload
+        except (
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+            urlerror.URLError,
+        ) as exc:
             LOGGER.debug("upstash get failed: %s", exc)
             return None
 
-    def set(self, key: str, value: dict[str, Any]) -> None:
+    def get(self, key: str) -> dict[str, Any] | None:
+        return _value_from_record(self.get_record(key))
+
+    def set_record(self, key: str, record: CacheRecord) -> None:
+        expires_at, value = record
+        remaining = math.ceil(expires_at - time.time())
+        if remaining <= 0:
+            return
+        envelope = {
+            "_meshilens_cache_v": 1,
+            "expires_at": expires_at,
+            "value": value,
+        }
         try:
             self._command(
                 "SET",
                 self._redis_key(key),
-                json.dumps(value, ensure_ascii=False),
+                json.dumps(envelope, ensure_ascii=False),
                 "EX",
-                int(self.ttl_seconds),
+                remaining,
             )
-        except (OSError, TypeError, ValueError, json.JSONDecodeError, urlerror.URLError) as exc:
+        except (
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+            urlerror.URLError,
+        ) as exc:
             LOGGER.debug("upstash set failed: %s", exc)
+
+    def set(self, key: str, value: dict[str, Any]) -> None:
+        self.set_record(key, (time.time() + self.ttl_seconds, value))
 
 
 class RedisURLCache:
@@ -214,26 +294,47 @@ class RedisURLCache:
         digest = sha256(key.encode("utf-8")).hexdigest()
         return f"meshilens:{self.namespace}:{digest}"
 
-    def get(self, key: str) -> dict[str, Any] | None:
+    def get_record(self, key: str) -> CacheRecord | None:
         try:
             raw = self._client.get(self._redis_key(key))
             if not raw:
                 return None
             value = json.loads(raw)
-            return value if isinstance(value, dict) else None
+            if not isinstance(value, dict) or value.get("_meshilens_cache_v") != 1:
+                return None
+            expires_at = float(value.get("expires_at") or 0)
+            payload = value.get("value")
+            if expires_at <= time.time() or not isinstance(payload, dict):
+                return None
+            return expires_at, payload
         except Exception as exc:
             LOGGER.debug("redis get failed: %s", exc)
             return None
 
-    def set(self, key: str, value: dict[str, Any]) -> None:
+    def get(self, key: str) -> dict[str, Any] | None:
+        return _value_from_record(self.get_record(key))
+
+    def set_record(self, key: str, record: CacheRecord) -> None:
+        expires_at, value = record
+        remaining = math.ceil(expires_at - time.time())
+        if remaining <= 0:
+            return
+        envelope = {
+            "_meshilens_cache_v": 1,
+            "expires_at": expires_at,
+            "value": value,
+        }
         try:
             self._client.set(
                 self._redis_key(key),
-                json.dumps(value, ensure_ascii=False),
-                ex=int(self.ttl_seconds),
+                json.dumps(envelope, ensure_ascii=False),
+                ex=remaining,
             )
         except Exception as exc:
             LOGGER.debug("redis set failed: %s", exc)
+
+    def set(self, key: str, value: dict[str, Any]) -> None:
+        self.set_record(key, (time.time() + self.ttl_seconds, value))
 
 
 class LayeredTTLCache:
@@ -246,11 +347,24 @@ class LayeredTTLCache:
 
     def get(self, key: str) -> dict[str, Any] | None:
         for index, layer in enumerate(self.layers):
-            value = layer.get(key)
-            if value is None:
+            get_record = getattr(layer, "get_record", None)
+            if not callable(get_record):
+                value = layer.get(key)
+                if value is None:
+                    continue
+                # A third-party backend without expiry metadata can still serve
+                # the value, but must not warm another layer with a fresh TTL.
+                return value
+            record = get_record(key)
+            if record is None:
+                continue
+            expires_at, value = record
+            if expires_at <= time.time():
                 continue
             for warmer in self.layers[:index]:
-                warmer.set(key, value)
+                set_record = getattr(warmer, "set_record", None)
+                if callable(set_record):
+                    set_record(key, (expires_at, value))
             return value
         return None
 

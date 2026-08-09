@@ -1,4 +1,5 @@
 (() => {
+  const DEFAULT_API_URL = "https://meshilens.vercel.app/api";
   const THEME_COLORS = Object.freeze([
     Object.freeze({ name: "赤紅", value: "#bf3a2b" }),
     Object.freeze({ name: "橙色", value: "#a65314" }),
@@ -15,9 +16,33 @@
       : DEFAULT_THEME_COLOR;
   }
 
+  function isAllowedApiUrl(value) {
+    try {
+      const parsed = new URL(String(value || ""));
+      const isLocal =
+        parsed.protocol === "http:"
+        && ["127.0.0.1", "localhost"].includes(parsed.hostname);
+      const isMeshiLensCloud =
+        parsed.protocol === "https:"
+        && parsed.hostname === "meshilens.vercel.app"
+        && parsed.pathname === "/api";
+      return isLocal || isMeshiLensCloud;
+    } catch {
+      return false;
+    }
+  }
+
+  function normalizeApiUrl(value) {
+    const normalized = String(value || DEFAULT_API_URL).replace(/\/$/, "");
+    return isAllowedApiUrl(normalized) ? normalized : DEFAULT_API_URL;
+  }
+
   globalThis.MeshiLensSettings = {
+    DEFAULT_API_URL,
     DEFAULT_THEME_COLOR,
     THEME_COLORS,
+    isAllowedApiUrl,
+    normalizeApiUrl,
     normalizeThemeColor,
   };
 })();

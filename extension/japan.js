@@ -46,6 +46,10 @@
     return "unknown";
   }
 
+  function shouldLookupJapanListCard(place) {
+    return classifyJapanPlace(place) !== "not_japan";
+  }
+
   globalThis.MeshiLensJapan = {
     JAPAN_BOUNDS,
     isJapanTabelogUrl,
@@ -53,5 +57,6 @@
     hasExactCoordinates,
     exactCoordinatesOutsideJapan,
     classifyJapanPlace,
+    shouldLookupJapanListCard,
   };
 })();

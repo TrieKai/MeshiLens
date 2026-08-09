@@ -27,6 +27,12 @@ HEADERS = {
     ),
 }
 DETAIL_SESSION = threading.local()
+PERSISTED_DETAIL_FIELDS = (
+    "phone",
+    "website",
+    "details_fetched_at",
+    "details_error",
+)
 
 
 def fetch_page(session: requests.Session, page: int) -> str:
@@ -124,6 +130,16 @@ def update_snapshot(
             raise RuntimeError(
                 f"Michelin 筆數不一致：頁面宣告 {expected_count}，解析到 {len(deduplicated)}"
             )
+        # Listing pages do not contain phone/website fields.  Preserve details
+        # already fetched for stable Michelin IDs unless a detail refresh below
+        # explicitly replaces them.
+        for restaurant_id, restaurant in deduplicated.items():
+            old = previous.get(str(restaurant_id), {})
+            if not old.get("details_fetched_at"):
+                continue
+            for field in PERSISTED_DETAIL_FIELDS:
+                if field in old:
+                    restaurant[field] = old[field]
     else:
         deduplicated = {key: dict(value) for key, value in previous.items()}
         expected_count = int(old_payload.get("count") or 0)
@@ -209,7 +225,11 @@ def update_snapshot(
             if refresh_listing
             else old_payload.get("fetched_at")
         ),
-        "details_updated_at": detail_timestamp if enrich_details else None,
+        "details_updated_at": (
+            detail_timestamp
+            if enrich_details
+            else old_payload.get("details_updated_at")
+        ),
         "count": len(deduplicated),
         "details_error_count": sum(
             1 for item in deduplicated.values() if item.get("details_error")

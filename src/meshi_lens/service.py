@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from typing import Any, Mapping
 from urllib.parse import urlencode
+from weakref import WeakValueDictionary
 
 from .advice import (
     GroqDiningAdvisor,
@@ -99,9 +101,13 @@ class MatchService:
             max_items=512,
             namespace="review_insights",
         )
-        self._review_insights_locks: dict[str, threading.Lock] = {}
+        self._review_insights_locks: WeakValueDictionary[str, threading.Lock] = (
+            WeakValueDictionary()
+        )
         self._review_insights_meta_lock = threading.Lock()
-        self._popularity_locks: dict[str, threading.Lock] = {}
+        self._popularity_locks: WeakValueDictionary[str, threading.Lock] = (
+            WeakValueDictionary()
+        )
         self._popularity_meta_lock = threading.Lock()
 
     def _review_insights_lock(self, key: str) -> threading.Lock:
@@ -119,6 +125,21 @@ class MatchService:
                 lock = threading.Lock()
                 self._popularity_locks[key] = lock
             return lock
+
+    @staticmethod
+    def _coordinate(value: Any, key: str) -> float | None:
+        if value in (None, ""):
+            return None
+        try:
+            coordinate = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{key} 格式不正確") from exc
+        if not math.isfinite(coordinate):
+            raise ValueError(f"{key} 格式不正確")
+        minimum, maximum = (-90.0, 90.0) if key.endswith("latitude") else (-180.0, 180.0)
+        if not minimum <= coordinate <= maximum:
+            raise ValueError(f"{key} 超出合理範圍")
+        return coordinate
 
     @staticmethod
     def validate_place(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -142,11 +163,7 @@ class MatchService:
             ),
         }
         for key in ("latitude", "longitude"):
-            if result[key] not in (None, ""):
-                try:
-                    result[key] = float(result[key])
-                except (TypeError, ValueError) as exc:
-                    raise ValueError(f"{key} 格式不正確") from exc
+            result[key] = MatchService._coordinate(result[key], key)
         return result
 
     @staticmethod
@@ -188,13 +205,7 @@ class MatchService:
             "longitude": value.get("longitude"),
         }
         for key in ("latitude", "longitude"):
-            if hint[key] in (None, ""):
-                hint[key] = None
-                continue
-            try:
-                hint[key] = float(hint[key])
-            except (TypeError, ValueError) as exc:
-                raise ValueError(f"tabelog.{key} 格式不正確") from exc
+            hint[key] = MatchService._coordinate(hint[key], f"tabelog.{key}")
         return hint
 
     def match_michelin(self, payload: Mapping[str, Any]) -> dict[str, Any]:

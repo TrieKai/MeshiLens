@@ -1,7 +1,6 @@
-importScripts("cache.js");
+importScripts("cache.js", "settings.js");
 
-const DEFAULT_API_URL = "https://meshilens.vercel.app/api";
-const LEGACY_LOCAL_API_URL = "http://127.0.0.1:18765";
+const { DEFAULT_API_URL, normalizeApiUrl } = globalThis.MeshiLensSettings;
 const {
   getCachedLookup,
   setCachedLookup,
@@ -15,28 +14,6 @@ const lookupControllers = new Map();
 let cachedSettings = null;
 /** @type {Promise<{ apiUrl: string, enabled: boolean }> | null} */
 let settingsReady = null;
-
-function isAllowedApiUrl(value) {
-  try {
-    const parsed = new URL(value);
-    const isLocal =
-      parsed.protocol === "http:" && ["127.0.0.1", "localhost"].includes(parsed.hostname);
-    const isMeshiLensCloud =
-      parsed.protocol === "https:" &&
-      parsed.hostname === "meshilens.vercel.app" &&
-      parsed.pathname === "/api";
-    return isLocal || isMeshiLensCloud;
-  } catch {
-    return false;
-  }
-}
-
-function normalizeApiUrl(value) {
-  let apiUrl = String(value || DEFAULT_API_URL).replace(/\/$/, "");
-  if (apiUrl === LEGACY_LOCAL_API_URL) apiUrl = DEFAULT_API_URL;
-  if (!isAllowedApiUrl(apiUrl)) return DEFAULT_API_URL;
-  return apiUrl;
-}
 
 async function loadSettings() {
   const settings = await chrome.storage.local.get({
