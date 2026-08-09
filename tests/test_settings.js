@@ -25,5 +25,8 @@ test("keeps the documented local API URL instead of migrating it to cloud", () =
     "http://localhost:18765",
   );
   assert.equal(normalizeApiUrl("https://attacker.example/api"), DEFAULT_API_URL);
+  assert.equal(normalizeApiUrl("http://localhost:18765/proxy"), DEFAULT_API_URL);
+  assert.equal(normalizeApiUrl("http://localhost:18765/?debug=1"), DEFAULT_API_URL);
+  assert.equal(normalizeApiUrl("http://user@localhost:18765"), DEFAULT_API_URL);
   assert.equal(isAllowedApiUrl("file:///tmp/server"), false);
 });

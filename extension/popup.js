@@ -81,7 +81,7 @@ enabledInput.addEventListener("change", async () => {
 });
 
 document.getElementById("save").addEventListener("click", async () => {
-  const value = input.value.trim().replace(/\/$/, "");
+  const value = input.value.trim().replace(/\/+$/, "");
   if (!isAllowedApiUrl(value)) {
     status.className = "status offline";
     status.textContent = "請使用 MeshiLens 雲端網址或本機 HTTP 網址";

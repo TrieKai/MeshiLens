@@ -16,6 +16,7 @@ SRC_DIRECTORY = PROJECT_ROOT / "src"
 if str(SRC_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SRC_DIRECTORY))
 
+from meshi_lens import __version__ as MESHI_VERSION  # noqa: E402
 from meshi_lens.http_api import (  # noqa: E402
     MAX_REQUEST_BYTES,
     POST_PATHS,
@@ -43,7 +44,10 @@ def request_path(value: str) -> str:
 class handler(BaseHTTPRequestHandler):
     """Handle Vercel requests without starting a long-lived HTTP server."""
 
-    server_version = "MeshiLens/0.1"
+    server_version = f"MeshiLens/{MESHI_VERSION}"
+
+    def version_string(self) -> str:
+        return self.server_version
 
     def _request_origin_allowed(self) -> bool:
         allowed_origin = os.environ.get("MESHI_ALLOWED_ORIGIN", "").rstrip("/")

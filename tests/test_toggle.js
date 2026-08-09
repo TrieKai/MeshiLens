@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const manifest = require("../extension/manifest.json");
 
 test("toggle persists state and skips health checks while disabled", async () => {
   const listeners = {};
@@ -46,7 +47,7 @@ test("toggle persists state and skips health checks while disabled", async () =>
   global.chrome = {
     runtime: {
       getManifest() {
-        return { version: "0.5.48" };
+        return { version: manifest.version };
       },
       async sendMessage() {
         healthChecks += 1;
@@ -68,7 +69,7 @@ test("toggle persists state and skips health checks while disabled", async () =>
   require("../extension/settings.js");
   require("../extension/popup.js");
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(elements.version.textContent, "v0.5.48");
+  assert.equal(elements.version.textContent, `v${manifest.version}`);
   assert.equal(elements.enabled.checked, false);
   assert.equal(elements.status.className, "status paused");
   assert.equal(healthChecks, 0);

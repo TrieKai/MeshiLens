@@ -2,7 +2,7 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
-## [Unreleased]
+## [0.5.49] — 2026-08-09
 
 ### Added
 - 新增 GitHub Actions CI，在 push 與 pull request 自動執行 Python 單元測試、擴充功能 JavaScript 測試與語法檢查。
@@ -11,16 +11,18 @@
 ### Changed
 - 將 Beautiful Soup、curl-cffi 與 lxml 列為直接依賴並同步 `uv.lock`，避免依賴於 `gurume` 的傳遞安裝細節。
 - 多層快取改為傳遞原始到期時間，不再因 L2 回填 L1 重新起算 TTL；檔案快取改為原子寫入，Redis／Upstash 使用帶版本的到期封包。舊檔案快取仍可讀取，舊 Redis／Upstash 項目會安全視為未命中並重新計算。
+- API 路徑、請求欄位與回應結構維持相容；自製用戶端現在必須傳送 `Content-Type: application/json`，設定 `MESHI_ALLOWED_ORIGIN` 後也必須傳送完全相同的 `Origin`。
 - 更新安裝、隱私、Vercel 部署、Michelin 快照與測試文件，正確說明本機／雲端 API 選擇及 Maps 可見清單徽章行為。
 
 ### Fixed
 - 保留使用者設定的 `http://127.0.0.1:18765` 本機 API，不再將已文件化的本機網址自動改回雲端。
-- Maps 搜尋清單中國別仍未確定的可見店家卡，現在會交由伺服器的嚴格 Michelin 快照配對；已明確在日本外的店家仍會略過。
+- 服務網址現在會拒絕帶憑證、查詢參數、錨點或多餘子路徑的無效 API 基底網址；本機與 Vercel HTTP `Server` 標頭也改為跟隨專案版本。
+- Maps 搜尋清單中，國別仍未確定的可見店家卡現在會交由伺服器的嚴格 Michelin 快照配對；已明確在日本外的店家仍會略過。
 - Michelin 清單更新會依穩定店家 ID 保留舊快照的電話、官網、詳情時間與錯誤狀態，不再因例行清單更新丟失已補齊資料。
 - 修正快取未命中時重複讀取同一後端，並讓 Upstash 錯誤維持失敗降級；評論摘要與人氣查詢的閒置單飛鎖可自動釋放。
 
 ### Security
-- POST API 會驗證擴充功能來源、`application/json` 內容類型、16 KiB 大小上限與 JSON 物件格式，並避免將未預期的伺服器例外內容直接回傳給用戶端。
+- POST API 會驗證擴充功能來源、`application/json` 內容類型、16 KiB 大小上限與 JSON 物件格式，並避免將未預期的伺服器例外內容或 Python 執行環境版本直接回傳給用戶端。
 - 店家與 Tabelog 提示座標現在會拒絕 `NaN`、Infinity 與超出緯經度合理範圍的輸入。
 
 ## [0.5.48] — 2026-07-30

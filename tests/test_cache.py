@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -65,6 +66,18 @@ class CacheTests(unittest.TestCase):
             second = FileTTLCache(directory, ttl_seconds=3_600, namespace="match")
             self.assertEqual(second.get("place|key")["selected"]["name"], "清水屋")
 
+    def test_file_cache_reads_the_legacy_created_at_format(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            cache = FileTTLCache(directory, ttl_seconds=10, namespace="legacy")
+            cache._path_for("key").write_text(
+                json.dumps({"created_at": 95, "value": {"value": 1}}),
+                encoding="utf-8",
+            )
+            with mock.patch("meshi_lens.cache.time.time", return_value=100):
+                self.assertEqual(cache.get("key"), {"value": 1})
+            with mock.patch("meshi_lens.cache.time.time", return_value=106):
+                self.assertIsNone(cache.get("key"))
+
     def test_layered_cache_warms_l1_from_l2(self) -> None:
         l1 = MemoryTTLCache(ttl_seconds=3_600, max_items=8)
         l2 = MemoryTTLCache(ttl_seconds=3_600, max_items=8)
@@ -96,6 +109,27 @@ class CacheTests(unittest.TestCase):
         with mock.patch.object(cache, "_command", side_effect=RuntimeError("offline")):
             self.assertIsNone(cache.get("key"))
             cache.set("key", {"value": 1})
+
+    def test_upstash_reads_versioned_records_and_ignores_legacy_values(self) -> None:
+        cache = UpstashRestCache("https://example.upstash.io", "token")
+        envelope = json.dumps(
+            {
+                "_meshilens_cache_v": 1,
+                "expires_at": 105,
+                "value": {"value": 1},
+            }
+        )
+        with (
+            mock.patch("meshi_lens.cache.time.time", return_value=100),
+            mock.patch.object(cache, "_command", return_value=envelope),
+        ):
+            self.assertEqual(cache.get("key"), {"value": 1})
+        with mock.patch.object(
+            cache,
+            "_command",
+            return_value=json.dumps({"value": 1}),
+        ):
+            self.assertIsNone(cache.get("legacy"))
 
     def test_build_cache_uses_file_backend_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

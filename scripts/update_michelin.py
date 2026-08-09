@@ -135,8 +135,6 @@ def update_snapshot(
         # explicitly replaces them.
         for restaurant_id, restaurant in deduplicated.items():
             old = previous.get(str(restaurant_id), {})
-            if not old.get("details_fetched_at"):
-                continue
             for field in PERSISTED_DETAIL_FIELDS:
                 if field in old:
                     restaurant[field] = old[field]

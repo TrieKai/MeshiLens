@@ -2,15 +2,26 @@ import json
 from pathlib import Path
 import unittest
 
-from api.index import request_path
+from api.index import handler, request_path
+from meshi_lens import __version__
 from meshi_lens.http_api import (
     UnsupportedMediaType,
     parse_json_object,
     request_origin_allowed,
 )
+from meshi_lens.server import RequestHandler
 
 
 class ApiRoutingTests(unittest.TestCase):
+    def test_http_handlers_report_the_package_version(self) -> None:
+        expected = f"MeshiLens/{__version__}"
+        self.assertEqual(handler.server_version, expected)
+        self.assertEqual(RequestHandler.server_version, expected)
+        self.assertEqual(handler.__new__(handler).version_string(), expected)
+        self.assertEqual(
+            RequestHandler.__new__(RequestHandler).version_string(), expected
+        )
+
     def test_cloud_origin_policy_rejects_websites(self) -> None:
         self.assertTrue(
             request_origin_allowed(

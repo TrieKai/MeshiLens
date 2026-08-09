@@ -92,6 +92,41 @@ class MichelinUpdateTests(unittest.TestCase):
         self.assertNotIn("phone", restaurant)
         self.assertNotIn("website", restaurant)
 
+    def test_listing_refresh_retains_legacy_details_without_timestamp(self) -> None:
+        previous = {
+            "count": 1,
+            "restaurants": [
+                {
+                    "id": "1",
+                    "name": "舊店名",
+                    "phone": "+81 3-0000-0000",
+                    "website": "https://example.jp/",
+                }
+            ],
+        }
+        listing = [{"id": "1", "name": "新店名", "url": "https://example.test/new"}]
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "michelin.json"
+            output.write_text(json.dumps(previous), encoding="utf-8")
+            with (
+                mock.patch.object(update_michelin, "fetch_page", return_value="<html>"),
+                mock.patch.object(
+                    update_michelin,
+                    "michelin_listing_meta",
+                    return_value=(1, 1),
+                ),
+                mock.patch.object(
+                    update_michelin,
+                    "parse_michelin_listing",
+                    return_value=listing,
+                ),
+            ):
+                payload = update_michelin.update_snapshot(output, 0.5)
+
+        restaurant = payload["restaurants"][0]
+        self.assertEqual(restaurant["phone"], "+81 3-0000-0000")
+        self.assertEqual(restaurant["website"], "https://example.jp/")
+
 
 if __name__ == "__main__":
     unittest.main()
