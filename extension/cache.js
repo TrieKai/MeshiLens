@@ -1,8 +1,25 @@
 (() => {
-  const LOOKUP_CACHE_TTL_MS = 45 * 60 * 1000;
+  const MATCH_LOOKUP_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+  const LOOKUP_CACHE_TTL_MS = {
+    "match-v2": MATCH_LOOKUP_CACHE_TTL_MS,
+    match: MATCH_LOOKUP_CACHE_TTL_MS,
+    michelin: 24 * 60 * 60 * 1000,
+    similar: 12 * 60 * 60 * 1000,
+    popularity: 24 * 60 * 60 * 1000,
+  };
   const COORD_DECIMALS = 5;
   const STORAGE_KEY = "lookupResultCache";
   const memoryCache = new Map();
+
+  function lookupTtlMs(kind) {
+    return LOOKUP_CACHE_TTL_MS[kind] || MATCH_LOOKUP_CACHE_TTL_MS;
+  }
+
+  function kindFromCacheKey(cacheKey) {
+    const text = String(cacheKey || "");
+    const index = text.indexOf(":");
+    return index === -1 ? "" : text.slice(0, index);
+  }
 
   function roundCoord(value, decimals = COORD_DECIMALS) {
     if (value === null || value === undefined || value === "") return "";
@@ -45,7 +62,8 @@
 
   function readMemory(key, now = Date.now()) {
     const entry = memoryCache.get(key);
-    if (!entry || !entry.savedAt || now - entry.savedAt > LOOKUP_CACHE_TTL_MS) {
+    const ttl = lookupTtlMs(kindFromCacheKey(key));
+    if (!entry || !entry.savedAt || now - entry.savedAt > ttl) {
       memoryCache.delete(key);
       return null;
     }
@@ -58,7 +76,8 @@
 
   function cachedLookupEntry(entry, cacheKey, now = Date.now()) {
     if (!entry || entry.key !== cacheKey || !entry.data || !entry.savedAt) return null;
-    return now - entry.savedAt <= LOOKUP_CACHE_TTL_MS ? entry.data : null;
+    const ttl = lookupTtlMs(kindFromCacheKey(cacheKey));
+    return now - entry.savedAt <= ttl ? entry.data : null;
   }
 
   async function getCachedLookup(kind, place, options = {}) {
@@ -99,7 +118,10 @@
       const cache = { ...(stored[STORAGE_KEY] || {}) };
       cache[key] = { key, savedAt: now, data: payload };
       const entries = Object.entries(cache)
-        .filter(([, entry]) => entry && now - (entry.savedAt || 0) <= LOOKUP_CACHE_TTL_MS)
+        .filter(([, entry]) => {
+          const ttl = lookupTtlMs(kindFromCacheKey(entry?.key || ""));
+          return entry && now - (entry.savedAt || 0) <= ttl;
+        })
         .sort((left, right) => (right[1].savedAt || 0) - (left[1].savedAt || 0))
         .slice(0, 80);
       await storage.set({ [STORAGE_KEY]: Object.fromEntries(entries) });
@@ -114,6 +136,8 @@
 
   globalThis.MeshiLensCache = {
     LOOKUP_CACHE_TTL_MS,
+    MATCH_LOOKUP_CACHE_TTL_MS,
+    lookupTtlMs,
     COORD_DECIMALS,
     roundCoord,
     placeCacheKey,

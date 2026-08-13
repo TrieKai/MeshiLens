@@ -226,6 +226,106 @@ class MichelinTests(unittest.TestCase):
             )
         self.assertIsNone(matched)
 
+    def test_nearby_detail_lookups_are_capped_at_two(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "michelin.json"
+            restaurants = [
+                {
+                    "id": str(index),
+                    "name": f"Unrelated Place {index}",
+                    "url": f"https://guide.michelin.com/restaurant/{index}",
+                    "latitude": 35.680691,
+                    "longitude": 139.734172,
+                    "distinction": "SELECTED",
+                    "distinction_label": "米其林指南入選",
+                }
+                for index in range(5)
+            ]
+            path.write_text(json.dumps({"restaurants": restaurants}), encoding="utf-8")
+            provider = MichelinProvider(path)
+            calls: list[str] = []
+
+            def fetch(restaurant):
+                calls.append(str(restaurant.get("id") or ""))
+                return {"phone": "+81 3-3239-3111", "website": ""}
+
+            provider._fetch_detail = fetch
+            provider.match(
+                {
+                    "name": "法國料理 銀塔 東京",
+                    "phone": "03-3239-3111",
+                    "latitude": 35.6809101,
+                    "longitude": 139.7340409,
+                }
+            )
+        self.assertEqual(calls, ["0", "1"])
+
+    def test_michelin_detail_cache_survives_new_provider(self) -> None:
+        from meshi_lens.cache import MemoryTTLCache
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "michelin.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "restaurants": [
+                            {
+                                "id": "1194082",
+                                "name": "Tour D'argent Tokyo",
+                                "url": "https://guide.michelin.com/restaurant/tour-d-argent",
+                                "latitude": 35.680691,
+                                "longitude": 139.734172,
+                                "distinction": "ONE_STAR",
+                                "distinction_label": "米其林一星",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            backend = MemoryTTLCache(ttl_seconds=86_400)
+            first = MichelinProvider(path, detail_cache=backend)
+            downloads = 0
+
+            def download(_restaurant):
+                nonlocal downloads
+                downloads += 1
+                return {
+                    "phone": "+81 3-3239-3111",
+                    "website": "https://tourdargent.jp/",
+                }
+
+            first._download_detail = download
+            matched = first.match(
+                {
+                    "name": "法國料理 銀塔 東京",
+                    "phone": "03-3239-3111",
+                    "website": "http://www.tourdargent.jp/",
+                    "latitude": 35.6809101,
+                    "longitude": 139.7340409,
+                }
+            )
+            self.assertEqual(matched["id"], "1194082")
+            self.assertEqual(downloads, 1)
+
+            second = MichelinProvider(path, detail_cache=backend)
+
+            def fail_download(_restaurant):
+                self.fail("must use persisted Michelin detail cache")
+
+            second._download_detail = fail_download
+            cached = second.match(
+                {
+                    "name": "法國料理 銀塔 東京",
+                    "phone": "03-3239-3111",
+                    "website": "http://www.tourdargent.jp/",
+                    "latitude": 35.6809101,
+                    "longitude": 139.7340409,
+                }
+            )
+        self.assertEqual(cached["id"], "1194082")
+        self.assertIn("電話完全相同", cached["match_reasons"])
+
 
 if __name__ == "__main__":
     unittest.main()

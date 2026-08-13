@@ -1,3 +1,4 @@
+import threading
 import unittest
 
 from meshi_lens.cache import MemoryTTLCache
@@ -691,6 +692,164 @@ class ServiceTests(unittest.TestCase):
                     }
                 }
             )
+
+    def test_match_cache_key_ignores_coordinate_jitter(self) -> None:
+        left = MatchService._cache_key(
+            {"name": "清水屋", "latitude": 35.6812361, "longitude": 139.7671241}
+        )
+        right = MatchService._cache_key(
+            {"name": "清水屋", "latitude": 35.6812364, "longitude": 139.7671244}
+        )
+        self.assertEqual(left, right)
+        self.assertIn("35.68124", left)
+        self.assertIn("139.76712", left)
+
+    def test_match_reuses_cache_when_maps_pin_jitters(self) -> None:
+        provider = FakeProvider()
+        service = MatchService(
+            provider=provider,
+            michelin_provider=FakeMichelinProvider(),
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+        )
+        first = service.match(
+            {"name": "清水屋", "latitude": 35.6812361, "longitude": 139.7671241},
+            include_michelin=False,
+        )
+        second = service.match(
+            {"name": "清水屋", "latitude": 35.6812364, "longitude": 139.7671244},
+            include_michelin=False,
+        )
+        self.assertFalse(first["cached"])
+        self.assertTrue(second["cached"])
+        self.assertEqual(provider.calls, 1)
+
+    def test_match_single_flight_shares_in_flight_search(self) -> None:
+        entered = threading.Event()
+        gate = threading.Event()
+
+        class SlowProvider(FakeProvider):
+            def search(self, place):
+                entered.set()
+                assert gate.wait(timeout=2)
+                return FakeProvider.search(self, place)
+
+        provider = SlowProvider()
+        service = MatchService(
+            provider=provider,
+            michelin_provider=FakeMichelinProvider(),
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+        )
+        results: list[dict | None] = [None, None]
+        errors: list[BaseException | None] = [None, None]
+
+        def run(index: int) -> None:
+            try:
+                results[index] = service.match(
+                    {"name": "清水屋", "latitude": 36.17, "longitude": 139.83},
+                    include_michelin=False,
+                )
+            except BaseException as exc:  # noqa: BLE001
+                errors[index] = exc
+
+        first = threading.Thread(target=run, args=(0,))
+        second = threading.Thread(target=run, args=(1,))
+        first.start()
+        self.assertTrue(entered.wait(timeout=2))
+        second.start()
+        second.join(timeout=0.1)
+        self.assertEqual(provider.calls, 0)
+        gate.set()
+        first.join(timeout=2)
+        second.join(timeout=2)
+        self.assertIsNone(errors[0])
+        self.assertIsNone(errors[1])
+        self.assertEqual(provider.calls, 1)
+        self.assertFalse(results[0]["cached"])
+        self.assertTrue(results[1]["cached"])
+
+    def test_similar_and_michelin_single_flight_share_in_flight_work(self) -> None:
+        similar_entered = threading.Event()
+        similar_gate = threading.Event()
+        michelin_entered = threading.Event()
+        michelin_gate = threading.Event()
+
+        class SlowSimilarProvider(FakeProvider):
+            def search_similar(self, seed, limit=20):
+                similar_entered.set()
+                assert similar_gate.wait(timeout=2)
+                return FakeProvider.search_similar(self, seed, limit=limit)
+
+        class SlowMichelin:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def match(self, _place, _tabelog=None):
+                michelin_entered.set()
+                assert michelin_gate.wait(timeout=2)
+                self.calls += 1
+                return {"name": "清水屋", "distinction_label": "必比登推介"}
+
+        provider = SlowSimilarProvider()
+        michelin = SlowMichelin()
+        service = MatchService(
+            provider=provider,
+            michelin_provider=michelin,
+            cache=MemoryTTLCache(),
+            michelin_cache=MemoryTTLCache(),
+            advice_cache=MemoryTTLCache(),
+            similar_cache=MemoryTTLCache(),
+        )
+        payload = {
+            "selected": {
+                "name": "近江町割烹",
+                "url": "https://tabelog.com/ishikawa/A1701/A170101/1700001/",
+                "genres": ["日本料理"],
+                "station": "金沢駅",
+                "address": "石川県金沢市下近江町",
+            }
+        }
+        similar_results: list[dict | None] = [None, None]
+        michelin_results: list[dict | None] = [None, None]
+
+        def run_similar(index: int) -> None:
+            similar_results[index] = service.similar(payload)
+
+        def run_michelin(index: int) -> None:
+            michelin_results[index] = service.match_michelin(
+                {"name": "清水屋", "latitude": 36.17, "longitude": 139.83}
+            )
+
+        similar_first = threading.Thread(target=run_similar, args=(0,))
+        similar_second = threading.Thread(target=run_similar, args=(1,))
+        similar_first.start()
+        self.assertTrue(similar_entered.wait(timeout=2))
+        similar_second.start()
+        similar_second.join(timeout=0.1)
+        self.assertEqual(provider.similar_calls, 0)
+        similar_gate.set()
+        similar_first.join(timeout=2)
+        similar_second.join(timeout=2)
+        self.assertEqual(provider.similar_calls, 1)
+        self.assertFalse(similar_results[0]["cached"])
+        self.assertTrue(similar_results[1]["cached"])
+
+        michelin_first = threading.Thread(target=run_michelin, args=(0,))
+        michelin_second = threading.Thread(target=run_michelin, args=(1,))
+        michelin_first.start()
+        self.assertTrue(michelin_entered.wait(timeout=2))
+        michelin_second.start()
+        michelin_second.join(timeout=0.1)
+        self.assertEqual(michelin.calls, 0)
+        michelin_gate.set()
+        michelin_first.join(timeout=2)
+        michelin_second.join(timeout=2)
+        self.assertEqual(michelin.calls, 1)
+        self.assertFalse(michelin_results[0]["cached"])
+        self.assertTrue(michelin_results[1]["cached"])
 
 
 if __name__ == "__main__":

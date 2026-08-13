@@ -1,9 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "fluid": true,
   "functions": {
     "api/index.py": {
       "maxDuration": 60,
-      "regions": ["hnd1"]
+      "regions": ["hnd1"],
+      "excludeFiles": "{tests/**,extension/**,landing/**,scripts/**,.github/**}"
     }
   },
   "rewrites": [

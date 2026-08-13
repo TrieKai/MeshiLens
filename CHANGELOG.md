@@ -2,6 +2,20 @@
 
 本專案的版本變更紀錄，依 `pyproject.toml`／`extension/manifest.json` 版號與 git commit 整理。格式大致遵循 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased]
+
+## [0.5.50] — 2026-08-13
+
+### Changed
+- `/match`、`/similar`、`/michelin` 在快取未命中時改為與人氣／評論摘要相同的單飛鎖，避免 Fluid Compute 下同一店短時間重複打 Tabelog。
+- 伺服器 match／Michelin 快取鍵將座標四捨五入到小數 5 位，與擴充功能一致，減少 Maps 針微抖造成的重複配對。舊快取鍵會安全未命中並重新計算。
+- 擴充功能 session 快取 TTL 對齊伺服器：配對 6 小時、Michelin／人氣 24 小時、相似店家 12 小時。
+- 公開評論實驗摘要的瀏覽器逾時改為 50 秒，避免伺服器仍在寫入 7 天摘要快取時客戶端先放棄。
+- Michelin 跨語言詳情補查改為最多 2 次，並將電話／官網寫入與結果快取相同的持久層（TTL 24 小時）。
+- Vercel 設定啟用 Fluid Compute，Python Function 排除測試、擴充功能、landing 與腳本目錄以縮小套件。
+- Tabelog 搜尋與 match／similar／michelin 路徑補上 `path`／`cache_hit` 與 `latency_ms` 日誌，方便區分 autocomplete、搜尋與備援。
+- API 路徑、請求欄位與回應結構維持相容；舊版擴充功能仍可呼叫同一組端點。
+
 ## [0.5.49] — 2026-08-09
 
 ### Added

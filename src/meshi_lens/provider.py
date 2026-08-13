@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
 import json
+import logging
 import re
 import threading
 import time
@@ -10,6 +11,9 @@ from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 from .localization import tabelog_label_zh_hant
 from .matching import haversine_meters, normalize_name, normalize_phone, normalize_text, similarity
+
+
+LOGGER = logging.getLogger("meshilens.provider")
 
 
 TABELOG_RESULT_RE = re.compile(
@@ -1190,6 +1194,22 @@ class GurumeProvider:
         return False
 
     def search(self, place: Mapping[str, Any], limit: int = 6) -> list[dict[str, Any]]:
+        started = time.monotonic()
+        path = "error"
+        try:
+            result = self._search(place, limit)
+            path = result[1]
+            return result[0]
+        finally:
+            LOGGER.info(
+                "search path=%s latency_ms=%s",
+                path,
+                int((time.monotonic() - started) * 1000),
+            )
+
+    def _search(
+        self, place: Mapping[str, Any], limit: int = 6
+    ) -> tuple[list[dict[str, Any]], str]:
         try:
             from gurume import RestaurantDetailRequest, SortType, query_restaurants
         except ImportError as exc:
@@ -1207,7 +1227,7 @@ class GurumeProvider:
             )
             for candidate in direct_candidates:
                 candidate["direct_source"] = True
-            return direct_candidates
+            return direct_candidates, "direct"
 
         suggestion_candidates: list[dict[str, Any]] = []
         suggestion_pages = self._discover_with_suggestions(
@@ -1228,7 +1248,7 @@ class GurumeProvider:
                 self._has_strong_identity_match(place, suggestion_candidates)
                 and suggestion_has_reviews
             ):
-                return suggestion_candidates
+                return suggestion_candidates, "suggestions"
         area = area_from_address(str(place.get("address") or ""))
         search_error: Exception | None = None
         used_fallback = False
@@ -1253,7 +1273,7 @@ class GurumeProvider:
             if suggestion_candidates and self._has_strong_identity_match(
                 place, suggestion_candidates
             ):
-                return suggestion_candidates
+                return suggestion_candidates, "suggestions"
             try:
                 fallback_urls = self._discover_with_web_search(place, min(limit, 4))
                 fallback_candidates = self._fetch_details(
@@ -1269,7 +1289,7 @@ class GurumeProvider:
                 used_fallback = True
             except Exception as fallback_error:
                 if suggestion_candidates:
-                    return suggestion_candidates
+                    return suggestion_candidates, "suggestions"
                 if search_error:
                     message = str(search_error)
                     if "403" in message:
@@ -1280,7 +1300,7 @@ class GurumeProvider:
                 raise RuntimeError(f"找不到 Tabelog 候選店家：{fallback_error}") from fallback_error
 
         if not candidates:
-            return []
+            return [], "search"
 
         # Fetch details only for plausible names. Search cards often omit phone/address.
         candidates.sort(
@@ -1288,7 +1308,7 @@ class GurumeProvider:
             reverse=True,
         )
         if used_fallback:
-            return candidates
+            return candidates, "web_fallback"
         enriched: list[dict[str, Any]] = []
         for candidate in candidates[:4]:
             if not candidate["url"]:
@@ -1308,7 +1328,7 @@ class GurumeProvider:
         enriched.extend(candidates[4:])
         # High-confidence identity: do not kick off Yahoo/DDG fallback crawls.
         if self._has_strong_identity_match(place, enriched):
-            return enriched
+            return enriched, "search"
         try:
             fallback_urls = self._discover_with_web_search(place, min(limit, 4))
             fallback_candidates = self._fetch_details(
@@ -1320,6 +1340,6 @@ class GurumeProvider:
                 for item in fallback_candidates
                 if str(item.get("url") or "") not in known_urls
             )
+            return enriched, "web_fallback"
         except Exception:
-            pass
-        return enriched
+            return enriched, "search"

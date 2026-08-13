@@ -8,6 +8,7 @@ import time
 from typing import Any, Mapping
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
+from .cache import CacheBackend
 from .matching import haversine_meters, normalize_name, normalize_phone, similarity
 
 
@@ -17,6 +18,7 @@ MICHELIN_JAPAN_URL = (
 )
 DEFAULT_DATA_PATH = Path(__file__).with_name("data") / "michelin-japan.json"
 DETAIL_CACHE_SECONDS = 86_400
+MAX_NEARBY_DETAIL_LOOKUPS = 2
 DISTINCTION_LABELS = {
     "THREE_STARS": "米其林三星",
     "TWO_STARS": "米其林二星",
@@ -163,12 +165,18 @@ def michelin_listing_meta(html: str) -> tuple[int, int]:
 class MichelinProvider:
     """Match Google Maps places against a locally stored Michelin Japan snapshot."""
 
-    def __init__(self, data_path: Path | str = DEFAULT_DATA_PATH) -> None:
+    def __init__(
+        self,
+        data_path: Path | str = DEFAULT_DATA_PATH,
+        *,
+        detail_cache: CacheBackend | None = None,
+    ) -> None:
         self.data_path = Path(data_path)
         self.dataset = self._load()
         self.restaurants = self._prepare_restaurants(
             list(self.dataset.get("restaurants") or [])
         )
+        self.detail_cache = detail_cache
         self._detail_cache: dict[str, tuple[float, dict[str, str]]] = {}
         self._detail_lock = threading.Lock()
 
@@ -226,14 +234,43 @@ class MichelinProvider:
         website = normalize_website(str(place.get("website") or ""))
         return names, phone, website, latitude, longitude
 
-    def _fetch_detail(self, restaurant: Mapping[str, Any]) -> dict[str, str]:
-        """Fetch one nearby detail page only when an identity signal needs resolving."""
-        restaurant_id = str(restaurant.get("id") or restaurant.get("url") or "")
+    @staticmethod
+    def _detail_cache_key(restaurant_id: str) -> str:
+        return f"detail|{restaurant_id}"
+
+    def _cached_detail(self, restaurant_id: str) -> dict[str, str] | None:
         now = time.monotonic()
         with self._detail_lock:
             cached = self._detail_cache.get(restaurant_id)
             if cached and now - cached[0] < DETAIL_CACHE_SECONDS:
                 return dict(cached[1])
+        if self.detail_cache is None or not restaurant_id:
+            return None
+        persisted = self.detail_cache.get(self._detail_cache_key(restaurant_id))
+        if not isinstance(persisted, dict):
+            return None
+        phone = str(persisted.get("phone") or "").strip()
+        website = str(persisted.get("website") or "").strip()
+        if not (phone or website):
+            return None
+        detail = {"phone": phone, "website": website}
+        with self._detail_lock:
+            self._detail_cache[restaurant_id] = (time.monotonic(), dict(detail))
+        return detail
+
+    def _store_detail(self, restaurant_id: str, detail: Mapping[str, str]) -> None:
+        stored = {
+            "phone": str(detail.get("phone") or "").strip(),
+            "website": str(detail.get("website") or "").strip(),
+        }
+        if not restaurant_id or not (stored["phone"] or stored["website"]):
+            return
+        with self._detail_lock:
+            self._detail_cache[restaurant_id] = (time.monotonic(), dict(stored))
+        if self.detail_cache is not None:
+            self.detail_cache.set(self._detail_cache_key(restaurant_id), stored)
+
+    def _download_detail(self, restaurant: Mapping[str, Any]) -> dict[str, str]:
         try:
             from curl_cffi import requests
 
@@ -245,12 +282,19 @@ class MichelinProvider:
                 impersonate="chrome",
             )
             response.raise_for_status()
-            detail = parse_michelin_detail(response.text)
+            return parse_michelin_detail(response.text)
         except Exception:
             return {}
+
+    def _fetch_detail(self, restaurant: Mapping[str, Any]) -> dict[str, str]:
+        """Fetch one nearby detail page only when an identity signal needs resolving."""
+        restaurant_id = str(restaurant.get("id") or restaurant.get("url") or "")
+        cached = self._cached_detail(restaurant_id)
+        if cached is not None:
+            return cached
+        detail = self._download_detail(restaurant)
         if detail:
-            with self._detail_lock:
-                self._detail_cache[restaurant_id] = (now, dict(detail))
+            self._store_detail(restaurant_id, detail)
         return detail
 
     def _nearby_detail_enriched_restaurants(
@@ -261,10 +305,11 @@ class MichelinProvider:
         latitude: float | None,
         longitude: float | None,
     ) -> list[Mapping[str, Any]]:
-        """Resolve translated names with at most four close Michelin detail lookups."""
+        """Resolve translated names with at most two close Michelin detail lookups."""
         if not (phone or website) or latitude is None or longitude is None:
             return self.restaurants
         replacements: dict[str, dict[str, Any]] = {}
+        lookups = 0
         for restaurant in self.restaurants:
             distance = haversine_meters(
                 latitude,
@@ -280,7 +325,15 @@ class MichelinProvider:
             )
             if name_score >= 0.45:
                 continue
-            detail = self._fetch_detail(restaurant)
+            restaurant_id = str(restaurant.get("id") or restaurant.get("url") or "")
+            cached = self._cached_detail(restaurant_id)
+            if cached is not None:
+                detail = cached
+            elif lookups >= MAX_NEARBY_DETAIL_LOOKUPS:
+                continue
+            else:
+                lookups += 1
+                detail = self._fetch_detail(restaurant)
             if detail:
                 merged = {**restaurant, **detail}
                 if "phone" in detail:
@@ -294,8 +347,6 @@ class MichelinProvider:
                 replacements[str(restaurant.get("id") or restaurant.get("url"))] = (
                     self._with_normalized_fields(merged)
                 )
-            if len(replacements) >= 4:
-                break
         if not replacements:
             return self.restaurants
         return [

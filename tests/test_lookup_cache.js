@@ -5,6 +5,8 @@ require("../extension/cache.js");
 
 const {
   LOOKUP_CACHE_TTL_MS,
+  MATCH_LOOKUP_CACHE_TTL_MS,
+  lookupTtlMs,
   roundCoord,
   placeCacheKey,
   tabelogCacheSuffix,
@@ -40,12 +42,35 @@ test("place cache key ignores tiny coordinate changes", () => {
   assert.equal(lookupCacheKey("match", left), `match:${left}`);
 });
 
+test("lookup cache TTL follows the server for each kind", () => {
+  assert.equal(lookupTtlMs("match-v2"), 6 * 60 * 60 * 1000);
+  assert.equal(lookupTtlMs("michelin"), 24 * 60 * 60 * 1000);
+  assert.equal(lookupTtlMs("similar"), 12 * 60 * 60 * 1000);
+  assert.equal(lookupTtlMs("popularity"), 24 * 60 * 60 * 1000);
+  assert.equal(LOOKUP_CACHE_TTL_MS.michelin, 24 * 60 * 60 * 1000);
+  assert.equal(MATCH_LOOKUP_CACHE_TTL_MS, 6 * 60 * 60 * 1000);
+});
+
 test("lookup cache entry expires after TTL", () => {
   const key = "match:demo";
   const entry = { key, savedAt: 1_000, data: { matched: true } };
-  assert.deepEqual(cachedLookupEntry(entry, key, 1_000 + LOOKUP_CACHE_TTL_MS), { matched: true });
-  assert.equal(cachedLookupEntry(entry, key, 1_000 + LOOKUP_CACHE_TTL_MS + 1), null);
+  const ttl = lookupTtlMs("match");
+  assert.deepEqual(cachedLookupEntry(entry, key, 1_000 + ttl), { matched: true });
+  assert.equal(cachedLookupEntry(entry, key, 1_000 + ttl + 1), null);
   assert.equal(cachedLookupEntry(entry, "other", 1_500), null);
+});
+
+test("michelin lookup cache outlives the match TTL", () => {
+  const key = "michelin:demo";
+  const entry = { key, savedAt: 1_000, data: { michelin: { distinction_label: "一星" } } };
+  assert.deepEqual(
+    cachedLookupEntry(entry, key, 1_000 + lookupTtlMs("match") + 1),
+    { michelin: { distinction_label: "一星" } },
+  );
+  assert.equal(
+    cachedLookupEntry(entry, key, 1_000 + lookupTtlMs("michelin") + 1),
+    null,
+  );
 });
 
 test("memory lookup cache stores match results", async () => {
@@ -56,7 +81,7 @@ test("memory lookup cache stores match results", async () => {
   const cached = await getCachedLookup("match", place, 6_000);
   assert.equal(cached.matched, true);
   assert.equal(cached.cached, true);
-  assert.equal(await getCachedLookup("match", place, 5_000 + LOOKUP_CACHE_TTL_MS + 1), null);
+  assert.equal(await getCachedLookup("match", place, 5_000 + lookupTtlMs("match") + 1), null);
 });
 
 test("tabelog-assisted michelin cache uses a separate suffix", async () => {

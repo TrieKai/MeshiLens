@@ -55,7 +55,7 @@ uv run meshilens-server
 
 ## Vercel 後端部署
 
-專案可部署為 Vercel Python Function；catch-all rewrite 會將 `/api/*` 子路徑明確轉交給單一 Python handler。服務提供 `GET /api/health` 和
+專案可部署為 Vercel Python Function（`hnd1` 東京、Fluid Compute）；catch-all rewrite 會將 `/api/*` 子路徑明確轉交給單一 Python handler。服務提供 `GET /api/health` 和
 `POST /api/match`、`POST /api/michelin`、`POST /api/similar`、`POST /api/popularity`、選用的 `POST /api/advice`，以及選用的
 `POST /api/review-insights`（公開評論實驗摘要）。服務會驗證 JSON 內容類型、請求大小與瀏覽器來源；正式部署時應將
 `MESHI_ALLOWED_ORIGIN` 設為擴充功能的完整來源，例如 `chrome-extension://<extension-id>`。這些是基本瀏覽器邊界檢查，不等同使用者身分驗證或分散式限流；若要公開服務，仍應在入口層加上這些保護。
@@ -74,7 +74,7 @@ uv run python scripts/update_michelin.py
 
 `/match`、`/michelin`、`/similar`、`/popularity`、`/advice`、`/review-insights` 會快取結果（TTL 分別約 6 小時、24 小時、12 小時、24 小時、24 小時、7 天；評論實驗路徑**只快取主題摘要**，不保存評論原文）。
 預設為**記憶體 L1 + 本機檔案**（目錄見 `MESHI_CACHE_DIR`，預設系統暫存）。
-在 Vercel Marketplace 連結 Upstash Redis 後，會自動設定：
+在 Vercel Marketplace 連結 Upstash Redis 後，會自動設定。資料庫區域請選 **東京（`ap-northeast-1`）**，與 Function 的 `hnd1` 同區，避免快取命中仍要付跨太平洋延遲：
 
 ```bash
 KV_REST_API_URL=https://xxxx.upstash.io
@@ -89,7 +89,7 @@ UPSTASH_REDIS_REST_TOKEN=...
 ```
 
 或使用 `MESHI_REDIS_URL`／`REDIS_URL`（需 `uv sync --extra redis`）。詳見 `.env.example`。
-擴充功能另有 45 分鐘的 session／記憶體短快取，並會取消過期的店家查詢請求。
+擴充功能 session／記憶體快取 TTL 對齊伺服器（配對 6 小時、Michelin／人氣 24 小時、相似店家 12 小時），並會取消過期的店家查詢請求。
 
 ## AI 用餐建議與相似店家排序（選用）
 

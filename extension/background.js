@@ -97,10 +97,15 @@ function endLookup(key, controller) {
   }
 }
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 35_000;
+const REVIEW_INSIGHTS_TIMEOUT_MS = 50_000;
+
 async function request(path, options = {}) {
+  const timeoutMs =
+    Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : DEFAULT_REQUEST_TIMEOUT_MS;
+  const { timeoutMs: _timeoutMs, signal: upstream, ...fetchOptions } = options;
   const timeoutController = new AbortController();
-  const timer = setTimeout(() => timeoutController.abort(), 35000);
-  const upstream = options.signal;
+  const timer = setTimeout(() => timeoutController.abort(), timeoutMs);
   const onUpstreamAbort = () => timeoutController.abort();
   if (upstream) {
     if (upstream.aborted) timeoutController.abort();
@@ -108,9 +113,9 @@ async function request(path, options = {}) {
   }
   try {
     const response = await fetch(`${await apiUrl()}${path}`, {
-      ...options,
+      ...fetchOptions,
       signal: timeoutController.signal,
-      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+      headers: { "Content-Type": "application/json", ...(fetchOptions.headers || {}) },
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -427,6 +432,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             method: "POST",
             body: JSON.stringify(payload),
             signal: active.controller.signal,
+            timeoutMs: REVIEW_INSIGHTS_TIMEOUT_MS,
           });
         }
         return matchPlace(message.place, active.controller.signal);

@@ -50,6 +50,7 @@ LOGGER = logging.getLogger("meshilens.service")
 MATCH_CACHE_VERSION = "match-v2"
 SIMILAR_CACHE_VERSION = "nearby-v20"
 POPULARITY_CACHE_VERSION = "popularity-v2"
+COORD_DECIMALS = 5
 
 
 class MatchService:
@@ -71,7 +72,13 @@ class MatchService:
         review_insights_cache: CacheBackend | None = None,
     ) -> None:
         self.provider = provider or GurumeProvider()
-        self.michelin_provider = michelin_provider or MichelinProvider()
+        self.michelin_provider = michelin_provider or MichelinProvider(
+            detail_cache=build_cache(
+                ttl_seconds=DEFAULT_MICHELIN_TTL_SECONDS,
+                max_items=512,
+                namespace="michelin_detail",
+            )
+        )
         self.advisor = advisor or GroqDiningAdvisor()
         self.review_advisor = review_advisor or GroqReviewInsightsAdvisor()
         self.similar_ranker = similar_ranker or GroqSimilarRanker()
@@ -101,30 +108,23 @@ class MatchService:
             max_items=512,
             namespace="review_insights",
         )
-        self._review_insights_locks: WeakValueDictionary[str, threading.Lock] = (
-            WeakValueDictionary()
-        )
-        self._review_insights_meta_lock = threading.Lock()
-        self._popularity_locks: WeakValueDictionary[str, threading.Lock] = (
-            WeakValueDictionary()
-        )
-        self._popularity_meta_lock = threading.Lock()
+        self._inflight: WeakValueDictionary[str, threading.Lock] = WeakValueDictionary()
+        self._inflight_meta = threading.Lock()
 
-    def _review_insights_lock(self, key: str) -> threading.Lock:
-        with self._review_insights_meta_lock:
-            lock = self._review_insights_locks.get(key)
+    def _inflight_lock(self, namespace: str, key: str) -> threading.Lock:
+        token = f"{namespace}|{key}"
+        with self._inflight_meta:
+            lock = self._inflight.get(token)
             if lock is None:
                 lock = threading.Lock()
-                self._review_insights_locks[key] = lock
+                self._inflight[token] = lock
             return lock
 
     def _popularity_lock(self, key: str) -> threading.Lock:
-        with self._popularity_meta_lock:
-            lock = self._popularity_locks.get(key)
-            if lock is None:
-                lock = threading.Lock()
-                self._popularity_locks[key] = lock
-            return lock
+        return self._inflight_lock("popularity", key)
+
+    def _review_insights_lock(self, key: str) -> threading.Lock:
+        return self._inflight_lock("review_insights", key)
 
     @staticmethod
     def _coordinate(value: Any, key: str) -> float | None:
@@ -140,6 +140,18 @@ class MatchService:
         if not minimum <= coordinate <= maximum:
             raise ValueError(f"{key} 超出合理範圍")
         return coordinate
+
+    @staticmethod
+    def _cache_coordinate(value: Any) -> str:
+        if value in (None, ""):
+            return ""
+        try:
+            coordinate = float(value)
+        except (TypeError, ValueError):
+            return ""
+        if not math.isfinite(coordinate):
+            return ""
+        return f"{round(coordinate, COORD_DECIMALS):.{COORD_DECIMALS}f}"
 
     @staticmethod
     def validate_place(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -174,17 +186,16 @@ class MatchService:
     @staticmethod
     def _cache_key(place: Mapping[str, Any]) -> str:
         return MATCH_CACHE_VERSION + "|" + "|".join(
-            str(place.get(key) or "")
-            for key in (
-                "name",
-                "alternate_name",
-                "address",
-                "phone",
-                "website",
-                "tabelog_url",
-                "latitude",
-                "longitude",
-            )
+            [
+                str(place.get("name") or ""),
+                str(place.get("alternate_name") or ""),
+                str(place.get("address") or ""),
+                str(place.get("phone") or ""),
+                str(place.get("website") or ""),
+                str(place.get("tabelog_url") or ""),
+                MatchService._cache_coordinate(place.get("latitude")),
+                MatchService._cache_coordinate(place.get("longitude")),
+            ]
         )
 
     @staticmethod
@@ -221,20 +232,37 @@ class MatchService:
                     str(tabelog.get("name") or ""),
                     str(tabelog.get("phone") or ""),
                     str(tabelog.get("website") or ""),
-                    str(tabelog.get("latitude") or ""),
-                    str(tabelog.get("longitude") or ""),
+                    self._cache_coordinate(tabelog.get("latitude")),
+                    self._cache_coordinate(tabelog.get("longitude")),
                 )
             )
+        started = time.monotonic()
         cached = self.michelin_cache.get(key)
         if cached:
+            LOGGER.info(
+                "michelin outcome=success cache_hit=true latency_ms=%s",
+                int((time.monotonic() - started) * 1000),
+            )
             return {**cached, "cached": True}
-        result = {
-            "place": place,
-            "michelin": self.michelin_provider.match(place, tabelog),
-            "cached": False,
-        }
-        self.michelin_cache.set(key, result)
-        return result
+        with self._inflight_lock("michelin", key):
+            cached = self.michelin_cache.get(key)
+            if cached:
+                LOGGER.info(
+                    "michelin outcome=success cache_hit=true latency_ms=%s",
+                    int((time.monotonic() - started) * 1000),
+                )
+                return {**cached, "cached": True}
+            result = {
+                "place": place,
+                "michelin": self.michelin_provider.match(place, tabelog),
+                "cached": False,
+            }
+            self.michelin_cache.set(key, result)
+            LOGGER.info(
+                "michelin outcome=success cache_hit=false latency_ms=%s",
+                int((time.monotonic() - started) * 1000),
+            )
+            return result
 
     def match_michelin_batch(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Return only high-confidence, snapshot-backed list badges.
@@ -357,60 +385,81 @@ class MatchService:
             str(seed.get(field) or "")
             for field in ("url", "genres", "station", "address", "lunch_price", "dinner_price")
         )
+        started = time.monotonic()
         cached = self.similar_cache.get(key)
         if cached:
+            LOGGER.info(
+                "similar outcome=success cache_hit=true latency_ms=%s",
+                int((time.monotonic() - started) * 1000),
+            )
             return {**cached, "cached": True}
-        try:
-            search_similar = getattr(self.provider, "search_similar")
-            candidates = search_similar(seed, limit=MAX_SIMILAR_AI_CANDIDATES)
-        except Exception as exc:
-            LOGGER.info("similar outcome=failure reason=%s", type(exc).__name__)
-            raise RuntimeError("Tabelog 相似店家暫時無法取得") from exc
-        area_path = tabelog_area_path(seed["url"])
-        recommendations, ranking_diagnostics = rank_similar_candidates_with_diagnostics(
-            seed, candidates, limit=6, search_area_path=area_path
-        )
-        ranking_diagnostics = {**ranking_diagnostics, "ranking_source": "rules"}
-        eligible, eligibility_diagnostics = rank_similar_candidates_with_diagnostics(
-            seed,
-            candidates,
-            limit=MAX_SIMILAR_AI_CANDIDATES,
-            search_area_path=area_path,
-            minimum_score=0,
-        )
-        if self.similar_ranker.configured and eligible:
+        with self._inflight_lock("similar", key):
+            cached = self.similar_cache.get(key)
+            if cached:
+                LOGGER.info(
+                    "similar outcome=success cache_hit=true latency_ms=%s",
+                    int((time.monotonic() - started) * 1000),
+                )
+                return {**cached, "cached": True}
             try:
-                ai_ranking = self.similar_ranker.rank(seed, eligible)
-                recommendations = apply_similar_ai_ranking(eligible, ai_ranking)
-                rejected_count = max(0, len(eligible) - len(recommendations))
-                ranking_diagnostics = {
-                    **eligibility_diagnostics,
-                    "below_quality_count": (
-                        eligibility_diagnostics["below_quality_count"] + rejected_count
-                    ),
-                    "recommendation_count": len(recommendations),
-                    "ranking_source": "ai",
-                    "ai_candidate_count": len(eligible),
-                    "ai_model": str(getattr(self.similar_ranker, "model", "")),
-                }
+                search_similar = getattr(self.provider, "search_similar")
+                candidates = search_similar(seed, limit=MAX_SIMILAR_AI_CANDIDATES)
             except Exception as exc:
                 LOGGER.info(
-                    "similar_ai outcome=fallback reason=%s", type(exc).__name__
+                    "similar outcome=failure reason=%s latency_ms=%s",
+                    type(exc).__name__,
+                    int((time.monotonic() - started) * 1000),
                 )
-                ranking_diagnostics["ai_fallback"] = True
-        search_scope = str(seed.get("station") or seed.get("address") or "").strip()
-        result = {
-            "source": "Tabelog 日本語版",
-            "seed": {"name": seed["name"], "url": seed["url"]},
-            "recommendations": recommendations,
-            "diagnostics": {
-                "search_scope": search_scope,
-                **ranking_diagnostics,
-            },
-            "cached": False,
-        }
-        self.similar_cache.set(key, result)
-        return result
+                raise RuntimeError("Tabelog 相似店家暫時無法取得") from exc
+            area_path = tabelog_area_path(seed["url"])
+            recommendations, ranking_diagnostics = rank_similar_candidates_with_diagnostics(
+                seed, candidates, limit=6, search_area_path=area_path
+            )
+            ranking_diagnostics = {**ranking_diagnostics, "ranking_source": "rules"}
+            eligible, eligibility_diagnostics = rank_similar_candidates_with_diagnostics(
+                seed,
+                candidates,
+                limit=MAX_SIMILAR_AI_CANDIDATES,
+                search_area_path=area_path,
+                minimum_score=0,
+            )
+            if self.similar_ranker.configured and eligible:
+                try:
+                    ai_ranking = self.similar_ranker.rank(seed, eligible)
+                    recommendations = apply_similar_ai_ranking(eligible, ai_ranking)
+                    rejected_count = max(0, len(eligible) - len(recommendations))
+                    ranking_diagnostics = {
+                        **eligibility_diagnostics,
+                        "below_quality_count": (
+                            eligibility_diagnostics["below_quality_count"] + rejected_count
+                        ),
+                        "recommendation_count": len(recommendations),
+                        "ranking_source": "ai",
+                        "ai_candidate_count": len(eligible),
+                        "ai_model": str(getattr(self.similar_ranker, "model", "")),
+                    }
+                except Exception as exc:
+                    LOGGER.info(
+                        "similar_ai outcome=fallback reason=%s", type(exc).__name__
+                    )
+                    ranking_diagnostics["ai_fallback"] = True
+            search_scope = str(seed.get("station") or seed.get("address") or "").strip()
+            result = {
+                "source": "Tabelog 日本語版",
+                "seed": {"name": seed["name"], "url": seed["url"]},
+                "recommendations": recommendations,
+                "diagnostics": {
+                    "search_scope": search_scope,
+                    **ranking_diagnostics,
+                },
+                "cached": False,
+            }
+            self.similar_cache.set(key, result)
+            LOGGER.info(
+                "similar outcome=success cache_hit=false latency_ms=%s",
+                int((time.monotonic() - started) * 1000),
+            )
+            return result
 
     @staticmethod
     def validate_similar_map_target(payload: Mapping[str, Any]) -> dict[str, str]:
@@ -583,33 +632,56 @@ class MatchService:
         place = self.validate_place(payload)
         self.ensure_not_overseas(place)
         key = self._cache_key(place)
+        started = time.monotonic()
         cached = self.cache.get(key)
         if cached:
+            LOGGER.info(
+                "match outcome=success cache_hit=true latency_ms=%s",
+                int((time.monotonic() - started) * 1000),
+            )
             return {**cached, "cached": True}
 
-        michelin = self.michelin_provider.match(place) if include_michelin else None
-        try:
-            candidates = rank_candidates(place, self.provider.search(place))
-            tabelog_error = ""
-        except Exception as exc:
-            if not michelin or not include_michelin:
-                raise
-            candidates = []
-            tabelog_error = str(exc) or "Tabelog 查詢失敗"
-        selected = candidates[0] if candidates and candidates[0]["confidence"] != "low" else None
-        if selected and include_michelin:
-            michelin = self.michelin_provider.match(place, selected) or michelin
-        result = {
-            "place": place,
-            "selected": selected,
-            "candidates": candidates,
-            "michelin": michelin,
-            "matched": selected is not None,
-            "needs_confirmation": bool(selected and selected["confidence"] != "high"),
-            "source": "Tabelog 日本語版",
-            "tabelog_error": tabelog_error,
-            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "cached": False,
-        }
-        self.cache.set(key, result)
-        return result
+        with self._inflight_lock("match", key):
+            cached = self.cache.get(key)
+            if cached:
+                LOGGER.info(
+                    "match outcome=success cache_hit=true latency_ms=%s",
+                    int((time.monotonic() - started) * 1000),
+                )
+                return {**cached, "cached": True}
+
+            michelin = self.michelin_provider.match(place) if include_michelin else None
+            try:
+                candidates = rank_candidates(place, self.provider.search(place))
+                tabelog_error = ""
+            except Exception as exc:
+                if not michelin or not include_michelin:
+                    LOGGER.info(
+                        "match outcome=failure reason=%s latency_ms=%s",
+                        type(exc).__name__,
+                        int((time.monotonic() - started) * 1000),
+                    )
+                    raise
+                candidates = []
+                tabelog_error = str(exc) or "Tabelog 查詢失敗"
+            selected = candidates[0] if candidates and candidates[0]["confidence"] != "low" else None
+            if selected and include_michelin:
+                michelin = self.michelin_provider.match(place, selected) or michelin
+            result = {
+                "place": place,
+                "selected": selected,
+                "candidates": candidates,
+                "michelin": michelin,
+                "matched": selected is not None,
+                "needs_confirmation": bool(selected and selected["confidence"] != "high"),
+                "source": "Tabelog 日本語版",
+                "tabelog_error": tabelog_error,
+                "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "cached": False,
+            }
+            self.cache.set(key, result)
+            LOGGER.info(
+                "match outcome=success cache_hit=false latency_ms=%s",
+                int((time.monotonic() - started) * 1000),
+            )
+            return result
