@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MeshiLens 行程比較</title>
+    <link rel="stylesheet" href="planner.css" />
+  </head>
+  <body>
+    <header class="planner-header">
+      <div class="planner-brand">
+        <img src="icons/icon-48.png" alt="" />
+        <div>
+          <div class="planner-eyebrow">MESHI LENS</div>
+          <h1>行程比較</h1>
+        </div>
+      </div>
+      <span id="planner-version" class="planner-version">v—</span>
+    </header>
+    <div id="planner-status" class="planner-status" role="status" aria-live="polite"></div>
+    <main id="planner-root"></main>
+    <script src="planner.js"></script>
+    <script src="planner_store.js"></script>
+    <script src="planner_share.js"></script>
+    <script src="qrcode.min.js"></script>
+    <script src="planner_ui.js"></script>
+  </body>
+</html>

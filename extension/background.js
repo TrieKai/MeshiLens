@@ -334,8 +334,53 @@ async function matchMichelin(place, signal, tabelog = null) {
   return data;
 }
 
+async function plannerTabId(sender) {
+  if (Number.isInteger(sender?.tab?.id)) return sender.tab.id;
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const id = tabs[0]?.id;
+  if (!Number.isInteger(id)) throw new Error("找不到目前的 Google Maps 分頁");
+  return id;
+}
+
+async function openPlannerPanel(sender) {
+  const activeTabId = await plannerTabId(sender);
+  if (chrome.sidePanel?.open) {
+    try {
+      await chrome.sidePanel.open({ tabId: activeTabId });
+      return { opened: "side_panel" };
+    } catch {
+      // Some Chromium builds lose the originating click gesture while the
+      // message wakes the service worker. Fall back to the same planner page.
+    }
+  }
+  await chrome.tabs.create({ url: chrome.runtime.getURL("planner.html") });
+  return { opened: "tab" };
+}
+
+async function plannerMapContext(sender) {
+  const activeTabId = await plannerTabId(sender);
+  const response = await chrome.tabs.sendMessage(activeTabId, {
+    type: "MESHI_PLANNER_GET_MAP_CONTEXT",
+  });
+  if (!response?.ok) throw new Error("請先在 Google Maps 開啟集合點或移動到目標區域");
+  return response.context;
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message) return false;
+
+  if (message.type === "OPEN_PLANNER") {
+    openPlannerPanel(sender)
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((error) => sendResponse({ ok: false, error: error.message || "無法開啟行程比較" }));
+    return true;
+  }
+  if (message.type === "GET_MAP_CONTEXT") {
+    plannerMapContext(sender)
+      .then((context) => sendResponse({ ok: true, context }))
+      .catch((error) => sendResponse({ ok: false, error: error.message || "無法讀取 Maps 位置" }));
+    return true;
+  }
 
   if (message.type === "CANCEL_LOOKUP") {
     abortTabLookups(sender);

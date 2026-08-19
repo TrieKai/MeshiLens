@@ -90,3 +90,17 @@ document.getElementById("save").addEventListener("click", async () => {
   await chrome.storage.local.set({ apiUrl: value });
   await check();
 });
+
+document.getElementById("open-planner").addEventListener("click", async () => {
+  const button = document.getElementById("open-planner");
+  button.disabled = true;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "OPEN_PLANNER" });
+    if (!response?.ok) throw new Error(response?.error || "無法開啟行程比較");
+    window.close();
+  } catch (error) {
+    status.className = "status offline";
+    status.textContent = error?.message || "無法開啟行程比較";
+    button.disabled = false;
+  }
+});

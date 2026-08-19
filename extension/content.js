@@ -41,6 +41,8 @@ const {
   safeStorageLocalGet,
   safeStorageLocalSet,
 } = globalThis.MeshiLensRuntime;
+const Planner = globalThis.MeshiLensPlanner;
+const plannerStore = globalThis.MeshiLensPlannerStore.createPlannerStore();
 let activePlaceKey = "";
 let lookupSequence = 0;
 let listBatchSequence = 0;
@@ -56,6 +58,8 @@ let extensionEnabled = false;
 let themeColor = DEFAULT_THEME_COLOR;
 let extensionAlive = true;
 let pageObserver = null;
+const plannerListFlights = new Set();
+let plannerListQueue = Promise.resolve();
 
 function handleInvalidatedContext() {
   if (!extensionAlive) return;
@@ -192,6 +196,7 @@ function extractPlace() {
     phone,
     website: officialWebsiteFromPage(detailPanel),
     tabelog_url: tabelogUrlFromPage(),
+    maps_url: location.href,
     ...coordinatesFromMapsUrl(location.href),
     title,
   };
@@ -216,6 +221,78 @@ function element(tag, className, text) {
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+function plannerId(prefix) {
+  const value = globalThis.crypto?.randomUUID?.()
+    || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}-${value}`;
+}
+
+function plannerTargetContains(state, target, restaurantId) {
+  const trip = state.trips.find((item) => item.id === target.tripId);
+  const restaurants = target.groupId
+    ? trip?.groups.find((group) => group.id === target.groupId)?.restaurants
+    : trip?.inbox;
+  return restaurants?.some((item) => item.id === restaurantId) === true;
+}
+
+async function savePlannerRestaurant(restaurant, requestedTarget = null) {
+  let target = requestedTarget;
+  const state = await plannerStore.update((current) => {
+    let next = current;
+    if (!next.activeTripId) {
+      next = Planner.createTrip(next, {
+        id: plannerId("trip"),
+        name: "我的日本美食行程",
+      });
+    }
+    const tripId = target?.tripId || next.activeTripId;
+    const trip = next.trips.find((item) => item.id === tripId);
+    const requestedGroupId = target ? target.groupId : next.activeGroupId;
+    const groupId = trip?.groups.some((group) => group.id === requestedGroupId)
+      ? requestedGroupId
+      : null;
+    target = { tripId, groupId };
+    return Planner.addRestaurant(next, tripId, groupId, restaurant);
+  });
+  if (!plannerTargetContains(state, target, restaurant.id)) {
+    throw new Error(target.groupId ? "這個餐次已經有 5 家候選店" : "待分類清單已滿");
+  }
+  return { state, target };
+}
+
+async function openPlanner() {
+  const response = await safeRuntimeSendMessage({ type: "OPEN_PLANNER" });
+  if (!response?.ok) throw new Error(response?.error || "暫時無法開啟行程比較");
+}
+
+function plannerRestaurantFor(place, candidate, michelin, matchStatus = "ready") {
+  return {
+    ...Planner.restaurantFromMatch({ place, candidate, michelin }),
+    matchStatus,
+  };
+}
+
+function plannerActionView(card, candidate, michelin) {
+  const section = element("section", "meshilens-planner-action");
+  const button = element("button", "meshilens-planner-button", "加入行程比較");
+  button.type = "button";
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    button.textContent = "正在加入…";
+    try {
+      await openPlanner();
+      const restaurant = plannerRestaurantFor(card._meshilensPlace, candidate, michelin);
+      await savePlannerRestaurant(restaurant);
+      button.textContent = "已加入行程比較";
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = error?.message || "暫時無法加入";
+    }
+  });
+  section.append(button);
+  return section;
 }
 
 function mountCard(place) {
@@ -967,6 +1044,7 @@ function renderResult(card, result) {
     card.append(element("div", "meshilens-status", message));
   } else {
     card.append(selectedView(selected, resultWithMichelin));
+    card.append(plannerActionView(card, selected, michelinData));
     syncAdvice(card);
     card._meshilensSimilar = null;
     syncSimilarRestaurants(card);
@@ -1167,6 +1245,7 @@ function showListHint() {
 
 function removeListBadges() {
   document.querySelectorAll(".meshilens-list-badge").forEach((badge) => badge.remove());
+  document.querySelectorAll(".meshilens-list-compare").forEach((button) => button.remove());
   document.querySelectorAll(".meshilens-list-card").forEach((card) => {
     card.classList.remove("meshilens-list-card");
   });
@@ -1198,8 +1277,8 @@ function cancelListBadgeLookup() {
 }
 
 function pruneDetachedListBadges() {
-  document.querySelectorAll(".meshilens-list-badge").forEach((badge) => {
-    if (!badge.isConnected || !badge.parentElement?.isConnected) badge.remove();
+  document.querySelectorAll(".meshilens-list-badge, .meshilens-list-compare").forEach((node) => {
+    if (!node.isConnected || !node.parentElement?.isConnected) node.remove();
   });
 }
 
@@ -1251,14 +1330,107 @@ function visibleListCards() {
   return collectListCards({ visibleOnly: true, limit: MAX_LIST_CARDS });
 }
 
+function listPlannerPlace(card) {
+  return {
+    name: card.name,
+    address: "",
+    phone: "",
+    website: "",
+    tabelog_url: "",
+    maps_url: card.href,
+    latitude: card.latitude,
+    longitude: card.longitude,
+    coordinates_source: card.exact_coordinates ? "place" : "",
+  };
+}
+
+async function addListCardToPlanner(card, button) {
+  button.textContent = "配對中…";
+  const place = listPlannerPlace(card);
+  let target = null;
+  let provisional = null;
+  try {
+    await openPlanner();
+    provisional = plannerRestaurantFor(place, {}, null, "pending");
+    ({ target } = await savePlannerRestaurant(provisional));
+    const [matchResponse, michelinResponse] = await Promise.all([
+      safeRuntimeSendMessage({ type: "MATCH_PLACE", place }),
+      safeRuntimeSendMessage({ type: "MATCH_MICHELIN", place }).catch(() => null),
+    ]);
+    if (matchResponse?.cancelled) throw new Error("查詢已取消，請再試一次");
+    if (!matchResponse?.ok) throw new Error(matchResponse?.error || "Tabelog 配對失敗");
+    const candidate = matchResponse.data?.selected;
+    let michelin = michelinResponse?.data?.michelin || matchResponse.data?.michelin || null;
+    if (!michelin && candidate) {
+      const refinedResponse = await safeRuntimeSendMessage({
+        type: "MATCH_MICHELIN",
+        place,
+        tabelog: tabelogHint(candidate),
+      }).catch(() => null);
+      michelin = refinedResponse?.data?.michelin || null;
+    }
+    const restaurant = candidate
+      ? plannerRestaurantFor(place, candidate, michelin, "ready")
+      : { ...provisional, matchStatus: "error" };
+    await savePlannerRestaurant(restaurant, target);
+    button.textContent = candidate ? "已加入比較" : "已加入，待核對";
+  } catch (error) {
+    if (provisional && target) {
+      await savePlannerRestaurant({ ...provisional, matchStatus: "error" }, target).catch(() => {});
+    }
+    button.textContent = error?.message || "加入失敗";
+    button.disabled = false;
+  } finally {
+    plannerListFlights.delete(card.key);
+  }
+}
+
+function queueListCardForPlanner(card, button) {
+  if (plannerListFlights.has(card.key)) return;
+  plannerListFlights.add(card.key);
+  button.disabled = true;
+  button.textContent = plannerListFlights.size > 1 ? "等待配對…" : "配對中…";
+  const operation = plannerListQueue.then(() => addListCardToPlanner(card, button));
+  plannerListQueue = operation.catch(() => {});
+}
+
+function syncListPlannerAction(card) {
+  if (!card?.mount?.isConnected) return;
+  const existing = [...card.mount.querySelectorAll(".meshilens-list-compare")];
+  for (const node of existing) {
+    if (node.dataset.meshilensListKey !== card.key) node.remove();
+  }
+  if (!shouldLookupJapanListCard(card)) {
+    existing.forEach((node) => node.remove());
+    return;
+  }
+  if (existing.some((node) => node.isConnected && node.dataset.meshilensListKey === card.key)) {
+    card.mount.classList.add("meshilens-list-card");
+    return;
+  }
+  card.mount.classList.add("meshilens-list-card");
+  const button = element("button", "meshilens-list-compare", "＋ 加入比較");
+  button.type = "button";
+  button.style.setProperty("--ml-accent", themeColor);
+  button.dataset.meshilensListKey = card.key;
+  button.setAttribute("aria-label", `將 ${card.name} 加入 MeshiLens 行程比較`);
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    queueListCardForPlanner(card, button);
+  });
+  card.mount.append(button);
+}
+
 function remountListBadgesFromCache() {
-  if (!extensionEnabled || !listBadgeCache.size) return;
+  if (!extensionEnabled) return;
   if (!document.querySelector('[role="feed"]')) return;
   pruneDetachedListBadges();
   // Detail mode may keep the feed off-screen or rebuild nodes; do not require
   // viewport intersection when restoring cached badges.
   for (const card of collectListCards({ visibleOnly: false, limit: 30 })) {
-    syncListBadge(card);
+    syncListPlannerAction(card);
+    if (listBadgeCache.size) syncListBadge(card);
   }
 }
 
@@ -1287,7 +1459,10 @@ async function loadListBadges() {
   if (mode !== LIST_MODE) return;
   pruneDetachedListBadges();
   const cards = visibleListCards();
-  for (const card of cards) syncListBadge(card);
+  for (const card of cards) {
+    syncListPlannerAction(card);
+    syncListBadge(card);
+  }
   // List cards usually expose only an exact pin and a name.  Allow unknown
   // country cards through while retaining the explicit overseas guard; the
   // server's snapshot-only matcher still requires an unambiguous name/pin hit.
@@ -1384,17 +1559,36 @@ function scan() {
   document.getElementById(CARD_ID)?.remove();
 }
 
+try {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type !== "MESHI_PLANNER_GET_MAP_CONTEXT") return false;
+    const coordinates = coordinatesFromMapsUrl(location.href);
+    sendResponse({
+      ok: Number.isFinite(coordinates.latitude) && Number.isFinite(coordinates.longitude),
+      context: {
+        name: detailTitle()?.textContent?.trim() || "目前地圖位置",
+        latitude: coordinates.latitude,
+        longitude: coordinates.longitude,
+        coordinates_source: coordinates.coordinates_source,
+      },
+    });
+    return false;
+  });
+} catch (error) {
+  notePossibleInvalidation(error);
+}
+
 pageObserver = new MutationObserver((mutations) => {
   if (!ensureExtensionAlive()) return;
   const pageChanged = mutations.some((mutation) => {
     const changedNodes = [...mutation.addedNodes, ...mutation.removedNodes];
     const isMeshiLensUiChange = changedNodes.length > 0 && changedNodes.every(
       (node) => node instanceof Element
-        && node.matches(`#${CARD_ID}, #${LIST_HINT_ID}, .meshilens-list-badge`),
+        && node.matches(`#${CARD_ID}, #${LIST_HINT_ID}, .meshilens-list-badge, .meshilens-list-compare`),
     );
     if (isMeshiLensUiChange) return false;
     const target = mutation.target instanceof Element ? mutation.target : mutation.target.parentElement;
-    return !target?.closest(`#${CARD_ID}, #${LIST_HINT_ID}, .meshilens-list-badge`);
+    return !target?.closest(`#${CARD_ID}, #${LIST_HINT_ID}, .meshilens-list-badge, .meshilens-list-compare`);
   });
   if (pageChanged) scan();
 });
@@ -1424,6 +1618,9 @@ try {
       themeColor = normalizeThemeColor(changes.themeColor.newValue);
       document.getElementById(CARD_ID)?.style.setProperty("--ml-accent", themeColor);
       document.getElementById(LIST_HINT_ID)?.style.setProperty("--ml-accent", themeColor);
+      document.querySelectorAll(".meshilens-list-compare").forEach((button) => {
+        button.style.setProperty("--ml-accent", themeColor);
+      });
     }
     if (changes.enabled) {
       extensionEnabled = changes.enabled.newValue !== false;

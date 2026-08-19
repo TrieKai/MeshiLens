@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "MeshiLens — Tabelog for Maps",
-  "version": "0.5.50",
-  "description": "在 Google Maps 顯示 Tabelog 評分、相似店家、百名店時間線、AI 用餐建議、公開評論實驗摘要與日本 Michelin Guide 入選資訊。",
-  "minimum_chrome_version": "109",
-  "permissions": ["storage"],
+  "version": "0.6.0",
+  "description": "在 Google Maps 顯示 Tabelog、百名店與 Michelin 資訊，並比較日本美食行程候選店。",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "sidePanel"],
   "host_permissions": [
     "http://127.0.0.1/*",
     "http://localhost/*",
@@ -26,7 +26,7 @@
         "https://www.google.co.jp/maps/*",
         "https://maps.google.com/*"
       ],
-      "js": ["category.js", "maps.js", "japan.js", "settings.js", "timeline.js", "advice.js", "similar.js", "popularity.js", "review_insights.js", "cache.js", "ui_mode.js", "list_badges.js", "runtime.js", "content.js"],
+      "js": ["category.js", "maps.js", "japan.js", "settings.js", "timeline.js", "advice.js", "similar.js", "popularity.js", "review_insights.js", "cache.js", "ui_mode.js", "list_badges.js", "runtime.js", "planner.js", "planner_store.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }
@@ -38,5 +38,8 @@
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png"
     }
+  },
+  "side_panel": {
+    "default_path": "planner.html"
   }
 }

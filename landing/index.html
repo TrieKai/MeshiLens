@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="MeshiLens 讓你在 Google Maps 日本餐廳頁面直接查看 Tabelog 與 Michelin Guide 資訊。"
+      content="MeshiLens 讓你在 Google Maps 查看 Tabelog 與 Michelin Guide 資訊，並比較日本美食行程候選店。"
     />
     <title>MeshiLens｜在 Google Maps 看懂日本餐廳</title>
     <link rel="stylesheet" href="styles.css" />
@@ -33,7 +33,7 @@
           <h1>在 Google Maps<br />看懂日本餐廳。</h1>
           <p class="hero-text">
             MeshiLens 將 Tabelog 日本語版評分與 Michelin Guide 日本入選資訊，
-            自然放進你正在看的 Google Maps 店家頁。
+            自然放進 Google Maps，並把候選店整理成真正能做決定的行程比較。
           </p>
           <div class="hero-actions">
             <a class="button button-primary" href="#install">查看安裝方式 <span aria-hidden="true">↓</span></a>
@@ -84,6 +84,7 @@
           <article class="feature feature-guide"><span class="feature-icon">✦</span><h3>Michelin Guide 入選</h3><p>辨識三星、二星、一星、必比登與指南入選，不必另開 Michelin 網站。</p><div class="guide-stamp"><span>MICHELIN</span><strong>★ ★ ★</strong><small>Selected restaurant</small></div></article>
           <article class="feature feature-match"><span class="feature-icon">⌁</span><h3>多訊號店家配對</h3><p>用店名、電話、地址、座標及官網交叉判斷，並清楚標示需核對的候選結果。</p><div class="match-lines"><span></span><span></span><span></span></div></article>
           <article class="feature feature-advice"><span class="feature-icon">◌</span><h3>結構化用餐建議</h3><p>以餐廳類型、價位、獎項、訂位與付款等已有欄位，整理出繁中用餐提示。</p><div class="advice-bubble">適合想安排一頓正式壽司晚餐的時候。</div></article>
+          <article class="feature feature-plan"><span class="feature-icon">✓</span><h3>候選店比較與手機行程</h3><p>按餐次比較三至五家，選出首選與備案，再用不經伺服器保存的連結或 QR Code 帶到手機。</p><div class="advice-bubble">銀座週六晚餐：首選＋備案都準備好了。</div></article>
         </div>
       </section>
 
@@ -95,7 +96,7 @@
           <a class="text-link" href="#install">閱讀使用與資料限制 <span aria-hidden="true">↓</span></a>
         </div>
         <ul class="privacy-points">
-          <li><span>01</span><p><strong>不批量抓店</strong>店家頁才會查 Tabelog；搜尋清單只用畫面上可見卡片批次查 Michelin 快照。</p></li>
+          <li><span>01</span><p><strong>不批量抓 Tabelog</strong>搜尋清單只自動批次查 Michelin 快照；只有你按下某一家「加入比較」時，才查那一家。</p></li>
           <li><span>02</span><p><strong>不讀取 Maps 評論</strong>店家比對只使用名稱、地址、電話、座標與官網等識別資訊。</p></li>
           <li><span>03</span><p><strong>評論摘要需主動點擊</strong>實驗功能僅讀取一頁公開 Tabelog 評論，完成摘要後立即捨棄原文。</p></li>
         </ul>
@@ -103,7 +104,7 @@
 
       <section class="install section" id="install">
         <div><p class="eyebrow">GET STARTED</p><h2>準備好讓地圖<br />更懂日本餐廳了嗎？</h2></div>
-        <div class="install-card"><h3>本機安裝</h3><p>MeshiLens 目前以本機服務搭配未封裝擴充功能使用。</p><ol><li>安裝 Python 3.12+ 與 uv</li><li>在專案資料夾執行 <code>uv sync</code> 與 <code>uv run meshilens-server</code></li><li>載入 <code>extension</code> 資料夾，並將服務網址設為 <code>http://127.0.0.1:18765</code></li></ol><a class="button button-primary" href="../README.md">查看完整安裝說明 <span aria-hidden="true">→</span></a></div>
+        <div class="install-card"><h3>本機安裝</h3><p>MeshiLens 目前以本機服務搭配未封裝擴充功能使用。</p><ol><li>安裝 Chrome／Edge 116+、Python 3.12+ 與 uv</li><li>在專案資料夾執行 <code>uv sync</code> 與 <code>uv run meshilens-server</code></li><li>載入 <code>extension</code> 資料夾，並將服務網址設為 <code>http://127.0.0.1:18765</code></li></ol><a class="button button-primary" href="../README.md">查看完整安裝說明 <span aria-hidden="true">→</span></a></div>
       </section>
     </main>
 

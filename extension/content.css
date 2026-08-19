@@ -85,6 +85,40 @@ a.meshilens-list-badge:focus-visible {
   outline: 0;
 }
 
+.meshilens-list-compare {
+  background: var(--ml-accent, #bf3a2b);
+  border: 0;
+  border-radius: 999px;
+  bottom: 8px;
+  box-shadow: 0 2px 6px rgba(53, 42, 30, 0.18);
+  color: #fff;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.2;
+  max-width: 144px;
+  overflow: hidden;
+  padding: 6px 9px;
+  position: absolute;
+  right: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  z-index: 3;
+}
+
+.meshilens-list-compare:hover,
+.meshilens-list-compare:focus-visible {
+  filter: brightness(0.92);
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
+.meshilens-list-compare:disabled {
+  cursor: wait;
+  opacity: 0.78;
+}
+
 .meshilens-header,
 .meshilens-score-row,
 .meshilens-footer,
@@ -109,6 +143,33 @@ a.meshilens-list-badge:focus-visible {
   color: var(--ml-muted);
   font-size: 11px;
 }
+
+.meshilens-planner-action {
+  border-top: 1px solid var(--ml-border);
+  margin-top: 11px;
+  padding-top: 11px;
+}
+
+.meshilens-planner-button {
+  background: var(--ml-accent);
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 750;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.meshilens-planner-button:hover,
+.meshilens-planner-button:focus-visible {
+  filter: brightness(0.92);
+  outline: 2px solid color-mix(in srgb, var(--ml-accent) 30%, white);
+  outline-offset: 2px;
+}
+
+.meshilens-planner-button:disabled { cursor: wait; opacity: 0.72; }
 
 .meshilens-score-row {
   gap: 10px;

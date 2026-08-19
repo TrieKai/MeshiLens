@@ -5,7 +5,7 @@ const manifest = require("../extension/manifest.json");
 test("toggle persists state and skips health checks while disabled", async () => {
   const listeners = {};
   const elements = Object.fromEntries(
-    ["api-url", "status", "enabled", "enabled-state", "save", "version"].map((id) => [
+    ["api-url", "status", "enabled", "enabled-state", "save", "version", "open-planner"].map((id) => [
       id,
       {
         checked: false,
