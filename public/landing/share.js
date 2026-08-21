@@ -1,3 +1,5 @@
+"use strict";
+
 const shareRoot = document.getElementById("share-root");
 const MAX_DECOMPRESSED_BYTES = 100_000;
 

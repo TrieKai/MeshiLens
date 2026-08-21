@@ -37,7 +37,7 @@
 
 ## 產品介紹頁
 
-專案包含可獨立開啟的繁中宣傳與使用教學頁：[`landing/index.html`](landing/index.html)。它介紹核心功能、三步安裝方式，以及資料使用與隱私限制；不需要額外安裝前端套件。
+專案包含可獨立開啟的繁中宣傳與使用教學頁：[`public/landing/index.html`](public/landing/index.html)。它介紹核心功能、三步安裝方式，以及資料使用與隱私限制；不需要額外安裝前端套件。`public/` 內容會由 Vercel 作為靜態檔案發布。
 
 ## 安裝與啟動
 
@@ -179,7 +179,7 @@ extension/planner.js       行程、餐次、候選店與透明排序領域邏�
 extension/planner.html     行程比較側邊工作區
 extension/planner_share.js 手機分享資料清理與網址片段編解碼
 extension/timeline.js      店家時間線條目組裝
-landing/share.html         不保存資料的手機行程靜態檢視
+public/landing/share.html  不保存資料的手機行程靜態檢視
 src/meshi_lens/provider.py gurume 介接與節流
 src/meshi_lens/michelin.py Michelin SSR 解析、本地快照與店家配對
 src/meshi_lens/matching.py 店家正規化、距離與配對評分

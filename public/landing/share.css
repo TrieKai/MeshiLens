@@ -28,7 +28,19 @@ body {
   gap: 10px;
   padding: 18px 2px 14px;
 }
-.share-header img { height: 38px; width: 38px; }
+.share-mark {
+  align-items: center;
+  background: var(--accent);
+  border-radius: 11px;
+  color: #fff;
+  display: flex;
+  font-family: Georgia, serif;
+  font-size: 21px;
+  font-weight: 800;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
 .share-eyebrow { color: var(--accent); font-size: 9px; font-weight: 850; letter-spacing: 0.16em; }
 .share-brand { font-family: Georgia, serif; font-size: 20px; font-weight: 700; margin-top: 2px; }
 

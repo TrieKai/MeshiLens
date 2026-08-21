@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-08-22
+
+### Fixed
+- 將宣傳頁與手機行程檢視器移至 Vercel Python 專案的 `public/landing/`，修正 `/landing/share.html` 被送入 Python API 而回傳「找不到路徑」的 production 404。
+- 手機分享頁改用內建文字品牌標記，不再參照不會隨靜態網站發布的擴充功能 icon。
+
 ## [0.6.0] — 2026-08-20
 
 ### Added

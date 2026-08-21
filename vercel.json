@@ -5,7 +5,7 @@
     "api/index.py": {
       "maxDuration": 60,
       "regions": ["hnd1"],
-      "excludeFiles": "{tests/**,extension/**,landing/**,scripts/**,.github/**}"
+      "excludeFiles": "{tests/**,extension/**,public/**,scripts/**,.github/**}"
     }
   },
   "rewrites": [

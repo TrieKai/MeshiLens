@@ -91,6 +91,15 @@ class ApiRoutingTests(unittest.TestCase):
         )
         self.assertEqual(rewrite["destination"], "/api?path=:path*")
 
+    def test_vercel_public_directory_contains_mobile_share_viewer(self) -> None:
+        public_landing = Path("public/landing")
+        share_html = (public_landing / "share.html").read_text(encoding="utf-8")
+
+        self.assertTrue((public_landing / "share.css").is_file())
+        self.assertTrue((public_landing / "share.js").is_file())
+        self.assertIn('href="share.css"', share_html)
+        self.assertIn('src="share.js"', share_html)
+
 
 if __name__ == "__main__":
     unittest.main()
