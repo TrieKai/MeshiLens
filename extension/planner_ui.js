@@ -186,48 +186,48 @@ function tripBar(trip) {
   return section;
 }
 
-function mealTabs(trip, group) {
-  const section = element("section", "planner-meals");
-  const tabs = element("nav", "planner-tabs");
-  tabs.setAttribute("aria-label", "餐次");
-  if (trip.inbox.length || !group) {
-    const inbox = element("button", "planner-tab", trip.inbox.length ? `待分類 ${trip.inbox.length}` : "待分類");
-    inbox.type = "button";
-    inbox.setAttribute("aria-current", String(!group));
-    inbox.addEventListener("click", () => {
-      shareUrl = "";
-      addingMeal = false;
-      void mutate((state) => Planner.setActiveTarget(state, trip.id, null));
-    });
-    tabs.append(inbox);
-  }
-  for (const item of trip.groups) {
-    const tab = element("button", "planner-tab", `${item.name} ${item.restaurants.length}`);
-    tab.type = "button";
-    tab.setAttribute("aria-current", String(item.id === group?.id));
-    tab.addEventListener("click", () => {
-      shareUrl = "";
-      addingMeal = false;
-      void mutate((state) => Planner.setActiveTarget(state, trip.id, item.id));
-    });
-    tabs.append(tab);
-  }
-  const addTab = element("button", "planner-tab planner-tab-add", "＋ 餐次");
+function nextMealButton(className = "planner-tab planner-tab-add") {
+  const addTab = element("button", className, "再排下一餐");
   addTab.type = "button";
   addTab.setAttribute("aria-pressed", String(addingMeal));
   addTab.addEventListener("click", () => {
     addingMeal = !addingMeal;
     render();
   });
-  tabs.append(addTab);
-  section.append(tabs);
+  return addTab;
+}
 
-  if (addingMeal) {
+function mealTabs(trip, group) {
+  const section = element("section", "planner-meals");
+  const multiple = trip.groups.length > 1;
+  if (multiple) {
+    const tabs = element("nav", "planner-tabs");
+    tabs.setAttribute("aria-label", "這一餐");
+    for (const item of trip.groups) {
+      const tab = element("button", "planner-tab", `${item.name} ${item.restaurants.length}`);
+      tab.type = "button";
+      tab.setAttribute("aria-current", String(item.id === group?.id));
+      tab.addEventListener("click", () => {
+        shareUrl = "";
+        addingMeal = false;
+        void mutate((state) => Planner.setActiveTarget(state, trip.id, item.id));
+      });
+      tabs.append(tab);
+    }
+    tabs.append(nextMealButton());
+    section.append(tabs);
+  } else {
+    const row = element("div", "planner-next-meal");
+    row.append(nextMealButton("planner-text-action"));
+    section.append(row);
+  }
+
+  if (addingMeal || !trip.groups.length) {
     const form = element("form", "planner-new-group");
     const input = document.createElement("input");
     input.maxLength = 120;
-    input.placeholder = "例如：銀座週六晚餐";
-    input.setAttribute("aria-label", "新餐次名稱");
+    input.placeholder = "例如：第二天午餐";
+    input.setAttribute("aria-label", "下一餐名稱");
     const add = plannerButton("新增");
     add.type = "submit";
     form.append(input, add);
@@ -241,7 +241,7 @@ function mealTabs(trip, group) {
         id: plannerId("meal"),
         name,
         intent: "destination",
-      }), "餐次已建立");
+      }), "下一餐已建立");
     });
     section.append(form);
     queueMicrotask(() => input.focus());
@@ -299,26 +299,38 @@ function inboxRestaurantCard(trip, restaurant) {
   card.append(restaurantLinks(restaurant));
   if (trip.groups.length) {
     const moveRow = element("div", "planner-inbox-move");
-    const select = document.createElement("select");
-    select.setAttribute("aria-label", `將 ${restaurant.name} 移到餐次`);
-    for (const group of trip.groups) {
-      const option = element("option", "", `${group.name}（${group.restaurants.length}/5）`);
-      option.value = group.id;
-      option.disabled = group.restaurants.length >= Planner.MAX_GROUP_RESTAURANTS;
-      select.append(option);
+    const singleGroup = trip.groups.length === 1 ? trip.groups[0] : null;
+    let groupId = singleGroup?.id || "";
+    if (!singleGroup) {
+      const select = document.createElement("select");
+      select.setAttribute("aria-label", `將 ${restaurant.name} 移入哪一餐`);
+      for (const item of trip.groups) {
+        const option = element("option", "", `${item.name}（${item.restaurants.length}/5）`);
+        option.value = item.id;
+        option.disabled = item.restaurants.length >= Planner.MAX_GROUP_RESTAURANTS;
+        select.append(option);
+      }
+      groupId = select.value;
+      select.addEventListener("change", () => {
+        groupId = select.value;
+      });
+      moveRow.append(select);
     }
     const move = plannerButton("移入這一餐", "is-secondary");
-    move.disabled = ![...select.options].some((option) => !option.disabled);
+    const target = singleGroup || trip.groups.find((item) => item.id === groupId);
+    move.disabled = !target || target.restaurants.length >= Planner.MAX_GROUP_RESTAURANTS;
     move.addEventListener("click", () => {
+      const destinationId = singleGroup?.id || groupId;
+      if (!destinationId) return;
       void mutate((state) => Planner.moveRestaurant(
         state,
         trip.id,
         restaurant.id,
         null,
-        select.value,
-      ), "已移入餐次");
+        destinationId,
+      ), "已加入這一餐");
     });
-    moveRow.append(select, move);
+    moveRow.append(move);
     card.append(moveRow);
   }
   const remove = document.createElement("button");
@@ -333,15 +345,13 @@ function inboxRestaurantCard(trip, restaurant) {
 }
 
 function inboxView(trip) {
-  const section = panel("待分類", `${trip.inbox.length}/20`);
-  if (!trip.inbox.length) {
-    section.append(element(
-      "p",
-      "planner-empty",
-      "還沒決定要配哪一餐的店會放這裡。先選一個餐次，再從 Maps 按「加入這一餐」。",
-    ));
-    return section;
-  }
+  if (!trip.inbox.length) return null;
+  const section = panel("還沒放進這一餐", `${trip.inbox.length}/20`);
+  section.append(element(
+    "p",
+    "planner-help",
+    "從 Maps 加入時若還沒指定哪一餐，會暫時放這裡。",
+  ));
   const list = element("div", "planner-restaurant-list");
   for (const restaurant of trip.inbox) list.append(inboxRestaurantCard(trip, restaurant));
   section.append(list);
@@ -390,7 +400,7 @@ function groupSettings(trip, group) {
 
   const form = element("div", "planner-form planner-form-grid");
   const nameField = element("label", "planner-field is-wide");
-  nameField.append(element("span", "", "餐次名稱"));
+  nameField.append(element("span", "", "這一餐叫什麼"));
   const name = document.createElement("input");
   name.maxLength = 120;
   name.value = group.name;
@@ -481,12 +491,12 @@ function groupSettings(trip, group) {
   form.append(nameField, dateField, mealField, budgetField, anchorField);
   details.append(form);
 
-  const remove = plannerButton("刪除這個餐次", "is-danger");
+  const remove = plannerButton("刪除這一餐", "is-danger");
   remove.addEventListener("click", () => {
-    if (!window.confirm(`刪除「${group.name}」？候選店會移到待分類。`)) return;
+    if (!window.confirm(`刪除「${group.name}」？裡面的店會先留著，還沒指定哪一餐。`)) return;
     settingsOpen = false;
     shareUrl = "";
-    void mutate((state) => Planner.deleteGroup(state, trip.id, group.id), "候選店已移到待分類");
+    void mutate((state) => Planner.deleteGroup(state, trip.id, group.id), "店家已先留著");
   });
   details.append(remove);
   section.append(details);
@@ -721,12 +731,19 @@ function renderQr(container, url) {
     if (!globalThis.QRCode) throw new Error("QR Code 元件未載入");
     new globalThis.QRCode(container, {
       text: url,
-      width: 190,
-      height: 190,
-      colorDark: "#20242a",
-      colorLight: "#fffdf9",
-      correctLevel: globalThis.QRCode.CorrectLevel.M,
+      width: 288,
+      height: 288,
+      colorDark: "#000000",
+      colorLight: "#ffffff",
+      correctLevel: globalThis.QRCode.CorrectLevel.L,
     });
+    const canvas = container.querySelector("canvas");
+    if (canvas) {
+      canvas.title = "點一下放大，再點一下收回";
+      canvas.addEventListener("click", () => {
+        canvas.classList.toggle("is-zoomed");
+      });
+    }
   } catch {
     container.append(element("p", "planner-empty", "分享網址較長，請改用複製連結傳到手機。"));
   }
@@ -752,7 +769,12 @@ function shareOutput(url) {
   const open = plannerButton("預覽手機行程", "is-quiet");
   open.addEventListener("click", () => window.open(url, "_blank", "noopener,noreferrer"));
   const qr = element("div", "planner-qr");
-  output.append(linkRow, open, qr);
+  output.append(
+    linkRow,
+    open,
+    qr,
+    element("p", "planner-help", "用手機鏡頭掃；若掃不到，請複製上方連結。點 QR 可放大。"),
+  );
   queueMicrotask(() => renderQr(qr, url));
   return output;
 }
@@ -764,7 +786,7 @@ function shareView(trip) {
     const hint = element("p", "planner-share-hint", "選好首選或備案後，可以產生給手機看的精簡行程。");
     return hint;
   }
-  const section = panel("傳到手機", `${chosenGroups} 餐已可分享`);
+  const section = panel("傳到手機", chosenGroups === 1 ? "已可分享" : `${chosenGroups} 餐已可分享`);
   const create = plannerButton(shareUrl ? "重新產生連結" : "產生分享連結與 QR Code");
   section.append(create);
   create.addEventListener("click", () => {
@@ -808,7 +830,7 @@ function render() {
     plannerRoot.append(emptyTripsView());
     return;
   }
-  if (!activeGroup(trip) && !trip.inbox.length && trip.groups.length) {
+  if (!activeGroup(trip) && trip.groups.length) {
     void mutate((state) => Planner.setActiveTarget(state, trip.id, trip.groups[0].id));
     return;
   }
@@ -816,9 +838,9 @@ function render() {
   plannerRoot.append(tripBar(trip), mealTabs(trip, group));
   if (group) {
     plannerRoot.append(groupSettings(trip, group), comparisonView(trip, group));
-  } else {
-    plannerRoot.append(inboxView(trip));
   }
+  const inbox = inboxView(trip);
+  if (inbox) plannerRoot.append(inbox);
   plannerRoot.append(shareView(trip));
   const footer = tripFooter(trip);
   if (footer) plannerRoot.append(footer);

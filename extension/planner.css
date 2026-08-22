@@ -346,6 +346,7 @@ button:focus-visible { outline: 2px solid var(--ml-accent); outline-offset: 2px;
 .planner-compare td.is-best small { color: #356044; }
 
 .planner-inbox-move { align-items: center; display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) auto; margin-top: 8px; }
+.planner-inbox-move:not(:has(select)) { grid-template-columns: 1fr; }
 
 .planner-share-hint {
   color: var(--ml-muted);
@@ -355,9 +356,36 @@ button:focus-visible { outline: 2px solid var(--ml-accent); outline-offset: 2px;
 }
 .planner-share-output { display: grid; gap: 9px; margin-top: 10px; }
 .planner-share-link { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) auto; }
-.planner-qr { align-items: center; background: #fff; border: 1px solid var(--ml-border); border-radius: 12px; display: flex; justify-content: center; min-height: 200px; padding: 10px; }
+.planner-next-meal { margin: 0 2px 8px; }
+.planner-qr {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--ml-border);
+  border-radius: 12px;
+  display: flex;
+  justify-content: center;
+  min-height: 220px;
+  padding: 14px;
+}
 .planner-qr img,
-.planner-qr canvas { height: auto !important; max-width: 190px; width: 100% !important; }
+.planner-qr canvas {
+  cursor: zoom-in;
+  height: auto !important;
+  image-rendering: pixelated;
+  max-width: 100%;
+  width: 100% !important;
+}
+.planner-qr canvas.is-zoomed {
+  background: #fff;
+  box-shadow: 0 0 0 100vmax rgb(32 36 42 / 55%);
+  cursor: zoom-out;
+  inset: 16px;
+  max-height: calc(100vh - 32px);
+  max-width: calc(100vw - 32px);
+  position: fixed;
+  width: auto !important;
+  z-index: 40;
+}
 .planner-footer { margin-top: 8px; }
 .planner-footer .planner-button { width: 100%; }
 
