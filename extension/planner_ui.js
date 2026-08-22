@@ -3,7 +3,7 @@ const plannerStatus = document.getElementById("planner-status");
 const plannerVersion = document.getElementById("planner-version");
 const Planner = globalThis.MeshiLensPlanner;
 const { PLANNER_STORAGE_KEY, createPlannerStore } = globalThis.MeshiLensPlannerStore;
-const { buildSharePayload, buildShareUrl } = globalThis.MeshiLensPlannerShare;
+const { buildSharePayload, buildShareUrl, openMapsUrl } = globalThis.MeshiLensPlannerShare;
 const plannerStore = createPlannerStore();
 const INTENT_OPTIONS = [
   ["destination", "專程去", "最值得專程去"],
@@ -268,9 +268,10 @@ function restaurantMeta(restaurant, rankedItem = null, group = null) {
 
 function restaurantLinks(restaurant) {
   const links = element("div", "planner-links");
-  if (restaurant.mapsUrl) {
+  const mapsHref = openMapsUrl(restaurant);
+  if (mapsHref) {
     const maps = element("a", "", "Maps");
-    maps.href = restaurant.mapsUrl;
+    maps.href = mapsHref;
     maps.target = "_blank";
     maps.rel = "noopener noreferrer";
     links.append(maps);

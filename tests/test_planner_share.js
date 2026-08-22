@@ -8,6 +8,7 @@ const {
   encodeSharePayload,
   decodeSharePayload,
   buildShareUrl,
+  openMapsUrl,
 } = globalThis.MeshiLensPlannerShare;
 
 function compressedFragmentForJson(value) {
@@ -59,6 +60,8 @@ test("builds a compact trip payload containing only primary and backup choices",
             address: "東京都中央區",
             rating: 3.9,
             michelinLabel: "一星",
+            latitude: 35.6717,
+            longitude: 139.7649,
             station: "銀座站",
           },
           {
@@ -89,12 +92,16 @@ test("builds a compact trip payload containing only primary and backup choices",
         mapsUrl: "https://www.google.com/maps/place/A",
         rating: 3.9,
         michelinLabel: "一星",
+        latitude: 35.6717,
+        longitude: 139.7649,
       },
       backup: {
         name: "乙壽司",
         mapsUrl: "https://www.google.com/maps/place/B",
         rating: 3.7,
         michelinLabel: "",
+        latitude: null,
+        longitude: null,
       },
     }],
   });
@@ -137,6 +144,8 @@ test("encodes and decodes a sanitized share payload in the URL fragment", () => 
         mapsUrl: "",
         rating: 3.9,
         michelinLabel: "一星",
+        latitude: null,
+        longitude: null,
       },
       backup: null,
     }],
@@ -216,4 +225,42 @@ test("keeps a full twelve-meal trip within local QR byte capacity", () => {
   };
 
   assert.equal(buildShareUrl(payload).length <= 2_300, true);
+});
+
+test("opens truncated Maps place slugs by restaurant name instead of the English slug", () => {
+  const fragment = [
+    "TUwBAFsAMQAsACIA5gCIAJEA5wCaAIQA6ACMAKgA5QCfAI4A5wC-AI4A6QCjAJ8A6AChAIwA5wCo",
+    "AIsAIgAsAFsAWwAiAOcArACsAOQAuACAAOUApACpAOYAmQCaAOkApACQARwAIgEwATIBHQAiAOMAgQ",
+    "CTATYAoADjAIIAjwE7AIoBNgCoATsBOACBAIsBNgCkATYAggE2AKIBNgC-ACABNgCyATYAnwE2AKEB",
+    "NgCqATYAiwDmAJwArADlALoAlwEwAGgAdAB0AHAAcwA6AC8ALwB3AWgALgBnAG8AbwBnAGwAZQAuAG",
+    "MAbwBtAC8AbQBhAWMALwBwAGwAYQBjAGUALwBTAHAAZQBjAGkAYQBsAHQAeQArAFQAbwBuAGsAYQB0",
+    "AHMAdQArAEEASgBJAE0AQQEcADMALgA0AQIAIgBdATQBNgCvAUwBNgCQAT4A5QCxARsBAgFgAWIBZA",
+    "FmAWgAdwFqAWwBbgFwAXIBdAF2AXgBegF8AX4ASABhAXYAZwB1AHIAaQB5AGEBmAAuADYAMgGcAF0B",
+    "yQBd",
+  ].join("");
+  const payload = decodeSharePayload(fragment);
+  const primary = payload.groups[0].primary;
+  const href = openMapsUrl(primary);
+
+  assert.equal(primary.mapsUrl, "https://www.google.com/maps/place/Specialty+Tonkatsu+AJIMA");
+  assert.match(href, /^https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=/);
+  assert.equal(
+    decodeURIComponent(new URL(href).searchParams.get("query")),
+    "こだわりとんかつあぢま ひたちなか本店",
+  );
+  assert.equal(
+    openMapsUrl({
+      name: "こだわりとんかつあぢま ひたちなか本店",
+      mapsUrl: "https://www.google.com/maps/place/Specialty+Tonkatsu+AJIMA/data=!3d36.4!4d140.5",
+    }),
+    "https://www.google.com/maps/place/Specialty+Tonkatsu+AJIMA/data=!3d36.4!4d140.5",
+  );
+  assert.equal(
+    decodeURIComponent(new URL(openMapsUrl({
+      name: "はまぐり屋",
+      latitude: 36.341,
+      longitude: 140.446,
+    })).searchParams.get("query")),
+    "はまぐり屋 36.341,140.446",
+  );
 });

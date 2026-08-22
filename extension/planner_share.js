@@ -16,6 +16,41 @@
     }
   }
 
+  function finiteCoord(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function isSpecificMapsUrl(value) {
+    try {
+      const url = new URL(String(value || ""));
+      if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+      const body = `${url.pathname}${url.search}${url.hash}`;
+      return /!3d-?\d/.test(body)
+        || /\/@-?\d+(?:\.\d+)?,-?\d+/.test(body)
+        || url.searchParams.has("cid")
+        || url.searchParams.has("query_place_id")
+        || url.searchParams.get("api") === "1"
+        || /\/data=/.test(url.pathname);
+    } catch {
+      return false;
+    }
+  }
+
+  function openMapsUrl(value = {}) {
+    const mapsUrl = webUrl(value.mapsUrl);
+    if (mapsUrl && isSpecificMapsUrl(mapsUrl)) return mapsUrl;
+    const name = text(value.name, 160);
+    const latitude = finiteCoord(value.latitude);
+    const longitude = finiteCoord(value.longitude);
+    const query = name && latitude !== null && longitude !== null
+      ? `${name} ${latitude},${longitude}`
+      : name || (latitude !== null && longitude !== null ? `${latitude},${longitude}` : "");
+    if (!query) return mapsUrl;
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  }
+
   function choice(value) {
     if (!value?.name) return null;
     return {
@@ -23,6 +58,8 @@
       mapsUrl: webUrl(value.mapsUrl),
       rating: Number.isFinite(value.rating) ? value.rating : null,
       michelinLabel: text(value.michelinLabel, 80),
+      latitude: finiteCoord(value.latitude),
+      longitude: finiteCoord(value.longitude),
     };
   }
 
@@ -133,9 +170,12 @@
   }
 
   function compactChoice(value) {
-    return value
-      ? [value.name, value.mapsUrl, value.rating, value.michelinLabel]
-      : null;
+    if (!value) return null;
+    const row = [value.name, value.mapsUrl, value.rating, value.michelinLabel];
+    if (value.latitude !== null && value.longitude !== null) {
+      row.push(value.latitude, value.longitude);
+    }
+    return row;
   }
 
   function compactPayload(value) {
@@ -160,6 +200,8 @@
       mapsUrl: value[1],
       rating: value[2],
       michelinLabel: value[3],
+      latitude: value[4],
+      longitude: value[5],
     };
   }
 
@@ -226,5 +268,6 @@
     encodeSharePayload,
     decodeSharePayload,
     buildShareUrl,
+    openMapsUrl,
   };
 })();

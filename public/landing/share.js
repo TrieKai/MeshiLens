@@ -16,6 +16,41 @@ function webUrl(value) {
   }
 }
 
+function finiteCoord(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function isSpecificMapsUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+    const body = `${url.pathname}${url.search}${url.hash}`;
+    return /!3d-?\d/.test(body)
+      || /\/@-?\d+(?:\.\d+)?,-?\d+/.test(body)
+      || url.searchParams.has("cid")
+      || url.searchParams.has("query_place_id")
+      || url.searchParams.get("api") === "1"
+      || /\/data=/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function openMapsUrl(value = {}) {
+  const mapsUrl = webUrl(value.mapsUrl);
+  if (mapsUrl && isSpecificMapsUrl(mapsUrl)) return mapsUrl;
+  const name = text(value.name, 160);
+  const latitude = finiteCoord(value.latitude);
+  const longitude = finiteCoord(value.longitude);
+  const query = name && latitude !== null && longitude !== null
+    ? `${name} ${latitude},${longitude}`
+    : name || (latitude !== null && longitude !== null ? `${latitude},${longitude}` : "");
+  if (!query) return mapsUrl;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
 function choice(value) {
   if (!value?.name) return null;
   return {
@@ -23,6 +58,8 @@ function choice(value) {
     mapsUrl: webUrl(value.mapsUrl),
     rating: Number.isFinite(value.rating) ? value.rating : null,
     michelinLabel: text(value.michelinLabel, 80),
+    latitude: finiteCoord(value.latitude),
+    longitude: finiteCoord(value.longitude),
   };
 }
 
@@ -97,12 +134,16 @@ function decodePayload(fragment) {
               mapsUrl: group[4][1],
               rating: group[4][2],
               michelinLabel: group[4][3],
+              latitude: group[4][4],
+              longitude: group[4][5],
             } : null,
             backup: Array.isArray(group?.[5]) ? {
               name: group[5][0],
               mapsUrl: group[5][1],
               rating: group[5][2],
               michelinLabel: group[5][3],
+              latitude: group[5][4],
+              longitude: group[5][5],
             } : null,
           })),
         }
@@ -129,9 +170,10 @@ function choiceCard(item, role) {
     item.michelinLabel ? `Michelin ${item.michelinLabel}` : "",
   ].filter(Boolean).join(" · ");
   if (meta) card.append(element("div", "share-meta", meta));
-  if (item.mapsUrl) {
+  const mapsHref = openMapsUrl(item);
+  if (mapsHref) {
     const link = element("a", "share-map-link", "在 Google Maps 開啟");
-    link.href = item.mapsUrl;
+    link.href = mapsHref;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     card.append(link);
