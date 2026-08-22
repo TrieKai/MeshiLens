@@ -3,7 +3,7 @@ const plannerStatus = document.getElementById("planner-status");
 const plannerVersion = document.getElementById("planner-version");
 const Planner = globalThis.MeshiLensPlanner;
 const { PLANNER_STORAGE_KEY, createPlannerStore } = globalThis.MeshiLensPlannerStore;
-const { buildSharePayload, buildShareUrl, openMapsUrl } = globalThis.MeshiLensPlannerShare;
+const { buildSharePayload, buildShareUrl, openMapsUrl, mealConclusion } = globalThis.MeshiLensPlannerShare;
 const plannerStore = createPlannerStore();
 const INTENT_OPTIONS = [
   ["destination", "專程去", "最值得專程去"],
@@ -493,24 +493,6 @@ function groupSettings(trip, group) {
   return section;
 }
 
-function decisionSummary(group) {
-  const primary = group.restaurants.find((item) => item.id === group.primaryId);
-  const backup = group.restaurants.find((item) => item.id === group.backupId);
-  if (!primary && !backup) return null;
-  const box = element("div", "planner-decision");
-  if (primary) {
-    const row = element("div", "planner-decision-row");
-    row.append(document.createTextNode("首選 "), element("strong", "", primary.name));
-    box.append(row);
-  }
-  if (backup) {
-    const row = element("div", "planner-decision-row");
-    row.append(document.createTextNode("備案 "), element("strong", "", backup.name));
-    box.append(row);
-  }
-  return box;
-}
-
 function textAction(label, onClick) {
   const button = document.createElement("button");
   button.type = "button";
@@ -520,64 +502,67 @@ function textAction(label, onClick) {
   return button;
 }
 
-function groupRestaurantCard(trip, group, rankedItem, index) {
-  const restaurant = rankedItem.restaurant;
+function decisionSummary(group) {
+  const primary = group.restaurants.find((item) => item.id === group.primaryId);
+  const backup = group.restaurants.find((item) => item.id === group.backupId);
+  const text = mealConclusion({ primary, backup });
+  if (!text) return null;
+  const box = element("div", "planner-decision");
+  box.append(element("div", "planner-decision-row", text));
+  return box;
+}
+
+function choiceToggle(label, pressed, disabled, onClick, ariaLabel) {
+  const button = element("button", `planner-choice${pressed ? " is-on" : ""}`, label);
+  button.type = "button";
+  button.setAttribute("aria-pressed", String(pressed));
+  button.setAttribute("aria-label", ariaLabel);
+  button.disabled = disabled;
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+function choiceControls(trip, group, restaurant) {
+  const wrap = element("div", "planner-choice-pair");
+  const pending = restaurant.matchStatus === "pending";
   const isPrimary = restaurant.id === group.primaryId;
   const isBackup = restaurant.id === group.backupId;
-  const isSuggested = !group.primaryId && index === 0;
-  const card = element("article", "planner-restaurant");
-  if (isPrimary) card.classList.add("is-primary");
-  if (isBackup) card.classList.add("is-backup");
-  const top = element("div", "planner-restaurant-top");
-  top.append(element("h3", "planner-restaurant-name", restaurant.name));
-  const rankLabel = isPrimary ? "首選" : isBackup ? "備案" : isSuggested ? "建議" : "";
-  if (rankLabel) {
-    top.append(element(
-      "span",
-      `planner-rank${isPrimary || isSuggested ? " is-recommended" : ""}`,
-      rankLabel,
-    ));
-  }
-  card.append(top);
-  const meta = restaurantMeta(restaurant, rankedItem, group);
-  if (meta) card.append(element("div", "planner-restaurant-meta", meta));
-  if (restaurant.matchStatus === "pending") {
-    card.append(element("div", "planner-restaurant-meta", "正在補齊 Tabelog 與 Michelin 資訊…"));
-  } else {
-    const tags = element("div", "planner-tags");
-    for (const advantage of rankedItem.advantages) tags.append(element("span", "planner-tag", advantage));
-    for (const caution of rankedItem.cautions) tags.append(element("span", "planner-tag is-caution", caution));
-    if (tags.childElementCount) card.append(tags);
-  }
-  card.append(restaurantLinks(restaurant));
-  const actions = element("div", "planner-actions");
-  const primary = plannerButton(isPrimary ? "已選首選" : "設為首選");
-  primary.disabled = restaurant.matchStatus === "pending" || isPrimary;
-  primary.addEventListener("click", () => {
-    void mutate((state) => Planner.chooseRestaurant(
-      state,
-      trip.id,
-      group.id,
-      restaurant.id,
-      "primary",
-    ), "已設為首選");
-  });
-  const backup = plannerButton(isBackup ? "已選備案" : "設為備案", "is-secondary");
-  backup.disabled = restaurant.matchStatus === "pending" || isBackup;
-  backup.addEventListener("click", () => {
-    void mutate((state) => Planner.chooseRestaurant(
-      state,
-      trip.id,
-      group.id,
-      restaurant.id,
-      "backup",
-    ), "已設為備案");
-  });
-  actions.append(primary, backup);
-  card.append(actions);
+  wrap.append(
+    choiceToggle("★", isPrimary, pending || isPrimary, () => {
+      void mutate((state) => Planner.chooseRestaurant(
+        state,
+        trip.id,
+        group.id,
+        restaurant.id,
+        "primary",
+      ), "已設為首選");
+    }, `將 ${restaurant.name} 設為首選`),
+    choiceToggle("備", isBackup, pending || isBackup, () => {
+      void mutate((state) => Planner.chooseRestaurant(
+        state,
+        trip.id,
+        group.id,
+        restaurant.id,
+        "backup",
+      ), "已設為備案");
+    }, `將 ${restaurant.name} 設為備案`),
+  );
+  return wrap;
+}
+
+function compareCell(text, isBest) {
+  const cell = element("td", isBest ? "is-best" : "");
+  cell.textContent = text || "—";
+  return cell;
+}
+
+function compareNameCell(trip, group, restaurant) {
+  const cell = element("td", "planner-compare-name");
+  cell.append(element("div", "planner-restaurant-name", restaurant.name));
+  cell.append(restaurantLinks(restaurant));
   const extras = element("div", "planner-card-extras");
   extras.append(
-    textAction("移到待分類", () => {
+    textAction("待分類", () => {
       void mutate((state) => Planner.moveRestaurant(
         state,
         trip.id,
@@ -595,30 +580,130 @@ function groupRestaurantCard(trip, group, rankedItem, index) {
       ), "候選店已移除");
     }),
   );
-  card.append(extras);
-  return card;
+  cell.append(extras);
+  return cell;
+}
+
+function compareChoiceCell(trip, group, restaurant) {
+  const cell = element("td", "planner-compare-choice");
+  cell.append(choiceControls(trip, group, restaurant));
+  return cell;
+}
+
+function compareRow(trip, group, rankedItem, highlight, showDistance) {
+  const restaurant = rankedItem.restaurant;
+  const row = document.createElement("tr");
+  if (restaurant.id === group.primaryId) row.classList.add("is-primary");
+  if (restaurant.id === group.backupId) row.classList.add("is-backup");
+  const rating = Number.isFinite(restaurant.rating) ? restaurant.rating.toFixed(2) : "—";
+  const ratingCell = compareCell(rating, highlight.rating);
+  if (Number.isFinite(restaurant.reviewCount)) {
+    ratingCell.append(element("small", "", `${restaurant.reviewCount.toLocaleString("zh-TW")}則`));
+  }
+  const price = group.meal === "dinner" ? restaurant.dinnerPrice : restaurant.lunchPrice;
+  row.append(
+    compareChoiceCell(trip, group, restaurant),
+    compareNameCell(trip, group, restaurant),
+    ratingCell,
+    compareCell(price, highlight.price),
+    compareCell(Planner.awardLabel(restaurant), highlight.award),
+  );
+  if (showDistance) {
+    row.append(compareCell(Planner.formatDistance(rankedItem.distanceKm), highlight.distance));
+  }
+  return row;
+}
+
+function comparisonTable(trip, group, ranked, showDistance, distanceHeader) {
+  const wrap = element("div", "planner-compare-wrap");
+  const table = document.createElement("table");
+  table.className = "planner-compare";
+  const caption = document.createElement("caption");
+  caption.className = "visually-hidden";
+  caption.textContent = "這一餐候選比較";
+  table.append(caption);
+  const head = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  for (const label of ["選擇", "店家", "評分", "價位", "獎項"]) {
+    headerRow.append(element("th", "", label));
+  }
+  if (showDistance) headerRow.append(element("th", "", distanceHeader));
+  head.append(headerRow);
+  table.append(head);
+  const body = document.createElement("tbody");
+  const highlights = Planner.comparisonHighlights(ranked);
+  ranked.forEach((item, index) => {
+    body.append(compareRow(trip, group, item, highlights[index], showDistance));
+  });
+  table.append(body);
+  wrap.append(table);
+  return wrap;
 }
 
 function comparisonView(trip, group) {
   const count = group.restaurants.length;
+  const layout = Planner.comparisonLayout(count);
   const section = panel("這一餐要吃哪家", `${count}/5`);
   const decision = decisionSummary(group);
   if (decision) section.append(decision);
-  if (group.date || group.meal) {
-    section.append(element("p", "planner-help", "營業時間請在出發前再確認一次。"));
-  }
-  if (!count) {
-    section.append(element(
-      "p",
-      "planner-empty",
-      "回到 Google Maps，把這一餐想比的店按「加入這一餐」。建議 3–5 家，再選首選與備案。",
-    ));
+  const hasAnchor = Number.isFinite(group.anchor?.latitude) && Number.isFinite(group.anchor?.longitude);
+  const showDistance = hasAnchor || group.intent === "nearby";
+  const distanceHeader = !hasAnchor && group.intent === "nearby" ? "先設集合點" : "距離";
+
+  if (layout === "empty") {
+    const steps = element("ol", "planner-steps");
+    for (const text of [
+      "在 Google Maps 找到想吃的店，按「加入這一餐」",
+      "同一餐放 3–5 家，並排看評分、價位與獎項",
+      "選出首選與備案；需要時傳到手機",
+    ]) {
+      steps.append(element("li", "", text));
+    }
+    section.append(steps);
     return section;
   }
+
   const ranked = Planner.rankGroup(group);
-  const list = element("div", "planner-restaurant-list");
-  ranked.forEach((item, index) => list.append(groupRestaurantCard(trip, group, item, index)));
-  section.append(list);
+  if (layout === "preview") {
+    const preview = element("article", "planner-preview");
+    const restaurant = ranked[0].restaurant;
+    preview.append(element("h3", "planner-restaurant-name", restaurant.name));
+    const meta = restaurantMeta(restaurant, ranked[0], group);
+    if (meta) preview.append(element("div", "planner-restaurant-meta", meta));
+    preview.append(restaurantLinks(restaurant));
+    if (restaurant.matchStatus === "pending") {
+      preview.append(element("div", "planner-restaurant-meta", "正在配對 Tabelog 與 Michelin…"));
+    }
+    const actions = element("div", "planner-preview-actions");
+    actions.append(choiceControls(trip, group, restaurant));
+    preview.append(actions);
+    const extras = element("div", "planner-card-extras");
+    extras.append(
+      textAction("待分類", () => {
+        void mutate((state) => Planner.moveRestaurant(
+          state,
+          trip.id,
+          restaurant.id,
+          group.id,
+          null,
+        ), "已移到待分類");
+      }),
+      textAction("移除", () => {
+        void mutate((state) => Planner.removeRestaurant(
+          state,
+          trip.id,
+          group.id,
+          restaurant.id,
+        ), "候選店已移除");
+      }),
+    );
+    preview.append(extras);
+    section.append(preview);
+    section.append(element("p", "planner-empty", "再加 1 家開始比較。同一餐最多 5 家。"));
+    return section;
+  }
+
+  section.append(comparisonTable(trip, group, ranked, showDistance, distanceHeader));
   return section;
 }
 

@@ -60,7 +60,17 @@ function choice(value) {
     michelinLabel: text(value.michelinLabel, 80),
     latitude: finiteCoord(value.latitude),
     longitude: finiteCoord(value.longitude),
+    reason: text(value.reason, 80),
   };
+}
+
+function mealConclusion(group) {
+  const primary = text(group?.primary?.name, 160);
+  const backup = text(group?.backup?.name, 160);
+  if (primary && backup) return `這一餐：${primary}，備案 ${backup}`;
+  if (primary) return `這一餐：${primary}`;
+  if (backup) return `這一餐備案：${backup}`;
+  return "";
 }
 
 function sanitizePayload(value) {
@@ -136,6 +146,7 @@ function decodePayload(fragment) {
               michelinLabel: group[4][3],
               latitude: group[4][4],
               longitude: group[4][5],
+              reason: group[4][6],
             } : null,
             backup: Array.isArray(group?.[5]) ? {
               name: group[5][0],
@@ -144,6 +155,7 @@ function decodePayload(fragment) {
               michelinLabel: group[5][3],
               latitude: group[5][4],
               longitude: group[5][5],
+              reason: group[5][6],
             } : null,
           })),
         }
@@ -170,6 +182,7 @@ function choiceCard(item, role) {
     item.michelinLabel ? `Michelin ${item.michelinLabel}` : "",
   ].filter(Boolean).join(" · ");
   if (meta) card.append(element("div", "share-meta", meta));
+  if (item.reason) card.append(element("div", "share-reason", item.reason));
   const mapsHref = openMapsUrl(item);
   if (mapsHref) {
     const link = element("a", "share-map-link", "在 Google Maps 開啟");
@@ -205,6 +218,8 @@ function renderShare() {
       item.anchor ? `集合點：${item.anchor}` : "",
     ].filter(Boolean).join(" · ");
     if (context) section.append(element("div", "share-context", context));
+    const conclusion = mealConclusion(item);
+    if (conclusion) section.append(element("p", "share-conclusion", conclusion));
     const choices = element("div", "share-choices");
     if (item.primary) choices.append(choiceCard(item.primary, "首選"));
     if (item.backup) choices.append(choiceCard(item.backup, "備案"));

@@ -595,6 +595,67 @@
       .map(({ originalIndex: _originalIndex, ...item }) => item);
   }
 
+  function comparisonLayout(count) {
+    const size = Number(count) || 0;
+    if (size <= 0) return "empty";
+    if (size === 1) return "preview";
+    return "table";
+  }
+
+  function awardLabel(restaurant) {
+    const years = Array.isArray(restaurant?.hyakumeitenYears) ? restaurant.hyakumeitenYears.length : 0;
+    const label = boundedText(restaurant?.michelinLabel, 80);
+    if (label && years) return `${label} · 百名店`;
+    if (label) return label;
+    if (years) return `百名店×${years}`;
+    return "";
+  }
+
+  function awardScore(restaurant) {
+    const label = String(restaurant?.michelinLabel || "");
+    let score = 0;
+    if (label.includes("三星")) score = 50;
+    else if (label.includes("二星")) score = 40;
+    else if (label.includes("一星")) score = 30;
+    else if (label.includes("必比登")) score = 20;
+    else if (label) score = 10;
+    const years = Array.isArray(restaurant?.hyakumeitenYears) ? restaurant.hyakumeitenYears.length : 0;
+    return score + years;
+  }
+
+  function formatDistance(distanceKm) {
+    if (!Number.isFinite(distanceKm)) return "—";
+    if (distanceKm < 0.05) return "附近";
+    return `${Math.round(distanceKm * 10) / 10} 公里`;
+  }
+
+  function comparisonHighlights(ranked) {
+    const rows = Array.isArray(ranked) ? ranked : [];
+    const ratings = rows.map((item) => item.restaurant?.rating).filter(Number.isFinite);
+    const maxRating = ratings.length ? Math.max(...ratings) : null;
+    const prices = rows.map((item) => item.priceYen).filter(Number.isFinite);
+    const minPrice = prices.length ? Math.min(...prices) : null;
+    const distances = rows.map((item) => item.distanceKm).filter(Number.isFinite);
+    const minDistance = distances.length ? Math.min(...distances) : null;
+    const awards = rows.map((item) => awardScore(item.restaurant));
+    const maxAward = awards.some((score) => score > 0) ? Math.max(...awards) : 0;
+    return rows.map((item, index) => ({
+      rating: maxRating !== null && item.restaurant?.rating === maxRating,
+      price: minPrice !== null && item.priceYen === minPrice,
+      award: maxAward > 0 && awards[index] === maxAward,
+      distance: minDistance !== null && item.distanceKm === minDistance,
+    }));
+  }
+
+  function mealConclusion(group) {
+    const primaryName = boundedText(group?.primary?.name || group?.primaryName, 160);
+    const backupName = boundedText(group?.backup?.name || group?.backupName, 160);
+    if (primaryName && backupName) return `這一餐：${primaryName}，備案 ${backupName}`;
+    if (primaryName) return `這一餐：${primaryName}`;
+    if (backupName) return `這一餐備案：${backupName}`;
+    return "";
+  }
+
   function chooseRestaurant(state, tripId, groupId, restaurantId, role, options = {}) {
     if (role !== "primary" && role !== "backup") return state;
     const now = Number.isFinite(options.now) ? options.now : Date.now();
@@ -730,6 +791,11 @@
     addRestaurant,
     moveRestaurant,
     rankGroup,
+    comparisonLayout,
+    awardLabel,
+    comparisonHighlights,
+    formatDistance,
+    mealConclusion,
     distanceKmBetween,
     chooseRestaurant,
     removeRestaurant,

@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
+require("../extension/planner.js");
 require("../extension/planner_share.js");
 
 const {
@@ -9,6 +10,7 @@ const {
   decodeSharePayload,
   buildShareUrl,
   openMapsUrl,
+  mealConclusion,
 } = globalThis.MeshiLensPlannerShare;
 
 function compressedFragmentForJson(value) {
@@ -94,6 +96,7 @@ test("builds a compact trip payload containing only primary and backup choices",
         michelinLabel: "一星",
         latitude: 35.6717,
         longitude: 139.7649,
+        reason: "Tabelog 評分最高（3.90）",
       },
       backup: {
         name: "乙壽司",
@@ -102,6 +105,7 @@ test("builds a compact trip payload containing only primary and backup choices",
         michelinLabel: "",
         latitude: null,
         longitude: null,
+        reason: "",
       },
     }],
   });
@@ -146,11 +150,38 @@ test("encodes and decodes a sanitized share payload in the URL fragment", () => 
         michelinLabel: "一星",
         latitude: null,
         longitude: null,
+        reason: "",
       },
       backup: null,
     }],
   });
   assert.equal(decodeSharePayload("#not-json"), null);
+});
+
+test("round-trips a one-line advantage on the selected restaurant", () => {
+  const encoded = encodeSharePayload({
+    v: 1,
+    title: "東京",
+    groups: [{
+      name: "晚餐",
+      anchor: "",
+      date: "",
+      meal: "dinner",
+      primary: {
+        name: "甲店",
+        mapsUrl: "https://www.google.com/maps/place/A",
+        rating: 3.9,
+        michelinLabel: "一星",
+        reason: "Tabelog 評分最高（3.90）",
+      },
+      backup: null,
+    }],
+  });
+
+  assert.equal(
+    decodeSharePayload(encoded).groups[0].primary.reason,
+    "Tabelog 評分最高（3.90）",
+  );
 });
 
 test("builds a share URL whose trip data stays after the fragment marker", () => {
@@ -243,6 +274,11 @@ test("opens truncated Maps place slugs by restaurant name instead of the English
   const href = openMapsUrl(primary);
 
   assert.equal(primary.mapsUrl, "https://www.google.com/maps/place/Specialty+Tonkatsu+AJIMA");
+  assert.equal(primary.reason, "");
+  assert.equal(
+    mealConclusion(payload.groups[0]),
+    "這一餐：こだわりとんかつあぢま ひたちなか本店，備案 はまぐり屋",
+  );
   assert.match(href, /^https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=/);
   assert.equal(
     decodeURIComponent(new URL(href).searchParams.get("query")),

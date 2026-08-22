@@ -12,6 +12,11 @@ const {
   addRestaurant,
   moveRestaurant,
   rankGroup,
+  comparisonLayout,
+  awardLabel,
+  comparisonHighlights,
+  formatDistance,
+  mealConclusion,
   chooseRestaurant,
   updateGroup,
   removeRestaurant,
@@ -220,6 +225,40 @@ test("ranks destination dining by quality signals and explains the winner", () =
     "Michelin 一星",
     "百名店入選 2 年",
   ]);
+});
+
+test("comparison layout and best-cell highlights cover empty, preview, ties, and awards", () => {
+  assert.equal(comparisonLayout(0), "empty");
+  assert.equal(comparisonLayout(1), "preview");
+  assert.equal(comparisonLayout(2), "table");
+  assert.equal(awardLabel({ michelinLabel: "一星", hyakumeitenYears: [2024] }), "一星 · 百名店");
+  assert.equal(awardLabel({ michelinLabel: "", hyakumeitenYears: [2023, 2024] }), "百名店×2");
+  assert.equal(awardLabel({ michelinLabel: "必比登", hyakumeitenYears: [] }), "必比登");
+  assert.equal(awardLabel({}), "");
+  assert.equal(formatDistance(0.03), "附近");
+  assert.equal(formatDistance(1.24), "1.2 公里");
+  assert.equal(formatDistance(null), "—");
+  assert.equal(
+    mealConclusion({ primary: { name: "甲壽司" }, backup: { name: "乙壽司" } }),
+    "這一餐：甲壽司，備案 乙壽司",
+  );
+  assert.equal(mealConclusion({ primary: { name: "甲壽司" } }), "這一餐：甲壽司");
+
+  const ranked = rankGroup({
+    intent: "destination",
+    meal: "dinner",
+    restaurants: [
+      { id: "a", name: "甲", rating: 3.9, dinnerPrice: "￥8,000～￥9,999", michelinLabel: "一星" },
+      { id: "b", name: "乙", rating: 3.9, dinnerPrice: "￥3,000～￥3,999", michelinLabel: "一星" },
+      { id: "c", name: "丙", rating: 3.5, dinnerPrice: "￥20,000～￥29,999", michelinLabel: "" },
+    ],
+  });
+  const highlights = comparisonHighlights(ranked);
+  assert.equal(highlights.filter((item) => item.rating).length, 2);
+  assert.equal(highlights.filter((item) => item.price).length, 1);
+  assert.equal(highlights.filter((item) => item.award).length, 2);
+  assert.ok(highlights.every((item) => item.distance === false));
+  assert.equal(ranked.find((item) => item.restaurant.id === "b") && highlights[ranked.findIndex((item) => item.restaurant.id === "b")].price, true);
 });
 
 test("ranks nearby dining from the meal anchor without hiding quality tradeoffs", () => {

@@ -263,6 +263,88 @@ button:focus-visible { outline: 2px solid var(--ml-accent); outline-offset: 2px;
 .planner-text-action:hover,
 .planner-text-action:focus-visible { color: var(--ml-accent); }
 
+.visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.planner-preview {
+  background: #fff;
+  border: 1px solid var(--ml-border);
+  border-radius: 12px;
+  padding: 11px;
+}
+.planner-preview-actions { margin-top: 8px; }
+.planner-preview-actions .planner-choice-pair {
+  grid-template-columns: auto auto;
+  justify-content: start;
+}
+
+.planner-compare-wrap {
+  margin: 0 -4px 2px;
+  overflow-x: auto;
+}
+.planner-compare {
+  border-collapse: collapse;
+  font-size: 11px;
+  min-width: 100%;
+  width: 100%;
+}
+.planner-compare th,
+.planner-compare td {
+  border-bottom: 1px solid var(--ml-border);
+  padding: 7px 5px;
+  text-align: left;
+  vertical-align: top;
+}
+.planner-compare th {
+  color: var(--ml-muted);
+  font-size: 9px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.planner-compare td.is-best {
+  background: #edf5ef;
+  color: #356044;
+  font-weight: 750;
+}
+.planner-compare tr.is-primary td.planner-compare-name .planner-restaurant-name {
+  color: var(--ml-accent);
+}
+.planner-compare-choice { padding-left: 2px; padding-right: 2px; width: 1%; }
+.planner-choice-pair { display: grid; gap: 3px; }
+.planner-choice {
+  background: #f4ece1;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #7a604b;
+  font-size: 10px;
+  font-weight: 800;
+  min-height: 24px;
+  min-width: 24px;
+  padding: 0 5px;
+}
+.planner-choice.is-on { background: var(--ml-accent); color: #fff; }
+.planner-choice:disabled { cursor: not-allowed; opacity: 0.45; }
+.planner-choice.is-on:disabled { opacity: 1; }
+.planner-compare-name { min-width: 92px; }
+.planner-compare-name .planner-restaurant-name { font-size: 12px; }
+.planner-compare-name .planner-links { margin-top: 3px; }
+.planner-compare-name .planner-card-extras { margin-top: 4px; }
+.planner-compare td small {
+  color: var(--ml-muted);
+  display: block;
+  font-size: 9px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.planner-compare td.is-best small { color: #356044; }
+
 .planner-inbox-move { align-items: center; display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) auto; margin-top: 8px; }
 
 .planner-share-hint {

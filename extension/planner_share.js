@@ -60,6 +60,7 @@
       michelinLabel: text(value.michelinLabel, 80),
       latitude: finiteCoord(value.latitude),
       longitude: finiteCoord(value.longitude),
+      reason: text(value.reason, 80),
     };
   }
 
@@ -68,8 +69,16 @@
     if (!trip) return null;
     const groups = [];
     for (const group of Array.isArray(trip.groups) ? trip.groups : []) {
-      const primary = choice(group.restaurants?.find((item) => item.id === group.primaryId));
-      const backup = choice(group.restaurants?.find((item) => item.id === group.backupId));
+      const ranked = globalThis.MeshiLensPlanner?.rankGroup?.(group) || [];
+      const reasons = new Map(ranked.map((item) => [item.restaurant.id, item.advantages?.[0] || ""]));
+      const primaryRestaurant = group.restaurants?.find((item) => item.id === group.primaryId);
+      const backupRestaurant = group.restaurants?.find((item) => item.id === group.backupId);
+      const primary = choice(primaryRestaurant
+        ? { ...primaryRestaurant, reason: reasons.get(primaryRestaurant.id) }
+        : null);
+      const backup = choice(backupRestaurant
+        ? { ...backupRestaurant, reason: reasons.get(backupRestaurant.id) }
+        : null);
       if (!primary && !backup) continue;
       groups.push({
         name: text(group.name, 120),
@@ -81,6 +90,15 @@
       });
     }
     return { v: SHARE_VERSION, title: text(trip.name, 120), groups };
+  }
+
+  function mealConclusion(group) {
+    const primary = text(group?.primary?.name, 160);
+    const backup = text(group?.backup?.name, 160);
+    if (primary && backup) return `這一餐：${primary}，備案 ${backup}`;
+    if (primary) return `這一餐：${primary}`;
+    if (backup) return `這一餐備案：${backup}`;
+    return "";
   }
 
   function sanitizeSharePayload(value) {
@@ -171,9 +189,17 @@
 
   function compactChoice(value) {
     if (!value) return null;
-    const row = [value.name, value.mapsUrl, value.rating, value.michelinLabel];
-    if (value.latitude !== null && value.longitude !== null) {
-      row.push(value.latitude, value.longitude);
+    const row = [
+      value.name,
+      value.mapsUrl,
+      value.rating,
+      value.michelinLabel,
+      value.latitude,
+      value.longitude,
+      value.reason || "",
+    ];
+    while (row.length > 4 && (row[row.length - 1] === "" || row[row.length - 1] == null)) {
+      row.pop();
     }
     return row;
   }
@@ -202,6 +228,7 @@
       michelinLabel: value[3],
       latitude: value[4],
       longitude: value[5],
+      reason: value[6],
     };
   }
 
@@ -269,5 +296,6 @@
     decodeSharePayload,
     buildShareUrl,
     openMapsUrl,
+    mealConclusion,
   };
 })();
