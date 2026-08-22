@@ -268,7 +268,7 @@ async function savePlannerRestaurant(restaurant, requestedTarget = null) {
 
 async function openPlanner() {
   const response = await safeRuntimeSendMessage({ type: "OPEN_PLANNER" });
-  if (!response?.ok) throw new Error(response?.error || "暫時無法開啟行程比較");
+  if (!response?.ok) throw new Error(response?.error || "暫時無法打開選店側欄");
 }
 
 function plannerRestaurantFor(place, candidate, michelin, matchStatus = "ready") {
@@ -280,7 +280,7 @@ function plannerRestaurantFor(place, candidate, michelin, matchStatus = "ready")
 
 function plannerActionView(card, candidate, michelin) {
   const section = element("section", "meshilens-planner-action");
-  const button = element("button", "meshilens-planner-button", "加入比較");
+  const button = element("button", "meshilens-planner-button", "加入這一餐");
   button.type = "button";
   button.addEventListener("click", async () => {
     button.disabled = true;
@@ -289,7 +289,7 @@ function plannerActionView(card, candidate, michelin) {
       await openPlanner();
       const restaurant = plannerRestaurantFor(card._meshilensPlace, candidate, michelin);
       await savePlannerRestaurant(restaurant);
-      button.textContent = "已加入比較";
+      button.textContent = "已加入這一餐";
     } catch (error) {
       button.disabled = false;
       button.textContent = error?.message || "暫時無法加入";
@@ -1377,7 +1377,7 @@ async function addListCardToPlanner(card, button) {
       ? plannerRestaurantFor(place, candidate, michelin, "ready")
       : { ...provisional, matchStatus: "error" };
     await savePlannerRestaurant(restaurant, target);
-    button.textContent = candidate ? "已加入比較" : "已加入，待核對";
+    button.textContent = candidate ? "已加入這一餐" : "已加入，待核對";
   } catch (error) {
     if (provisional && target) {
       await savePlannerRestaurant({ ...provisional, matchStatus: "error" }, target).catch(() => {});
@@ -1413,11 +1413,11 @@ function syncListPlannerAction(card) {
     return;
   }
   card.mount.classList.add("meshilens-list-card");
-  const button = element("button", "meshilens-list-compare", "加入比較");
+  const button = element("button", "meshilens-list-compare", "加入這一餐");
   button.type = "button";
   button.style.setProperty("--ml-accent", themeColor);
   button.dataset.meshilensListKey = card.key;
-  button.setAttribute("aria-label", `將 ${card.name} 加入 MeshiLens 行程比較`);
+  button.setAttribute("aria-label", `將 ${card.name} 加入這一餐的候選`);
   button.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();

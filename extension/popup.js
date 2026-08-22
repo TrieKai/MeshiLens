@@ -96,11 +96,11 @@ document.getElementById("open-planner").addEventListener("click", async () => {
   button.disabled = true;
   try {
     const response = await chrome.runtime.sendMessage({ type: "OPEN_PLANNER" });
-    if (!response?.ok) throw new Error(response?.error || "無法開啟行程比較");
+    if (!response?.ok) throw new Error(response?.error || "無法打開選店側欄");
     window.close();
   } catch (error) {
     status.className = "status offline";
-    status.textContent = error?.message || "無法開啟行程比較";
+    status.textContent = error?.message || "無法打開選店側欄";
     button.disabled = false;
   }
 });

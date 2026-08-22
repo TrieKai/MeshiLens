@@ -372,7 +372,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "OPEN_PLANNER") {
     openPlannerPanel(sender)
       .then((data) => sendResponse({ ok: true, data }))
-      .catch((error) => sendResponse({ ok: false, error: error.message || "無法開啟行程比較" }));
+      .catch((error) => sendResponse({ ok: false, error: error.message || "無法打開選店側欄" }));
     return true;
   }
   if (message.type === "GET_MAP_CONTEXT") {

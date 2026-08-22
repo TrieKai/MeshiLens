@@ -41,6 +41,14 @@ button { cursor: pointer; }
 .planner-eyebrow { color: var(--ml-accent); font-size: 9px; font-weight: 800; letter-spacing: 0.16em; }
 .planner-header h1 { font-family: Georgia, serif; font-size: 22px; line-height: 1; margin: 3px 0 0; }
 .planner-version { color: var(--ml-muted); font-size: 10px; font-weight: 700; }
+.planner-purpose {
+  color: var(--ml-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 8px 14px 10px;
+  border-bottom: 1px solid var(--ml-border);
+}
 
 .planner-status {
   background: #f6efe6;
@@ -125,6 +133,15 @@ button:focus-visible { outline: 2px solid var(--ml-accent); outline-offset: 2px;
 
 .planner-empty { color: var(--ml-muted); font-size: 12px; line-height: 1.6; padding: 8px 2px; }
 .planner-empty strong { color: var(--ml-ink); }
+.planner-steps {
+  color: var(--ml-ink);
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0 0 12px;
+  padding-left: 1.2em;
+}
+.planner-steps li { margin: 0 0 6px; }
+.planner-steps li:last-child { margin-bottom: 0; }
 
 .planner-form { display: grid; gap: 9px; }
 .planner-form-grid { display: grid; gap: 9px; grid-template-columns: 1fr 1fr; }

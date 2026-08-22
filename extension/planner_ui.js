@@ -88,26 +88,31 @@ function panel(title, note = "") {
 }
 
 function emptyTripsView() {
-  const section = panel("建立行程");
-  section.append(element(
-    "p",
-    "planner-empty",
-    "先幫這趟旅行取個名字，再到 Google Maps 按「加入比較」。候選店會直接進入第一餐。",
-  ));
+  const section = panel("開始選店");
+  const steps = element("ol", "planner-steps");
+  for (const text of [
+    "在 Google Maps 找到想吃的店，按「加入這一餐」",
+    "同一餐放 3–5 家，並排看評分、價位與獎項",
+    "選出首選與備案；需要時傳到手機",
+  ]) {
+    steps.append(element("li", "", text));
+  }
+  section.append(steps);
   const form = element("form", "planner-form");
   const input = document.createElement("input");
   input.name = "tripName";
   input.maxLength = 120;
-  input.placeholder = "例如：東京五天";
+  input.placeholder = "這趟旅行叫什麼？例如：東京五天";
   input.required = true;
-  const submit = plannerButton("開始比較");
+  input.setAttribute("aria-label", "行程名稱");
+  const submit = plannerButton("開始選店");
   submit.type = "submit";
   form.append(input, submit);
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const name = input.value.trim();
     if (!name) return;
-    void mutate((state) => startTrip(state, name), "行程已建立");
+    void mutate((state) => startTrip(state, name), "可以開始從 Maps 加入這一餐");
   });
   section.append(form);
   return section;
@@ -332,7 +337,7 @@ function inboxView(trip) {
     section.append(element(
       "p",
       "planner-empty",
-      "還沒決定哪一餐的店會放這裡。從餐次裡把店家移過來，或先新增一個餐次再從 Maps 加入。",
+      "還沒決定要配哪一餐的店會放這裡。先選一個餐次，再從 Maps 按「加入這一餐」。",
     ));
     return section;
   }
@@ -595,7 +600,7 @@ function groupRestaurantCard(trip, group, rankedItem, index) {
 
 function comparisonView(trip, group) {
   const count = group.restaurants.length;
-  const section = panel("這一餐", `${count}/5`);
+  const section = panel("這一餐要吃哪家", `${count}/5`);
   const decision = decisionSummary(group);
   if (decision) section.append(decision);
   if (group.date || group.meal) {
@@ -605,7 +610,7 @@ function comparisonView(trip, group) {
     section.append(element(
       "p",
       "planner-empty",
-      "在 Google Maps 搜尋結果或店家頁按「加入比較」，店家會進入這一餐。一餐最多 5 家。",
+      "回到 Google Maps，把這一餐想比的店按「加入這一餐」。建議 3–5 家，再選首選與備案。",
     ));
     return section;
   }
