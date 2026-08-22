@@ -33,7 +33,7 @@ button { cursor: pointer; }
   border-bottom: 1px solid var(--ml-border);
   display: flex;
   justify-content: space-between;
-  padding: 16px 16px 13px;
+  padding: 12px 14px 10px;
 }
 
 .planner-brand { align-items: center; display: flex; gap: 10px; }
@@ -54,7 +54,7 @@ button { cursor: pointer; }
 .planner-status.is-error { background: #f9e4e1; color: #8d2b21; }
 .planner-status.is-success { background: #e7f3e8; color: #28613b; }
 
-#planner-root { padding: 14px; }
+#planner-root { padding: 12px 14px 16px; }
 
 .planner-panel {
   background: var(--ml-card);
@@ -75,8 +75,24 @@ button { cursor: pointer; }
 .planner-section-title h2 { font-size: 14px; margin: 0; }
 .planner-section-title span { color: var(--ml-muted); font-size: 10px; }
 
-.planner-trip-row { display: grid; gap: 7px; grid-template-columns: minmax(0, 1fr) auto auto; }
-.planner-trip-row select { min-width: 0; width: auto; }
+.planner-trip-bar {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  margin-bottom: 10px;
+}
+.planner-trip-bar select { min-width: 0; width: auto; }
+.planner-inline-form {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.planner-meals { margin-bottom: 10px; }
+.planner-tab-add { background: transparent; border: 1px dashed var(--ml-border); color: var(--ml-muted); }
+.planner-tab-add[aria-pressed="true"] { background: var(--ml-accent-soft); border-color: color-mix(in srgb, var(--ml-accent) 34%, white); color: var(--ml-accent); }
 
 input,
 select {
@@ -122,6 +138,46 @@ button:focus-visible { outline: 2px solid var(--ml-accent); outline-offset: 2px;
 .planner-anchor-row input,
 .planner-share-link input { min-width: 0; width: auto; }
 .planner-help { color: var(--ml-muted); font-size: 10px; line-height: 1.45; margin: 0; }
+
+.planner-settings-panel { padding-bottom: 11px; }
+.planner-intent {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 8px;
+}
+.planner-intent-chip {
+  background: #f4ece1;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #5b5148;
+  font-size: 11px;
+  font-weight: 750;
+  min-height: 34px;
+  padding: 6px 4px;
+}
+.planner-intent-chip[aria-pressed="true"] {
+  background: var(--ml-accent-soft);
+  border-color: color-mix(in srgb, var(--ml-accent) 34%, white);
+  color: var(--ml-accent);
+}
+.planner-settings {
+  margin-top: 10px;
+}
+.planner-settings summary {
+  color: var(--ml-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  list-style: none;
+}
+.planner-settings summary::-webkit-details-marker { display: none; }
+.planner-settings summary::after {
+  content: " ▾";
+  font-weight: 500;
+}
+.planner-settings[open] summary { margin-bottom: 10px; }
+.planner-settings .planner-button.is-danger { margin-top: 10px; width: 100%; }
 
 .planner-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 3px; }
 .planner-tab {
@@ -173,18 +229,43 @@ button:focus-visible { outline: 2px solid var(--ml-accent); outline-offset: 2px;
 .planner-links { display: flex; gap: 10px; margin-top: 8px; }
 .planner-links a { color: var(--ml-accent); font-size: 10px; font-weight: 700; text-decoration: none; }
 .planner-links a:hover { text-decoration: underline; }
+.planner-card-extras {
+  display: flex;
+  gap: 12px;
+  margin-top: 7px;
+}
+.planner-text-action {
+  background: none;
+  border: 0;
+  color: var(--ml-muted);
+  font-size: 10px;
+  font-weight: 700;
+  min-height: 0;
+  padding: 0;
+}
+.planner-text-action:hover,
+.planner-text-action:focus-visible { color: var(--ml-accent); }
 
 .planner-inbox-move { align-items: center; display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) auto; margin-top: 8px; }
 
+.planner-share-hint {
+  color: var(--ml-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 4px 2px 0;
+}
 .planner-share-output { display: grid; gap: 9px; margin-top: 10px; }
 .planner-share-link { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) auto; }
 .planner-qr { align-items: center; background: #fff; border: 1px solid var(--ml-border); border-radius: 12px; display: flex; justify-content: center; min-height: 200px; padding: 10px; }
 .planner-qr img,
 .planner-qr canvas { height: auto !important; max-width: 190px; width: 100% !important; }
+.planner-footer { margin-top: 8px; }
+.planner-footer .planner-button { width: 100%; }
 
 @media (max-width: 360px) {
   .planner-form-grid { grid-template-columns: 1fr; }
   .planner-field.is-wide { grid-column: auto; }
-  .planner-trip-row { grid-template-columns: minmax(0, 1fr) auto; }
-  .planner-trip-row .planner-delete-trip { grid-column: 1 / -1; }
+  .planner-trip-bar,
+  .planner-inline-form { grid-template-columns: minmax(0, 1fr) auto; }
+  .planner-intent { grid-template-columns: 1fr; }
 }

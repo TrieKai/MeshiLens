@@ -152,7 +152,7 @@ function renderShare() {
   }
   document.title = `${payload.title}｜MeshiLens`;
   const title = element("h1", "share-title", payload.title);
-  const summary = element("p", "share-summary", `${payload.groups.length} 個用餐場合 · 首選與備案`);
+  const summary = element("p", "share-summary", `${payload.groups.length} 個餐次 · 首選與備案`);
   const groups = element("div", "share-groups");
   for (const item of payload.groups) {
     const section = element("section", "share-group");

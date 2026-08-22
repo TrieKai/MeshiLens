@@ -7,6 +7,7 @@ const {
   createPlannerState,
   createTrip,
   createGroup,
+  ensureActiveMeal,
   restaurantFromMatch,
   addRestaurant,
   moveRestaurant,
@@ -41,6 +42,49 @@ test("creates a named trip with an active unclassified inbox", () => {
         groups: [],
       },
     ],
+  });
+});
+
+test("starts an empty trip on the first meal instead of the inbox", () => {
+  const withTrip = createTrip(createPlannerState(), { id: "trip", name: "東京", now: 10 });
+  const withMeal = ensureActiveMeal(withTrip, "trip", { id: "meal-1", name: "第一餐", now: 20 });
+
+  assert.equal(withMeal.activeGroupId, "meal-1");
+  assert.equal(withMeal.trips[0].groups[0].name, "第一餐");
+
+  const unchanged = ensureActiveMeal(withMeal, "trip", { id: "meal-2", name: "第二餐", now: 30 });
+  assert.equal(unchanged.activeGroupId, "meal-1");
+  assert.equal(unchanged.trips[0].groups.length, 1);
+
+  const inboxView = setActiveTarget(withMeal, "trip", null);
+  const stillInbox = ensureActiveMeal(inboxView, "trip", { id: "meal-2", name: "第二餐", now: 40 });
+  assert.equal(stillInbox.activeGroupId, null);
+  assert.equal(stillInbox.trips[0].groups.length, 1);
+});
+
+test("updates meal comparison fields without clearing omitted values", () => {
+  let state = createTrip(createPlannerState(), { id: "trip", name: "東京", now: 1 });
+  state = createGroup(state, "trip", {
+    id: "meal",
+    name: "晚餐",
+    anchor: { name: "銀座站", latitude: 35.6717, longitude: 139.7649 },
+    date: "2026-10-17",
+    meal: "dinner",
+    intent: "destination",
+    budgetMax: 8_000,
+    now: 2,
+  });
+  state = updateGroup(state, "trip", "meal", { intent: "nearby" }, { now: 3 });
+
+  assert.equal(state.trips[0].groups[0].intent, "nearby");
+  assert.equal(state.trips[0].groups[0].name, "晚餐");
+  assert.equal(state.trips[0].groups[0].date, "2026-10-17");
+  assert.equal(state.trips[0].groups[0].meal, "dinner");
+  assert.equal(state.trips[0].groups[0].budgetMax, 8_000);
+  assert.deepEqual(state.trips[0].groups[0].anchor, {
+    name: "銀座站",
+    latitude: 35.6717,
+    longitude: 139.7649,
   });
 });
 
@@ -331,6 +375,14 @@ test("renames, switches, and deletes local trips", () => {
   assert.deepEqual(state.trips.map((trip) => trip.id), ["osaka"]);
   assert.equal(state.activeTripId, "osaka");
   assert.equal(state.activeGroupId, null);
+
+  state = createGroup(state, "osaka", { id: "dinner", name: "晚餐", now: 5 });
+  state = createTrip(state, { id: "kyoto", name: "京都", now: 6 });
+  state = createGroup(state, "kyoto", { id: "breakfast", name: "早餐", now: 7 });
+  state = setActiveTarget(state, "kyoto", "breakfast");
+  state = deleteTrip(state, "kyoto");
+  assert.equal(state.activeTripId, "osaka");
+  assert.equal(state.activeGroupId, "dinner");
 });
 
 test("creates and activates a meal comparison group", () => {

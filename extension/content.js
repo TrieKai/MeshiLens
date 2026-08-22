@@ -248,6 +248,10 @@ async function savePlannerRestaurant(restaurant, requestedTarget = null) {
       });
     }
     const tripId = target?.tripId || next.activeTripId;
+    next = Planner.ensureActiveMeal(next, tripId, {
+      id: plannerId("meal"),
+      name: "第一餐",
+    });
     const trip = next.trips.find((item) => item.id === tripId);
     const requestedGroupId = target ? target.groupId : next.activeGroupId;
     const groupId = trip?.groups.some((group) => group.id === requestedGroupId)
@@ -276,7 +280,7 @@ function plannerRestaurantFor(place, candidate, michelin, matchStatus = "ready")
 
 function plannerActionView(card, candidate, michelin) {
   const section = element("section", "meshilens-planner-action");
-  const button = element("button", "meshilens-planner-button", "加入行程比較");
+  const button = element("button", "meshilens-planner-button", "加入比較");
   button.type = "button";
   button.addEventListener("click", async () => {
     button.disabled = true;
@@ -285,7 +289,7 @@ function plannerActionView(card, candidate, michelin) {
       await openPlanner();
       const restaurant = plannerRestaurantFor(card._meshilensPlace, candidate, michelin);
       await savePlannerRestaurant(restaurant);
-      button.textContent = "已加入行程比較";
+      button.textContent = "已加入比較";
     } catch (error) {
       button.disabled = false;
       button.textContent = error?.message || "暫時無法加入";
@@ -1409,7 +1413,7 @@ function syncListPlannerAction(card) {
     return;
   }
   card.mount.classList.add("meshilens-list-card");
-  const button = element("button", "meshilens-list-compare", "＋ 加入比較");
+  const button = element("button", "meshilens-list-compare", "加入比較");
   button.type = "button";
   button.style.setProperty("--ml-accent", themeColor);
   button.dataset.meshilensListKey = card.key;

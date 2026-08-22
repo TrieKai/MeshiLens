@@ -267,6 +267,24 @@
       : state;
   }
 
+  function ensureActiveMeal(state, tripId, input = {}) {
+    const trip = state.trips.find((item) => item.id === tripId);
+    if (!trip) return state;
+    if (
+      state.activeTripId === tripId
+      && state.activeGroupId
+      && trip.groups.some((group) => group.id === state.activeGroupId)
+    ) return state;
+    if (trip.groups.length) return state;
+    const id = String(input.id || "").trim();
+    if (!id) return state;
+    return createGroup(state, tripId, {
+      id,
+      name: boundedText(input.name || "第一餐", 120) || "第一餐",
+      now: input.now,
+    });
+  }
+
   function updateGroup(state, tripId, groupId, input = {}, options = {}) {
     const now = Number.isFinite(options.now) ? options.now : Date.now();
     let changed = false;
@@ -274,19 +292,36 @@
       if (trip.id !== tripId) return trip;
       const groups = trip.groups.map((group) => {
         if (group.id !== groupId) return group;
-        changed = true;
-        const intent = ["destination", "nearby", "budget"].includes(input.intent)
-          ? input.intent
+        const intent = input.intent !== undefined
+          ? (["destination", "nearby", "budget"].includes(input.intent) ? input.intent : group.intent)
           : group.intent;
-        const meal = ["lunch", "dinner"].includes(input.meal) ? input.meal : "";
-        const budgetMax = input.budgetMax === "" || input.budgetMax == null
-          ? null
-          : finiteNumber(input.budgetMax);
+        const meal = input.meal !== undefined
+          ? (["lunch", "dinner"].includes(input.meal) ? input.meal : "")
+          : group.meal;
+        const budgetMax = input.budgetMax !== undefined
+          ? (input.budgetMax === "" || input.budgetMax == null ? null : finiteNumber(input.budgetMax))
+          : group.budgetMax;
+        const name = input.name !== undefined
+          ? (boundedText(input.name, 120) || group.name)
+          : group.name;
+        const date = input.date !== undefined
+          ? (/^\d{4}-\d{2}-\d{2}$/.test(String(input.date || "")) ? String(input.date) : "")
+          : group.date;
+        const anchor = input.anchor !== undefined ? sanitizedAnchor(input.anchor) : group.anchor;
+        if (
+          name === group.name
+          && date === group.date
+          && meal === group.meal
+          && intent === group.intent
+          && budgetMax === group.budgetMax
+          && JSON.stringify(anchor) === JSON.stringify(group.anchor)
+        ) return group;
+        changed = true;
         return {
           ...group,
-          name: boundedText(input.name || group.name, 120),
-          anchor: sanitizedAnchor(input.anchor),
-          date: /^\d{4}-\d{2}-\d{2}$/.test(String(input.date || "")) ? String(input.date) : "",
+          name,
+          anchor,
+          date,
           meal,
           intent,
           budgetMax,
@@ -670,11 +705,12 @@
     if (!state.trips.some((trip) => trip.id === tripId)) return state;
     const trips = state.trips.filter((trip) => trip.id !== tripId);
     if (state.activeTripId !== tripId) return { ...state, trips };
+    const nextTrip = trips[0] || null;
     return {
       ...state,
       trips,
-      activeTripId: trips[0]?.id || null,
-      activeGroupId: null,
+      activeTripId: nextTrip?.id || null,
+      activeGroupId: nextTrip?.groups[0]?.id || null,
     };
   }
 
@@ -688,6 +724,7 @@
     sanitizePlannerState,
     createTrip,
     createGroup,
+    ensureActiveMeal,
     updateGroup,
     restaurantFromMatch,
     addRestaurant,
