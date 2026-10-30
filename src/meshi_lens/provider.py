@@ -9,7 +9,7 @@ import time
 from typing import Any, Mapping
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
-from .localization import tabelog_label_zh_hant
+from .localization import station_name, tabelog_label_zh_hant
 from .matching import haversine_meters, normalize_name, normalize_phone, normalize_text, similarity
 
 
@@ -148,7 +148,7 @@ def restaurant_to_dict(value: Any) -> dict[str, Any]:
         "longitude": longitude,
         "genres": genres,
         "area": _first(data, "area", "location_area") or "",
-        "station": _first(data, "station", "nearest_station") or "",
+        "station": station_name(_first(data, "station", "nearest_station")),
         "lunch_price": _first(data, "lunch_price", "lunch_budget") or "",
         "dinner_price": _first(data, "dinner_price", "dinner_budget") or "",
         "business_hours": _first(data, "business_hours", "hours") or "",
@@ -1099,7 +1099,8 @@ class GurumeProvider:
                     fetch_peripheral(category_url), bounded_limit
                 )
             return parse_peripheral_restaurants(generic_html, bounded_limit)
-        station = str(seed.get("station") or "").strip().removesuffix("駅")
+        # Seeds come from the extension, whose cache may still hold uncleaned station text.
+        station = station_name(seed.get("station")).removesuffix("駅")
         area = station or area_from_address(str(seed.get("address") or ""))
         if not area:
             return []

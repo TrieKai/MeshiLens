@@ -613,6 +613,11 @@ class ProviderTests(unittest.TestCase):
         )
         self.assertTrue(candidate["has_reservation"])
 
+    def test_cleans_station_text_cut_at_the_first_station(self) -> None:
+        candidate = restaurant_to_dict({"name": "一蘭 渋谷スペイン坂店", "station": "各線「渋谷駅"})
+
+        self.assertEqual(candidate["station"], "渋谷駅")
+
     def test_extracts_reservation_and_payment_information(self) -> None:
         html = """
         <div id="js-basics" data-lat="36.175271769" data-lng="139.837251778"></div>
