@@ -12,7 +12,7 @@
 - 讀取店名、地址、電話與真正的店家座標（網址含多組 `!3d...!4d...` 時使用最後一組目前店家座標）
 - Google Maps 已列出 Tabelog 菜單／店家連結時，直接使用該 URL 並視為高信心配對
 - 以 Google Maps 餐飲類別為快速判斷，未知類別若有菜單、每人價格或明確提供內用，也會視為餐飲店家；沒有任何餐飲訊號的地點不顯示也不呼叫 API
-- Maps 使用英文譯名時，同時擷取隱藏的當地語言店名，去除「うなぎ、割烹」等類型詞後查找 Tabelog 店家 ID；autocomplete 正式店頁若已由相似店名與相同電話，或精確店名、店家座標與既有評分共同確認，就立即停止讀取其餘候選；Tabelog 自動完成在上游停用時，後端會跳過這一步 1 小時並直接改用搜尋頁
+- Maps 使用英文譯名時，同時擷取隱藏的當地語言店名，去除「うなぎ、割烹」等類型詞後查找 Tabelog 店家 ID；autocomplete 正式店頁一出現高信心配對（與最後選店同一套評分）就立即停止讀取其餘候選；Tabelog 自動完成在上游停用時，後端會跳過這一步 1 小時並直接改用搜尋頁
 - Tabelog 缺少電話或地址格式不同時，從店家地圖頁補讀座標並與 Maps 位置比對
 - Tabelog 出現同名、同電話、同座標的重複頁面時，優先選擇已有評分與較多評論的成熟頁面
 - Tabelog 明確標示「移轉前」時，優先選擇其指向的新店；舊資料保留已搬遷標示與新店連結，不以距離自行猜測搬遷
@@ -21,7 +21,8 @@
 - 相似店家的常見 Tabelog 料理標籤會轉為繁中；對照表集中於 `src/meshi_lens/data/tabelog-genres-zh-hant.json`，未知標籤保留原文以避免猜測翻譯。已設定 Groq 時，30 家內的結構化候選會以一次 AI 請求篩選排序；AI 只能選擇既有候選 ID，伺服器驗證後最多顯示 6 家，失敗時退回規則排序。預設顯示 3 家，可直接依推薦度、Tabelog 評分、評論數排序。
 - 相似店家以原店的 Tabelog 附近頁作為地理範圍；候選卡片缺少地點欄位時，僅接受同一 Tabelog 精確區域，避免跨區誤薦
 - 已配對店家的詳細卡會背景顯示 Tabelog 同一精確區域的「最多預訂／在地人預訂最多／瀏覽最多」TOP 5、TOP 10 或 TOP 20 標籤；只以精確 Tabelog URL 比對，可點開對應排行頁，不顯示或推算原始預訂、瀏覽數
-- Tabelog 搜尋頁回覆 403 時，以低頻率公開網頁搜尋找出候選店家 URL，再由 `gurume` 讀取 Tabelog 詳細頁
+- Tabelog 搜尋頁回覆 403 或搜尋結果沒有高信心店家時，以低頻率公開網頁搜尋找出候選店家 URL，再讀取 Tabelog 詳細頁（`gurume` 負責解析）
+- 每次 Tabelog 配對最多 25 秒：每個階段開始前與每次請求前檢查剩餘時間，時間到就以目前找到的候選排序，不讓擴充功能或 Android 等到逾時
 - 以電話、地址、座標及正規化店名計算配對信心
 - 在 Maps 店家區塊顯示評分、評論數、店家時間線（百名店多年紀錄 + 目前 Michelin）、價位、車站、營業資訊及 Tabelog 連結
 - 顯示 Tabelog 的預約狀態；有穩定的線上預約連結時提供直接按鈕
@@ -162,6 +163,8 @@ host 節流抓取**一頁**公開評論，最多約 20 則（對齊 Tabelog 預�
 
 75 分以上自動視為高信心；52–74.9 分會顯示提醒；更低則不自動選定。名稱正規化會移除「割烹、食堂、レストラン、本店」等類型或分店詞，但常見店名仍須靠電話、地址或座標確認。
 
+後端探索候選也用同一套分數決定何時停止：依序為自動完成、Tabelog 搜尋頁與前 4 家詳細頁、公開網頁搜尋備援，只有出現高信心且不是移轉前頁面的候選才提早結束。
+
 店名與地址比較前會把繁體中文與舊字體漢字轉成日文新字體（「澀谷」→「渋谷」、「神戶」→「神戸」，對照表在 `src/meshi_lens/data/kanji-variants.json`）。Google 地圖常把日本地址顯示成羅馬拼音（「1 Chome-22-7 Jinnan, Shibuya」），這時改比門牌號碼：門牌相同且區名／地名（`src/meshi_lens/data/japan-romaji-places.json`）或大樓名也對得上，地址分數才會接近滿分；門牌不同則不加分。
 
 ## 測試
@@ -206,7 +209,10 @@ extension/planner.html     「這一餐吃哪家」選店側邊工作區
 extension/planner_share.js 手機分享資料清理與網址片段編解碼
 extension/timeline.js      店家時間線條目組裝
 public/landing/share.html  不保存資料的手機行程靜態檢視
-src/meshi_lens/provider.py gurume 介接與節流
+src/meshi_lens/provider.py Tabelog 讀取入口（配對、相似店家、人氣、評論頁）
+src/meshi_lens/tabelog_discovery.py 配對探索階段、停止條件與 25 秒時限
+src/meshi_lens/tabelog_parse.py Tabelog HTML 純解析（含 gurume 解析器介接）
+src/meshi_lens/fetch.py    依 host 節流、逾時與狀態碼的單一請求入口
 src/meshi_lens/michelin.py Michelin SSR 解析、本地快照與店家配對
 src/meshi_lens/matching.py 店家正規化、距離與配對評分
 src/meshi_lens/server.py   只監聽本機的 JSON HTTP 服務

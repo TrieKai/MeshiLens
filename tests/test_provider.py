@@ -3,8 +3,6 @@ from urllib.parse import quote
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from gurume.suggest import TabelogSuggestUnavailableError
-
 from meshi_lens.provider import (
     canonical_restaurant_url,
     coordinates_from_tabelog_html,
@@ -98,38 +96,24 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(len(parsed["urls"]), 20)
         self.assertTrue(parsed["urls"][-1].endswith("/13270019/"))
 
-    def test_similar_search_reads_one_search_page_without_detail_fetches(self) -> None:
-        class FakeSearchRequest:
-            received = None
-
-            def __init__(self, **kwargs):
-                type(self).received = kwargs
-
-            def search_sync(self):
-                return [
-                    {
-                        "name": "銀座の寿司店",
-                        "url": "https://tabelog.com/tokyo/A1301/A130101/1300002/",
-                        "rating": 3.8,
-                        "review_count": 22,
-                        "genres": ["寿司"],
-                        "station": "銀座駅",
-                        "area": "銀座",
-                    }
-                ]
-
-        fake_gurume = SimpleNamespace(
-            RestaurantSearchRequest=FakeSearchRequest,
-            SortType=SimpleNamespace(RANKING="ranking"),
-        )
+    def test_review_list_keeps_its_blocked_message(self) -> None:
+        response = SimpleNamespace(status_code=403, text="")
         provider = GurumeProvider(minimum_interval=0)
-        with patch.dict("sys.modules", {"gurume": fake_gurume}):
-            results = provider.search_similar({"genres": ["寿司"], "station": "銀座駅", "address": "東京都中央区銀座"})
+        with patch("curl_cffi.requests.get", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "Tabelog 暫時拒絕公開評論頁請求（403）"):
+                provider.fetch_review_list_html(
+                    "https://tabelog.com/tokyo/A1301/A130101/13000001/"
+                )
 
-        self.assertEqual(FakeSearchRequest.received["area"], "銀座")
-        self.assertEqual(FakeSearchRequest.received["keyword"], "寿司")
-        self.assertEqual(FakeSearchRequest.received["sort_type"], "ranking")
-        self.assertEqual(results[0]["area"], "銀座")
+    def test_similar_search_needs_the_seed_tabelog_url(self) -> None:
+        provider = GurumeProvider(minimum_interval=0)
+        with patch("curl_cffi.requests.get") as get:
+            with self.assertRaises(ValueError):
+                provider.search_similar(
+                    {"genres": ["寿司"], "station": "銀座駅", "address": "東京都中央区銀座"}
+                )
+
+        get.assert_not_called()
 
     def test_builds_restaurant_specific_peripheral_map_url(self) -> None:
         url = "https://tabelog.com/tokyo/A1323/A132302/13276342/"
@@ -172,11 +156,10 @@ class ProviderTests(unittest.TestCase):
         restaurant_url = "https://tabelog.com/osaka/A2701/A270304/27003671/"
 
         class FakeResponse:
+            status_code = 200
+
             def __init__(self, text: str) -> None:
                 self.text = text
-
-            def raise_for_status(self) -> None:
-                return None
 
         class FakeRequests:
             urls: list[str] = []
@@ -217,13 +200,11 @@ class ProviderTests(unittest.TestCase):
         restaurant_url = "https://tabelog.com/osaka/A2701/A270304/27003671/"
 
         class FakeResponse:
+            status_code = 200
             text = (
                 '<div><h5><a href="https://tabelog.com/osaka/A2701/A270304/27000002/">近所の天婦羅</a></h5>'
                 '関目高殿 / 天ぷら 3.55 42人</div>'
             )
-
-            def raise_for_status(self) -> None:
-                return None
 
         class FakeRequests:
             urls: list[str] = []
@@ -251,11 +232,10 @@ class ProviderTests(unittest.TestCase):
         restaurant_url = "https://tabelog.com/aichi/A2301/A230101/23077220/"
 
         class FakeResponse:
+            status_code = 200
+
             def __init__(self, text: str) -> None:
                 self.text = text
-
-            def raise_for_status(self) -> None:
-                return None
 
         class FakeRequests:
             urls: list[str] = []
@@ -312,176 +292,6 @@ class ProviderTests(unittest.TestCase):
             ["共通店", "麵包店", "蛋糕店"],
         )
         self.assertEqual(results[0]["genres"], ["カフェ", "パン"])
-
-    def test_reuses_autocomplete_detail_page_before_requesting_a_map_page(self) -> None:
-        url = "https://tabelog.com/tokyo/A1301/A130101/13000001/"
-
-        class FakeDetailRequest:
-            def __init__(self, **_kwargs: object) -> None:
-                pass
-
-            def _parse_restaurant(self, _html: str, _url: str) -> dict[str, object]:
-                return {
-                    "name": "早い店",
-                    "url": url,
-                    "address": "東京都中央区銀座1-1-1",
-                    "phone": "03-1234-5678",
-                    "rating": 3.5,
-                }
-
-        class FakeRequests:
-            calls: list[str] = []
-
-            @classmethod
-            def get(cls, request_url: str, **_kwargs: object) -> object:
-                cls.calls.append(request_url)
-                raise AssertionError("正式店家頁已預載，不應再讀取地圖頁")
-
-        provider = GurumeProvider(minimum_interval=0)
-        with patch.dict("sys.modules", {"curl_cffi": SimpleNamespace(requests=FakeRequests)}):
-            results = provider._fetch_details(
-                [url], FakeDetailRequest,
-                preloaded_html={url: "<html><body>預載店家頁</body></html>"},
-            )
-
-        self.assertEqual(FakeRequests.calls, [])
-        self.assertEqual(results[0]["name"], "早い店")
-        self.assertEqual(results[0]["address"], "東京都中央区銀座1-1-1")
-
-    def test_stops_autocomplete_details_after_exact_phone_match(self) -> None:
-        class FakeDetailRequest:
-            def __init__(self, **_kwargs: object) -> None:
-                pass
-
-            def _parse_restaurant(self, _html: str, url: str) -> dict[str, object]:
-                return {
-                    "name": "清水屋",
-                    "url": url,
-                    "address": "茨城県潮来市永山2651",
-                    "phone": "0299-64-2011",
-                    "rating": 3.54,
-                }
-
-        class FakeResponse:
-            def __init__(self, restaurant_id: str) -> None:
-                self.text = (
-                    '<html><head><link rel="canonical" '
-                    f'href="https://tabelog.com/ibaraki/A0804/A080401/{restaurant_id}/">'
-                    "</head></html>"
-                )
-
-            def raise_for_status(self) -> None:
-                return None
-
-        requested_ids: list[str] = []
-
-        def fake_get(_url: str, **kwargs: object) -> FakeResponse:
-            restaurant_id = str(dict(kwargs["params"])["rcd"])
-            requested_ids.append(restaurant_id)
-            return FakeResponse(restaurant_id)
-
-        suggestions = [
-            SimpleNamespace(
-                datatype="Restaurant",
-                name="清水屋",
-                id_in_datatype=restaurant_id,
-            )
-            for restaurant_id in ("8000477", "8000478", "8000479")
-        ]
-        provider = GurumeProvider(minimum_interval=0)
-        with (
-            patch("gurume.suggest.get_keyword_suggestions", return_value=suggestions),
-            patch("curl_cffi.requests.get", side_effect=fake_get),
-        ):
-            pages = provider._discover_with_suggestions(
-                {
-                    "name": "清水屋",
-                    "phone": "0299-64-2011",
-                },
-                limit=3,
-                request_type=FakeDetailRequest,
-            )
-
-        self.assertEqual(requested_ids, ["8000477"])
-        self.assertEqual(
-            list(pages),
-            ["https://tabelog.com/ibaraki/A0804/A080401/8000477/"],
-        )
-
-    def test_skips_autocomplete_for_an_hour_once_tabelog_switches_it_off(self) -> None:
-        provider = GurumeProvider(minimum_interval=0)
-        place = {"name": "一蘭 澀谷店"}
-        with patch(
-            "gurume.suggest.get_keyword_suggestions",
-            side_effect=TabelogSuggestUnavailableError(TabelogSuggestUnavailableError.HELP),
-        ) as suggest:
-            with patch("meshi_lens.provider.time.monotonic", return_value=1_000.0):
-                self.assertEqual(provider._discover_with_suggestions(place, limit=3), {})
-            # The folded name 「一蘭渋谷店」 would be a second query; it is not sent.
-            self.assertEqual(suggest.call_count, 1)
-
-            with patch("meshi_lens.provider.time.monotonic", return_value=1_000.0 + 3_599):
-                self.assertEqual(provider._discover_with_suggestions(place, limit=3), {})
-            self.assertEqual(suggest.call_count, 1)
-
-            with patch("meshi_lens.provider.time.monotonic", return_value=1_000.0 + 3_601):
-                provider._discover_with_suggestions(place, limit=3)
-            self.assertEqual(suggest.call_count, 2)
-
-    def test_other_autocomplete_errors_still_try_the_next_query(self) -> None:
-        provider = GurumeProvider(minimum_interval=0)
-        place = {"name": "一蘭 澀谷店"}
-        with patch(
-            "gurume.suggest.get_keyword_suggestions", side_effect=RuntimeError("timeout")
-        ) as suggest:
-            self.assertEqual(provider._discover_with_suggestions(place, limit=3), {})
-            self.assertEqual(provider._discover_with_suggestions(place, limit=3), {})
-
-        # The original and the folded name, on both lookups.
-        self.assertEqual(suggest.call_count, 4)
-
-    def test_only_treats_exact_place_coordinates_as_decisive(self) -> None:
-        provider = GurumeProvider(minimum_interval=0)
-        candidate = {
-            "name": "清水屋",
-            "latitude": 35.0001,
-            "longitude": 139.0001,
-            "rating": 3.54,
-        }
-        place = {
-            "name": "清水屋",
-            "latitude": 35.0,
-            "longitude": 139.0,
-            "coordinates_source": "viewport",
-        }
-        self.assertFalse(provider._has_decisive_identity_match(place, candidate))
-        self.assertTrue(
-            provider._has_decisive_identity_match(
-                {**place, "coordinates_source": "place"},
-                candidate,
-            )
-        )
-
-    def test_does_not_stop_on_relocated_or_different_name_phone_match(self) -> None:
-        provider = GurumeProvider(minimum_interval=0)
-        place = {"name": "清水屋", "phone": "0299-64-2011"}
-        candidate = {
-            "name": "清水屋",
-            "phone": "0299-64-2011",
-            "rating": 3.54,
-        }
-        self.assertFalse(
-            provider._has_decisive_identity_match(
-                place,
-                {**candidate, "is_relocated": True},
-            )
-        )
-        self.assertFalse(
-            provider._has_decisive_identity_match(
-                place,
-                {**candidate, "name": "完全不同的店"},
-            )
-        )
 
     def test_searches_by_local_phone_before_translated_name(self) -> None:
         self.assertEqual(

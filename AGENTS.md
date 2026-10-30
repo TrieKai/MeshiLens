@@ -37,6 +37,7 @@ node --test tests/test_*.js
 - 前端可測邏輯放进 `extension/*.js` 模組（掛 `globalThis.MeshiLens*`），以 `node --test` 覆蓋；勿只寫在 `content.js` 難以測試的閉包裡。
 - Android 可測邏輯寫成不依賴 `android.*` 的 Kotlin（如 `MapsPlaceReader`、`PlaceTracker`、`CardText`），以 `./gradlew testDebugUnitTest` 覆蓋；介面維持同一套暖色卡片配色（`res/values/colors.xml`）。
 - 任何影響功能行為、安全、向下相容性、UX 或依賴的實作變更，都要**立刻升 patch 版號**，不要只寫 `CHANGELOG.md` 的 `Unreleased` 就收工。同一回合同步：`extension/manifest.json`、`pyproject.toml`、`src/meshi_lens/__init__.py`、`uv.lock` 的 `meshilens` 套件版本、`CHANGELOG.md`（把變更寫進新版號，`Unreleased` 留空），`android/app/build.gradle.kts` 的 `versionName`／`versionCode`，以及依賴版本字串的測試。
+- 後端讀 Tabelog 頁面一律走 `fetch.py` 的 `ThrottledFetcher.fetch()`（每個主機 0.8 秒節流、逾時、狀態碼、`/match` 的 25 秒時限）；gurume 只負責解析 HTML，它的私有解析器只在 `tabelog_parse.py` 呼叫。`/match` 探索何時停止只看 `tabelog_discovery.settles_identity`（`score_candidate` 高信心），不要另訂門檻。
 - 不要為了「雙標籤／評論語言」去刮 Google Maps 星等或評論內容；配對靠店名、電話、地址、座標、官網。Android 無障礙服務同樣只讀這些欄位，且只監聽 Google 地圖 App。
 - 遵守 README「隱私與限制」：低頻請求、不寫 exploit、不大量爬 Tabelog／Michelin。
 - 未經要求不要 commit、push 或開 PR。
