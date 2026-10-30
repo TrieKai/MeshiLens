@@ -4,6 +4,24 @@
 
 ## [Unreleased]
 
+## [0.6.8] — 2026-10-30
+
+### Changed
+- 配對時先把繁體中文與舊字體漢字轉成日文新字體再比較，例如 Google 地圖的「一蘭 澀谷店」對 Tabelog「一蘭 渋谷店」，店名分數與 Tabelog 搜尋建議都更容易命中；對照表在 `src/meshi_lens/data/kanji-variants.json`，地址中的「丁目」也和「1-22-7」寫法視為相同。
+- Google 地圖的羅馬拼音地址（如「1 Chome-22-7 Jinnan, Shibuya」）改以門牌號碼比對 Tabelog 日文地址，再用區名／地名（`src/meshi_lens/data/japan-romaji-places.json`）或 Maps 保留原文的大樓名確認；門牌不同時不加分。只有店名與地址的分享模式，一蘭 澀谷店從低信心 20 分提高到待確認 58 分。
+- 後端配對快取鍵改為 `match-v3`，部署後不再沿用舊規則算出的配對與 Michelin 快取。
+
+## [0.6.7] — 2026-10-30
+
+### Added
+- Android App 原型（`android/`）：以無障礙服務讀取 Google 地圖 App 店家面板的店名、類別、地址、日文地址、電話與官網，用浮動卡片直接疊在地圖上顯示 Tabelog 評分、百名店與 Michelin；不需要「顯示在其他應用程式上層」權限，不讀星等或評論，也不串地圖 SDK。
+- 浮動卡片只在偵測到日本的餐飲店家時查詢：只看到羅馬拼音地址時最多等 2.5 秒讓電話或日文地址出現，每家店最多查 3 次，高信心配對後不再重查；離開 Google 地圖時自動隱藏。
+- 分享模式：在 Google 地圖按「分享」選 MeshiLens，App 只讀短網址的轉址取得店名與地址（不抓地圖頁面），以半頁卡片顯示結果；沒有選定店時直接列出候選（含低信心）供確認。
+- `vercel.json` 的函式打包排除 `android/`，避免 Android 原始碼與建置產物被帶進 Python 函式。
+
+### Changed
+- `tests/test_version.py` 同步檢查 Android `versionName`／`versionCode`。
+
 ## [0.6.6] — 2026-08-22
 
 ### Changed

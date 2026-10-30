@@ -47,7 +47,7 @@ from .similar_ai import (
 
 
 LOGGER = logging.getLogger("meshilens.service")
-MATCH_CACHE_VERSION = "match-v2"
+MATCH_CACHE_VERSION = "match-v3"
 SIMILAR_CACHE_VERSION = "nearby-v20"
 POPULARITY_CACHE_VERSION = "popularity-v2"
 COORD_DECIMALS = 5

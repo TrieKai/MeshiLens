@@ -22,6 +22,9 @@ class VersionTests(unittest.TestCase):
         )
         lock_text = (PROJECT_ROOT / "uv.lock").read_text(encoding="utf-8")
         changelog = (PROJECT_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        android_gradle = (PROJECT_ROOT / "android/app/build.gradle.kts").read_text(
+            encoding="utf-8"
+        )
         lock_match = re.search(
             r'\[\[package\]\]\nname = "meshilens"\nversion = "([^"]+)"',
             lock_text,
@@ -31,16 +34,25 @@ class VersionTests(unittest.TestCase):
             changelog,
             re.MULTILINE,
         )
+        android_name_match = re.search(r'versionName = "([^"]+)"', android_gradle)
+        android_code_match = re.search(r"versionCode = (\d+)", android_gradle)
         self.assertIsNotNone(lock_match)
         self.assertIsNotNone(changelog_match)
+        self.assertIsNotNone(android_name_match)
+        self.assertIsNotNone(android_code_match)
         versions = {
             manifest["version"],
             pyproject["project"]["version"],
             __version__,
             lock_match.group(1),
             changelog_match.group(1),
+            android_name_match.group(1),
         }
         self.assertEqual(versions, {__version__})
+        major, minor, patch = (int(part) for part in __version__.split("."))
+        self.assertEqual(
+            int(android_code_match.group(1)), major * 10_000 + minor * 100 + patch
+        )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Light, warm theme only: AGENTS.md asks to avoid dark-by-default UI. -->
+    <style name="Theme.MeshiLens" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">@color/ml_accent</item>
+        <item name="android:colorAccent">@color/ml_accent</item>
+        <item name="android:textColorPrimary">@color/ml_ink</item>
+        <item name="android:windowBackground">@color/ml_page</item>
+        <item name="android:statusBarColor">@color/ml_page</item>
+        <item name="android:navigationBarColor">@color/ml_page</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <!-- Share mode: a bottom sheet over whatever app shared the link. -->
+    <style name="Theme.MeshiLens.Sheet">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <style name="MeshiLens.Button" parent="">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">44dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:paddingStart">18dp</item>
+        <item name="android:paddingEnd">18dp</item>
+        <item name="android:background">@drawable/bg_button</item>
+        <item name="android:textColor">@android:color/white</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+
+    <style name="MeshiLens.Button.Outline">
+        <item name="android:background">@drawable/bg_button_outline</item>
+        <item name="android:textColor">@color/ml_accent</item>
+    </style>
+
+    <style name="MeshiLens.SectionTitle" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">24dp</item>
+        <item name="android:textColor">@color/ml_ink</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="MeshiLens.Body" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">8dp</item>
+        <item name="android:lineSpacingMultiplier">1.2</item>
+        <item name="android:textColor">@color/ml_ink</item>
+        <item name="android:textSize">14sp</item>
+    </style>
+
+    <style name="MeshiLens.Caption" parent="MeshiLens.Body">
+        <item name="android:textColor">@color/ml_muted</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+</resources>

@@ -67,6 +67,25 @@ uv run meshilens-server
 
 分享時只輸出各餐已選定的首選、備案與 Maps 連結。資料經清理後編碼在 `landing/share.html#...` 的網址片段；瀏覽器不會把片段送進 HTTP 請求，QR Code 也完全在本機產生。分享網址本身持有行程內容，仍應只傳給預期的同行者。
 
+## Android App（原型）
+
+`android/` 是不需要瀏覽器的 Android App（Android 8.0 以上），直接搭配 Google 地圖 App 使用，不另外串地圖 SDK：
+
+- **浮動卡片**：開啟「MeshiLens 浮動卡片」無障礙服務後，在 Google 地圖點進日本的餐廳、把店家資訊往上滑，看到電話或日文地址時卡片就會疊在地圖上顯示 Tabelog 評分、百名店與 Michelin。卡片不搶焦點、只攔截自己範圍內的觸控，地圖照常拖曳、縮放、打字；平常是可拖曳的小膠囊，點開才展開，離開 Google 地圖時自動隱藏。這是唯一需要的權限，不需要「顯示在其他應用程式上層」。
+- **分享模式**：在 Google 地圖按「分享」→ 選「MeshiLens」，不需要無障礙權限。Google 地圖只分享店名與短網址，App 只讀短網址的轉址取得店名與地址，不抓地圖頁面；因為沒有電話與日文地址，配對多半只到「待確認」，請對照卡片上的地址；沒有選定時會直接列出候選讓你挑。
+
+建置與安裝需要 JDK 17 以上與 Android SDK（`android/local.properties` 的 `sdk.dir` 或 `ANDROID_HOME`）；首次建置會下載 Gradle、Android Gradle Plugin 與所需 SDK 套件：
+
+```bash
+cd android
+./gradlew testDebugUnitTest assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+- App 固定呼叫 `https://meshilens.vercel.app/api`，請求不帶瀏覽器 `Origin`；若 Vercel 設定了 `MESHI_ALLOWED_ORIGIN`，App 會收到 403，需另外開放。
+- 用瀏覽器或檔案管理員安裝 APK 時，Android 13 以上可能以「受限制的設定」擋住無障礙開關，需在應用程式資訊頁右上角選單允許；開啟 Android「進階保護」的手機則無法使用非輔助工具的無障礙服務。Google Play 對使用無障礙 API 的 App 另有審查，上架前需另外評估。
+- 目前只做店家卡片與分享；AI 建議、相似店家、人氣標籤、評論摘要與「這一餐吃哪家」尚未移植。
+
 ## Vercel 後端部署
 
 專案可部署為 Vercel Python Function（`hnd1` 東京、Fluid Compute）；catch-all rewrite 會將 `/api/*` 子路徑明確轉交給單一 Python handler。服務提供 `GET /api/health` 和
@@ -143,6 +162,8 @@ host 節流抓取**一頁**公開評論，最多約 20 則（對齊 Tabelog 預�
 
 75 分以上自動視為高信心；52–74.9 分會顯示提醒；更低則不自動選定。名稱正規化會移除「割烹、食堂、レストラン、本店」等類型或分店詞，但常見店名仍須靠電話、地址或座標確認。
 
+店名與地址比較前會把繁體中文與舊字體漢字轉成日文新字體（「澀谷」→「渋谷」、「神戶」→「神戸」，對照表在 `src/meshi_lens/data/kanji-variants.json`）。Google 地圖常把日本地址顯示成羅馬拼音（「1 Chome-22-7 Jinnan, Shibuya」），這時改比門牌號碼：門牌相同且區名／地名（`src/meshi_lens/data/japan-romaji-places.json`）或大樓名也對得上，地址分數才會接近滿分；門牌不同則不加分。
+
 ## 測試
 
 不需連上 Tabelog 即可執行單元測試：
@@ -153,6 +174,7 @@ node --check extension/background.js
 node --check extension/content.js
 node --check extension/popup.js
 node --test tests/test_*.js
+(cd android && ./gradlew testDebugUnitTest)
 ```
 
 測試包含「割烹 清水屋」對 Tabelog「清水屋」的電話與地址差異案例。
@@ -171,12 +193,14 @@ node --test tests/test_*.js
 - Tabelog 商標與資料屬其權利人；本專案不隸屬於 Google 或 Tabelog。
 - Michelin 功能僅保存店家識別、座標、料理類型、價位、獎項與官方連結，不保存照片或評審文章；此非官方授權功能，請維持低頻、個人及非商業用途。
 - AI 用餐建議（`/advice`）是根據有限結構化欄位的輔助判讀，**不是評論摘要**，也不應取代店家頁最新資訊或個人判斷。
+- Android App 的無障礙服務只接收 Google 地圖 App 的事件，只讀店家面板的店名、類別、地址、電話與官網，不讀星等、評論或其他 App 的內容；為了在離開 Google 地圖時隱藏卡片，只檢查前景視窗屬於哪個 App。只有偵測到日本的餐飲店家、且看到電話或地址後才查詢，每家店最多 3 次。
 - **公開評論實驗摘要**僅在使用者主動點擊分析按鈕後，由後端低頻讀取少量公開 Tabelog 評論並送 Groq 生成主題摘要；**不保存評論原文**、不自動抓、不做批量、不顯示逐字引用／作者／頭像；日誌與快取只保留匿名化指標與最終摘要。
 
 ## 專案結構
 
 ```text
 extension/                 Chrome／Edge Manifest V3 擴充功能
+android/                   Android App 原型（無障礙浮動卡片＋分享模式）
 extension/planner.js       行程、餐次、候選店與透明排序領域邏輯
 extension/planner.html     「這一餐吃哪家」選店側邊工作區
 extension/planner_share.js 手機分享資料清理與網址片段編解碼

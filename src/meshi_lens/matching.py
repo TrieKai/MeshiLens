@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from functools import cache
+from importlib.resources import files
+import json
 from math import asin, cos, radians, sin, sqrt
 import re
 import unicodedata
@@ -22,10 +25,38 @@ TYPE_WORDS = (
 BRANCH_WORDS = ("本店", "支店", "駅前店", "別館", "新館")
 
 
+@cache
+def _bundled_json(name: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(
+            files("meshi_lens").joinpath(f"data/{name}").read_text(encoding="utf-8")
+        )
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+@cache
+def _kanji_variants() -> dict[int, str]:
+    """Traditional-Chinese and old-form kanji folded to the forms Tabelog uses.
+
+    Google Maps in Traditional Chinese shows 「一蘭 澀谷店」 for Tabelog's
+    「一蘭 渋谷店」; both sides of every comparison are folded, so names that
+    really use an old form (龍, 澤, 髙…) still match themselves.
+    """
+    return str.maketrans(
+        {
+            source: target
+            for source, target in _bundled_json("kanji-variants.json").items()
+            if len(source) == 1 and len(target) == 1
+        }
+    )
+
+
 def normalize_text(value: str | None) -> str:
     if not value:
         return ""
-    value = unicodedata.normalize("NFKC", value).casefold()
+    value = unicodedata.normalize("NFKC", value).casefold().translate(_kanji_variants())
     return re.sub(r"[^0-9a-z\u3040-\u30ff\u3400-\u9fff]", "", value)
 
 
@@ -44,9 +75,11 @@ def normalize_phone(value: str | None) -> str:
 
 
 def normalize_address(value: str | None) -> str:
-    normalized = unicodedata.normalize("NFKC", value or "").casefold()
+    normalized = unicodedata.normalize("NFKC", value or "").casefold().translate(_kanji_variants())
     normalized = re.sub(r"〒?\d{3}-?\d{4}", "", normalized)
-    normalized = normalized.replace("番地", "-").replace("番", "-").replace("号", "")
+    normalized = (
+        normalized.replace("丁目", "-").replace("番地", "-").replace("番", "-").replace("号", "")
+    )
     return re.sub(r"[^0-9a-z\u3040-\u30ff\u3400-\u9fff]", "", normalized)
 
 
@@ -57,6 +90,82 @@ def similarity(left: str, right: str) -> float:
         shorter, longer = sorted((len(left), len(right)))
         return 0.88 + 0.12 * (shorter / longer)
     return SequenceMatcher(None, left, right).ratio()
+
+
+ROMANISED_ADDRESS = re.compile(r"[A-Za-z]{3,}")
+POSTCODE = re.compile(r"〒?\s*\d{3}\s*-\s*\d{4}")
+CHOME = re.compile(r"\s*(?:丁目|ch[oō]u?me)\s*", re.IGNORECASE)
+BANCHI = re.compile(r"\s*番地?\s*")
+DASH_VARIANTS = re.compile(r"[\u2010-\u2015\u2212\u30fc\uff0d]")
+DASH_RUN = re.compile(r"\s*-[\s-]*")
+BLOCK_NUMBERS = re.compile(r"\d{1,4}(?:-\d{1,4})+")
+LOCAL_SCRIPT_RUN = re.compile(r"[\u3040-\u30ff\u3400-\u9fff]{3,}")
+PREFECTURE_ONLY = re.compile(r"^.{1,3}[都道府県]$")
+
+
+def _block_numbers(address: str) -> tuple[int, ...]:
+    """`1 Chome-22-7`, `1丁目22番7号` and `1-22-7` all become (1, 22, 7)."""
+    text = POSTCODE.sub(" ", unicodedata.normalize("NFKC", address))
+    text = BANCHI.sub("-", CHOME.sub("-", text)).replace("号", "")
+    text = DASH_RUN.sub("-", DASH_VARIANTS.sub("-", text))
+    match = BLOCK_NUMBERS.search(text)
+    return tuple(int(part) for part in match.group(0).split("-")) if match else ()
+
+
+def _same_block(left: tuple[int, ...], right: tuple[int, ...]) -> bool:
+    common = min(len(left), len(right))
+    return common >= 2 and left[:common] == right[:common]
+
+
+@cache
+def _romaji_localities() -> tuple[tuple[re.Pattern[str], str], ...]:
+    """Ward, city and area names that Google Maps romanises, with their kanji."""
+    localities = _bundled_json("japan-romaji-places.json").get("localities") or {}
+    return tuple(
+        (re.compile(rf"\b{re.escape(romaji)}\b", re.IGNORECASE), normalize_text(kanji))
+        for romaji, kanji in localities.items()
+        if romaji and kanji
+    )
+
+
+def _romanised_address_similarity(place_address: str, candidate_address: str) -> float:
+    """Match `1 Chome-22-7 Jinnan, Shibuya` against `東京都渋谷区神南1-22-7`.
+
+    The block numbers must agree; the ward or area name, or a Japanese
+    building name that Maps keeps as-is, then confirms the same block.
+    """
+    if not _same_block(_block_numbers(place_address), _block_numbers(candidate_address)):
+        return 0.0
+    candidate = normalize_text(candidate_address)
+    # Drop macrons so `Chūō` reads like the table's `Chuo`.
+    ascii_address = "".join(
+        char
+        for char in unicodedata.normalize("NFKD", place_address)
+        if not unicodedata.combining(char)
+    )
+    locality = any(
+        kanji in candidate
+        for pattern, kanji in _romaji_localities()
+        if kanji and pattern.search(ascii_address)
+    )
+    building = any(
+        normalize_text(token) in candidate
+        for token in LOCAL_SCRIPT_RUN.findall(unicodedata.normalize("NFKC", place_address))
+        if not PREFECTURE_ONLY.match(token)
+    )
+    if locality and building:
+        return 0.95
+    if locality or building:
+        return 0.9
+    return 0.6
+
+
+def address_similarity(place_address: str, candidate_address: str) -> float:
+    """Compare a Google Maps address with a Tabelog (Japanese) address."""
+    score = similarity(normalize_address(place_address), normalize_address(candidate_address))
+    if ROMANISED_ADDRESS.search(place_address):
+        score = max(score, _romanised_address_similarity(place_address, candidate_address))
+    return score
 
 
 def haversine_meters(
@@ -122,9 +231,9 @@ def score_candidate(place: Mapping[str, Any], candidate: Mapping[str, Any]) -> M
     if name_score >= 0.88:
         reasons.append("店名高度相似")
 
-    address_score = similarity(
-        normalize_address(str(place.get("address") or "")),
-        normalize_address(str(candidate.get("address") or "")),
+    address_score = address_similarity(
+        str(place.get("address") or ""),
+        str(candidate.get("address") or ""),
     )
     if address_score >= 0.45:
         score += address_score * 35

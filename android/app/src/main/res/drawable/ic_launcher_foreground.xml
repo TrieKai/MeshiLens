@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Steaming bowl under a magnifier, redrawn from extension/icons/icon-128.png. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M42,43 c-2,-2 2,-4 0,-6 c-2,-2 2,-4 0,-6 M48,43 c-2,-2 2,-4 0,-6 c-2,-2 2,-4 0,-6 M54,43 c-2,-2 2,-4 0,-6 c-2,-2 2,-4 0,-6"
+        android:strokeWidth="2.2"
+        android:strokeColor="#D2462F"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="#D2462F"
+        android:pathData="M34,48 h28 a14,13 0 0 1 -28,0 z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M32.5,47.5 h31"
+        android:strokeWidth="2.5"
+        android:strokeColor="#D2462F"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M48,27 a21,21 0 1,1 -0.01,0 z"
+        android:strokeWidth="5"
+        android:strokeColor="#1F2A44" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M63,63 L75,75"
+        android:strokeWidth="6.5"
+        android:strokeColor="#1F2A44"
+        android:strokeLineCap="round" />
+</vector>

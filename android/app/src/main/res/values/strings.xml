@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MeshiLens</string>
+    <string name="share_target_label">用 MeshiLens 查 Tabelog</string>
+
+    <string name="accessibility_service_label">MeshiLens 浮動卡片</string>
+    <string name="accessibility_service_summary">在 Google 地圖店家頁顯示 Tabelog 評分與米其林入選</string>
+    <string name="accessibility_service_description">MeshiLens 只讀取 Google 地圖店家面板上的店名、類別、地址、電話與官網，用來比對 Tabelog 日本語版評分與 Michelin Guide 日本入選資訊，並以浮動卡片顯示在地圖上。\n\n不會讀取 Google 地圖的星等或評論，也不會讀取其他 App 的內容。比對資料只送到 MeshiLens 服務（meshilens.vercel.app），不含你的位置或帳號。</string>
+
+    <string name="main_subtitle">在 Google 地圖店家頁顯示 Tabelog 評分與米其林入選</string>
+    <string name="main_status_on">浮動卡片：已開啟</string>
+    <string name="main_status_off">浮動卡片：尚未開啟</string>
+    <string name="main_status_on_body">打開 Google 地圖並點進日本的餐廳，卡片會浮在地圖上，不用切換 App。</string>
+    <string name="main_status_off_body">到「無障礙」設定找到「MeshiLens 浮動卡片」並開啟。這是浮動卡片唯一需要的權限。</string>
+    <string name="main_open_accessibility">開啟無障礙設定</string>
+    <string name="main_restricted_hint">如果開關是灰色、顯示「受限制的設定」：到應用程式資訊，按右上角 ⋮ →「允許受限制的設定」，再回來開啟。</string>
+    <string name="main_open_app_info">開啟應用程式資訊</string>
+    <string name="main_how_title">使用方式</string>
+    <string name="main_how_body">1. 在 Google 地圖點進日本的餐廳。\n2. 把店家資訊往上滑，看到電話或日文地址後，卡片會顯示 Tabelog 評分與米其林。\n3. 點膠囊展開詳情，拖曳可以移到不擋路的位置；離開 Google 地圖時卡片會自動隱藏。</string>
+    <string name="main_share_title">分享模式（不需無障礙權限）</string>
+    <string name="main_share_body">在 Google 地圖店家頁按「分享」→ 選「MeshiLens」，會跳出同一張卡片。分享只帶店名與連結，比對較弱，常需要從候選中自己確認。</string>
+    <string name="main_open_maps">打開 Google 地圖</string>
+    <string name="main_privacy_title">隱私</string>
+    <string name="main_privacy_body">只讀取 Google 地圖店家面板的店名、類別、地址、電話與官網；不讀星等或評論，也不讀其他 App。比對資料只送到 MeshiLens 服務（meshilens.vercel.app），不含你的位置或帳號。</string>
+    <string name="main_version">版本 %1$s</string>
+
+    <string name="card_collapse">收合</string>
+    <string name="card_close">關閉</string>
+</resources>
