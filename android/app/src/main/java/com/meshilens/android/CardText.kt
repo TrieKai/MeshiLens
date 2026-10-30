@@ -7,14 +7,14 @@ object CardText {
     const val BRAND = "MeshiLens"
     const val SOURCE = "Tabelog 日本語版"
     const val LOADING = "正在查詢 Tabelog 與 Michelin…"
-    const val NEEDS_DETAILS = "把 Google 地圖的店家資訊往上滑，看到電話或日文地址後就會比對。"
+    const val NEEDS_DETAILS = "往下捲到店家頁下方的「關於」區塊，看到電話或日文地址就會自動比對。"
     const val NOT_FOUND = "找不到可信的 Tabelog 店家，請從候選結果選擇。"
     const val NOT_FOUND_NO_CANDIDATES = "找不到 Tabelog 店家。"
     const val CANDIDATE_NOTE = "這些是同一店的可能配對，不是推薦店家。"
 
     fun pill(state: CardState): String = when (state) {
         is CardState.Loading -> "查詢中…"
-        is CardState.NeedsDetails -> "上滑店家資訊後比對"
+        is CardState.NeedsDetails -> "捲到「關於」後比對"
         is CardState.Failed -> "查詢失敗 · 點開重試"
         is CardState.Ready -> readyPill(state)
     }

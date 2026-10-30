@@ -16,7 +16,7 @@
     <string name="main_restricted_hint">如果開關是灰色、顯示「受限制的設定」：到應用程式資訊，按右上角 ⋮ →「允許受限制的設定」，再回來開啟。</string>
     <string name="main_open_app_info">開啟應用程式資訊</string>
     <string name="main_how_title">使用方式</string>
-    <string name="main_how_body">1. 在 Google 地圖點進日本的餐廳。\n2. 把店家資訊往上滑，看到電話或日文地址後，卡片會顯示 Tabelog 評分與米其林。\n3. 點膠囊展開詳情，拖曳可以移到不擋路的位置；離開 Google 地圖時卡片會自動隱藏。</string>
+    <string name="main_how_body">1. 在 Google 地圖點進日本的餐廳。\n2. 把店家資訊往下捲到「關於」區塊，看到電話或日文地址後，卡片會顯示 Tabelog 評分與米其林。\n3. 點膠囊展開詳情，拖曳可以移到不擋路的位置；離開 Google 地圖時卡片會自動隱藏。</string>
     <string name="main_share_title">分享模式（不需無障礙權限）</string>
     <string name="main_share_body">在 Google 地圖店家頁按「分享」→ 選「MeshiLens」，會跳出同一張卡片。分享只帶店名與連結，比對較弱，常需要從候選中自己確認。</string>
     <string name="main_open_maps">打開 Google 地圖</string>

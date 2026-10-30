@@ -11,7 +11,7 @@ class CardTextTest {
     @Test
     fun pillSummarisesEachState() {
         assertEquals("查詢中…", CardText.pill(CardState.Loading("店")))
-        assertEquals("上滑店家資訊後比對", CardText.pill(CardState.NeedsDetails("店")))
+        assertEquals("捲到「關於」後比對", CardText.pill(CardState.NeedsDetails("店")))
         assertEquals("Tabelog 3.21", CardText.pill(CardState.Ready("店", result, result.selected, null)))
         assertEquals("Tabelog 3.21 · 米其林一星", CardText.pill(CardState.Ready("店", result, result.selected, michelin)))
         assertEquals("Tabelog 未配對", CardText.pill(CardState.Ready("店", result, null, null)))
