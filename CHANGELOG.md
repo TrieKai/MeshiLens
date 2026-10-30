@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+## [0.6.12] — 2026-10-30
+
+### Added
+- GitHub Actions CI 新增 Android job：push 與 pull request 時以 JDK 21 在 `android/` 執行 `./gradlew testDebugUnitTest assembleDebug`，跑 Android 單元測試並建置 debug APK；Gradle 由 `gradle/actions/setup-gradle` 快取並驗證 wrapper，SDK 使用執行環境內建的 `ANDROID_HOME`。
+
 ## [0.6.11] — 2026-10-30
 
 ### Fixed

@@ -11,8 +11,8 @@ android {
         minSdk = 26
         targetSdk = 36
         // Same release as extension/manifest.json; versionCode is major * 10000 + minor * 100 + patch.
-        versionCode = 611
-        versionName = "0.6.11"
+        versionCode = 612
+        versionName = "0.6.12"
     }
 
     buildTypes {
