@@ -3,6 +3,8 @@ from urllib.parse import quote
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from gurume.suggest import TabelogSuggestUnavailableError
+
 from meshi_lens.provider import (
     canonical_restaurant_url,
     coordinates_from_tabelog_html,
@@ -405,6 +407,38 @@ class ProviderTests(unittest.TestCase):
             list(pages),
             ["https://tabelog.com/ibaraki/A0804/A080401/8000477/"],
         )
+
+    def test_skips_autocomplete_for_an_hour_once_tabelog_switches_it_off(self) -> None:
+        provider = GurumeProvider(minimum_interval=0)
+        place = {"name": "一蘭 澀谷店"}
+        with patch(
+            "gurume.suggest.get_keyword_suggestions",
+            side_effect=TabelogSuggestUnavailableError(TabelogSuggestUnavailableError.HELP),
+        ) as suggest:
+            with patch("meshi_lens.provider.time.monotonic", return_value=1_000.0):
+                self.assertEqual(provider._discover_with_suggestions(place, limit=3), {})
+            # The folded name 「一蘭渋谷店」 would be a second query; it is not sent.
+            self.assertEqual(suggest.call_count, 1)
+
+            with patch("meshi_lens.provider.time.monotonic", return_value=1_000.0 + 3_599):
+                self.assertEqual(provider._discover_with_suggestions(place, limit=3), {})
+            self.assertEqual(suggest.call_count, 1)
+
+            with patch("meshi_lens.provider.time.monotonic", return_value=1_000.0 + 3_601):
+                provider._discover_with_suggestions(place, limit=3)
+            self.assertEqual(suggest.call_count, 2)
+
+    def test_other_autocomplete_errors_still_try_the_next_query(self) -> None:
+        provider = GurumeProvider(minimum_interval=0)
+        place = {"name": "一蘭 澀谷店"}
+        with patch(
+            "gurume.suggest.get_keyword_suggestions", side_effect=RuntimeError("timeout")
+        ) as suggest:
+            self.assertEqual(provider._discover_with_suggestions(place, limit=3), {})
+            self.assertEqual(provider._discover_with_suggestions(place, limit=3), {})
+
+        # The original and the folded name, on both lookups.
+        self.assertEqual(suggest.call_count, 4)
 
     def test_only_treats_exact_place_coordinates_as_decisive(self) -> None:
         provider = GurumeProvider(minimum_interval=0)

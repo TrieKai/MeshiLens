@@ -649,12 +649,16 @@ class GurumeProvider:
     """Small, rate-limited adapter around gurume's public Python API."""
 
     TABELOG_HOST = "tabelog.com"
+    # Tabelog's autocomplete answers `suggest_empty` for every keyword while it is
+    # switched off upstream; retry it this rarely instead of on every lookup.
+    SUGGEST_RETRY_SECONDS = 3600.0
 
     def __init__(self, minimum_interval: float = 0.8) -> None:
         self.minimum_interval = minimum_interval
         self._last_request_by_host: dict[str, float] = {}
         self._host_locks: dict[str, threading.Lock] = {}
         self._meta_lock = threading.Lock()
+        self._suggest_unavailable_until = 0.0
 
     def _host_lock(self, host: str) -> threading.Lock:
         with self._meta_lock:
@@ -724,7 +728,10 @@ class GurumeProvider:
         """
         from bs4 import BeautifulSoup
         from curl_cffi import requests
-        from gurume.suggest import get_keyword_suggestions
+        from gurume.suggest import TabelogSuggestUnavailableError, get_keyword_suggestions
+
+        if time.monotonic() < self._suggest_unavailable_until:
+            return {}
 
         names = [
             str(place.get("alternate_name") or "").strip(),
@@ -742,6 +749,16 @@ class GurumeProvider:
             try:
                 self._throttle(self.TABELOG_HOST)
                 suggestions = get_keyword_suggestions(query)
+            except TabelogSuggestUnavailableError:
+                # Switched off for every keyword, so the remaining queries would fail too.
+                self._suggest_unavailable_until = (
+                    time.monotonic() + self.SUGGEST_RETRY_SECONDS
+                )
+                LOGGER.info(
+                    "suggest unavailable; skipping for %ss",
+                    int(self.SUGGEST_RETRY_SECONDS),
+                )
+                return {}
             except Exception:
                 continue
             for suggestion in suggestions:
