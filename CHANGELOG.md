@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+## [0.6.13] — 2026-10-30
+
+### Changed
+- Michelin 跨語言配對不再重讀快照中已補齊的詳情頁。更新器離線讀過詳情頁的店家帶有 `details_fetched_at`，電話與官網都已在快照裡，查詢時直接用快照比對。只有清單更新後新增、還沒補齊詳情的店，才照舊補查 100 公尺內最多 2 家，並快取一天。目前快照的 1,117 家都已補齊，所以查詢時不會再向 Michelin 請求詳情頁，Michelin 結果也不必等這些請求。店家若在快照之後更換了電話或官網，請執行 `uv run python scripts/update_michelin.py --include-details --refresh-details` 重新讀取。
+
 ## [0.6.12] — 2026-10-30
 
 ### Added

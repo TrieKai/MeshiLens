@@ -260,6 +260,54 @@ class MichelinTests(unittest.TestCase):
             )
         self.assertEqual(calls, ["0", "1"])
 
+    def test_nearby_detail_lookup_skips_restaurants_already_enriched_offline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "michelin.json"
+            restaurants = [
+                {
+                    "id": "1194082",
+                    "name": "Tour D'argent Tokyo",
+                    "url": "https://guide.michelin.com/restaurant/tour-d-argent",
+                    "phone": "+81 3-3239-3111",
+                    "website": "https://tourdargent.jp/",
+                    "details_fetched_at": "2026-07-18T08:58:12Z",
+                    "latitude": 35.680691,
+                    "longitude": 139.734172,
+                    "distinction": "ONE_STAR",
+                    "distinction_label": "米其林一星",
+                },
+                {
+                    # Added by a list-only update, so its detail page was never read.
+                    "id": "2",
+                    "name": "Unrelated Neighbour",
+                    "url": "https://guide.michelin.com/restaurant/neighbour",
+                    "latitude": 35.6812,
+                    "longitude": 139.7343,
+                    "distinction": "SELECTED",
+                    "distinction_label": "米其林指南入選",
+                },
+            ]
+            path.write_text(json.dumps({"restaurants": restaurants}), encoding="utf-8")
+            provider = MichelinProvider(path)
+            calls: list[str] = []
+
+            def fetch(restaurant):
+                calls.append(str(restaurant.get("id") or ""))
+                return {}
+
+            provider._fetch_detail = fetch
+            matched = provider.match(
+                {
+                    "name": "法國料理 銀塔 東京",
+                    "phone": "03-3239-3111",
+                    "latitude": 35.6809101,
+                    "longitude": 139.7340409,
+                }
+            )
+        self.assertEqual(calls, ["2"])
+        self.assertEqual(matched["id"], "1194082")
+        self.assertIn("電話完全相同", matched["match_reasons"])
+
     def test_michelin_detail_cache_survives_new_provider(self) -> None:
         from meshi_lens.cache import MemoryTTLCache
 

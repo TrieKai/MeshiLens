@@ -305,7 +305,11 @@ class MichelinProvider:
         latitude: float | None,
         longitude: float | None,
     ) -> list[Mapping[str, Any]]:
-        """Resolve translated names with at most two close Michelin detail lookups."""
+        """Resolve translated names with at most two close Michelin detail lookups.
+
+        Entries whose detail page the updater already read (``details_fetched_at``)
+        carry its phone and website, so only the remaining entries are looked up.
+        """
         if not (phone or website) or latitude is None or longitude is None:
             return self.restaurants
         replacements: dict[str, dict[str, Any]] = {}
@@ -324,6 +328,8 @@ class MichelinProvider:
                 (similarity(name, candidate_name) for name in names), default=0.0
             )
             if name_score >= 0.45:
+                continue
+            if restaurant.get("details_fetched_at"):
                 continue
             restaurant_id = str(restaurant.get("id") or restaurant.get("url") or "")
             cached = self._cached_detail(restaurant_id)
