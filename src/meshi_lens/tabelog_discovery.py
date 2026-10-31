@@ -50,7 +50,8 @@ def area_from_address(address: str) -> str | None:
 def web_search_queries(place: Mapping[str, Any]) -> list[str]:
     """Build identity-focused fallbacks for translated Google Maps names."""
     queries: list[str] = []
-    raw_phone = str(place.get("phone") or "").strip()
+    # Drop any label left in front of the number, e.g. 「號碼:」 from zh-TW 「電話號碼:」.
+    raw_phone = re.sub(r"^[^\d+]+", "", str(place.get("phone") or "").strip())
     if raw_phone:
         local_phone = re.sub(r"^\+?81[\s().-]*", "0", raw_phone)
         local_phone = re.sub(r"[^\d-]", "", local_phone)

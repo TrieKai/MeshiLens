@@ -308,6 +308,13 @@ class ProviderTests(unittest.TestCase):
             ],
         )
 
+    def test_phone_query_drops_a_leftover_maps_label(self) -> None:
+        # zh-TW Maps labels the row 「電話號碼:」, and the extension strips only 「電話」.
+        self.assertEqual(
+            web_search_queries({"name": "", "phone": "號碼: +81 3-3535-3600"}),
+            ['site:tabelog.com "03-3535-3600"'],
+        )
+
     def test_canonicalizes_review_and_language_urls(self) -> None:
         self.assertEqual(
             canonical_restaurant_url(
